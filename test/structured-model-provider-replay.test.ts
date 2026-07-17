@@ -5,6 +5,7 @@ import test from "node:test";
 import type { AgentContext, BuilderExecution, TestAgentExecution } from "../src/agents/agent-provider.js";
 import { InMemoryModelCostBudgetState, type ModelCostBudgets } from "../src/agents/model-cost-budget.js";
 import { modelStageCredentialSchemaVersion } from "../src/agents/model-stage-credential.js";
+import type { ModelRoutingPolicy } from "../src/agents/model-routing.js";
 import {
   ModelTransportFailure,
   StructuredModelAgentProvider,
@@ -17,11 +18,12 @@ import {
 const replayDirectory = path.join(process.cwd(), "test", "fixtures", "model-provider-replay");
 
 interface ReplayFixture {
-  readonly schemaVersion: "structured-provider-replay/v1";
+  readonly schemaVersion: "structured-provider-replay/v2";
   readonly stage: "test" | "build";
   readonly clockNowMs: number;
   readonly budgets: ModelCostBudgets;
   readonly retryPolicy: ModelRetryPolicy;
+  readonly routingPolicy: ModelRoutingPolicy;
   readonly request: ModelRequest;
   readonly events: readonly ReplayEvent[];
   readonly expected: {
@@ -29,6 +31,7 @@ interface ReplayFixture {
       readonly usage: unknown;
       readonly budgetDecision: unknown;
       readonly requestAttempts: unknown;
+      readonly routingDecision: unknown;
     };
     readonly untrustedRationale: unknown;
     readonly retryDelaysMs: readonly number[];
@@ -82,6 +85,7 @@ class ReplayTransport implements ModelTransport {
     this.invocations.push(invocation);
     assert.equal(invocation.stage, this.fixture.stage);
     assert.deepEqual(invocation.request, this.fixture.request);
+    assert.deepEqual(invocation.route, (this.fixture.expected.trusted.routingDecision as { readonly route: unknown }).route);
     const event = this.fixture.events[this.invocations.length - 1];
     assert.ok(event, "Replay transport received an unexpected invocation.");
     if (event.kind === "failure") {
@@ -116,6 +120,7 @@ for (const name of ["test-success.json", "builder-transient-retry.json"] as cons
           },
         },
       },
+      fixture.routingPolicy,
       new InMemoryModelCostBudgetState(),
       fixture.retryPolicy,
       { async wait(delayMs) { retryDelaysMs.push(delayMs); } },
@@ -126,6 +131,7 @@ for (const name of ["test-success.json", "builder-transient-retry.json"] as cons
       usage: result.usage,
       budgetDecision: result.budgetDecision,
       requestAttempts: result.requestAttempts,
+      routingDecision: result.routingDecision,
     };
 
     assert.deepEqual(trusted, fixture.expected.trusted);
@@ -159,7 +165,7 @@ async function execute(
 async function loadFixture(name: string): Promise<ReplayFixture> {
   const parsed: unknown = JSON.parse(await readFile(path.join(replayDirectory, name), "utf8"));
   assert.ok(isRecord(parsed));
-  assert.equal(parsed.schemaVersion, "structured-provider-replay/v1");
+  assert.equal(parsed.schemaVersion, "structured-provider-replay/v2");
   assert.ok(parsed.stage === "test" || parsed.stage === "build");
   assert.ok(Array.isArray(parsed.events) && parsed.events.length > 0);
   return parsed as unknown as ReplayFixture;

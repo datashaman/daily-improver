@@ -19,7 +19,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
 - One active or completed improvement is enforced per canonical repository per UTC day, fresh repository-bound open-PR state enforces `max_open_prs`, and fresh unresolved-finding state suppresses repeated work.
-- Committed deterministic provider replays now cover both structured stages, including successful validation and a sanitized transient retry; the exact next task is model routing based on task complexity.
+- Committed deterministic provider replays now cover both structured stages, including successful validation, a sanitized transient retry, and bounded model routing based on task complexity; the exact next task is private customer endpoint compatibility.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -140,7 +140,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Store model rationale separately from trusted evidence.
 - [x] Use separate short-lived credentials for test and builder agents.
 - [x] Add deterministic provider replay fixtures.
-- [ ] Add model routing based on task complexity.
+- [x] Add model routing based on task complexity.
 - [ ] Keep the provider interface compatible with private customer endpoints.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
@@ -474,7 +474,7 @@ The recent and next commit-sized milestones are:
 12. [x] `feat: prevent repeated unresolved findings`
 13. [x] `feat: explain candidate scores`
 
-The immediate next task is Phase 1C: add model routing based on task complexity.
+The immediate next task is Phase 1C: keep the structured provider interface compatible with private customer endpoints.
 
 ## Initial operating limits
 

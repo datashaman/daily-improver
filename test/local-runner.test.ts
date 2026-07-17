@@ -34,6 +34,7 @@ for ($total = 0; $total <= 50; $total++) {
       usage: fixtureUsage,
       budgetDecision,
       requestAttempts: fixtureRequestAttempts(budgetDecision),
+      routingDecision: fixtureRoutingDecision("test"),
       rationale: {
         summary: "Added the allocation invariant test.",
         changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
@@ -81,6 +82,7 @@ final class MoneyAllocator
       usage: fixtureUsage,
       budgetDecision,
       requestAttempts: fixtureRequestAttempts(budgetDecision),
+      routingDecision: fixtureRoutingDecision("build"),
       rationale: {
         summary: "Distributed the allocation remainder.",
         changedFiles: ["app/Domain/MoneyAllocator.php"],
@@ -122,6 +124,27 @@ function fixtureRequestAttempts(budgetDecision: ReturnType<typeof fixtureBudgetD
     schemaVersion: "model-request-attempts/v1" as const,
     maxAttempts: 1,
     attempts: [{ attempt: 1, classification: "completed" as const, budgetDecision }],
+  };
+}
+
+function fixtureRoutingDecision(stage: "test" | "build") {
+  return {
+    schemaVersion: "task-complexity-decision/v1" as const,
+    stage,
+    complexity: "lower" as const,
+    score: 0,
+    inputs: {
+      maxFiles: 2,
+      maxChangedLines: 80,
+      acceptanceCriteria: 1,
+      propertyInvariants: 1,
+      evidenceItems: 1,
+    },
+    route: {
+      id: `fixture-${stage}-lower`,
+      provider: fixtureUsage.provider,
+      model: fixtureUsage.model,
+    },
   };
 }
 
@@ -170,9 +193,11 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
   const usageArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository));
   assert.match(usageArtifact.stdout, /"model": "fixture-model-v1"/);
-  assert.match(usageArtifact.stdout, /"schemaVersion": "agent-usage\/v3"/);
+  assert.match(usageArtifact.stdout, /"schemaVersion": "agent-usage\/v4"/);
   assert.match(usageArtifact.stdout, /"budgetDecision"/);
   assert.match(usageArtifact.stdout, /"requestAttempts"/);
+  assert.match(usageArtifact.stdout, /"routingDecision"/);
+  assert.match(usageArtifact.stdout, /"complexity": "lower"/);
   assert.match(usageArtifact.stdout, /"classification": "completed"/);
   const rationaleArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
   assert.match(rationaleArtifact.stdout, /"trust": "untrusted-model-output"/);

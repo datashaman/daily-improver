@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: deterministic structured provider replay fixtures.
-- Current checkpoint commit: `test: add structured provider replay fixtures`.
+- Last completed milestone: bounded model routing based on task complexity.
+- Current checkpoint commit: `feat: route models by task complexity`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, and committed deterministic test/build replays through every injected provider boundary; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays through every injected provider boundary, and versioned lower/higher model routing from bounded structured task complexity; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add model routing based on task complexity.
+Keep the structured provider interface compatible with private customer endpoints.
 
 ## Acceptance criteria for the next task
 
-- Define a bounded, versioned, language-neutral task-complexity decision from approved structured request fields.
-- Select deterministic test-agent and builder model routes for representative lower- and higher-complexity tasks without inspecting host paths, credentials, model rationale, or repository source.
-- Keep route identifiers and configuration explicit and bounded, and fail closed on incomplete, unsupported, or ambiguous routing inputs.
-- Preserve the existing stage-scoped credential, retry, response validation, and stage/daily/specification budget gates for every route.
-- Add executable deterministic examples for each supported route and failure mode without a live model API or permanent credential.
+- Define endpoint-neutral transport capabilities and invocation metadata without moving provider-specific behavior into the core stage contracts.
+- Prove that both routed stages can target a deterministic private-endpoint transport while retaining the same structured request/response, route, credential, retry, and budget boundaries.
+- Keep endpoint identifiers and capabilities explicit and bounded; fail closed before transport on incomplete, unsupported, extended, or route-incompatible endpoint configuration.
+- Ensure endpoint authentication remains ephemeral transport context and cannot enter requests, usage, routing decisions, rationale, attempts, or errors.
+- Add deterministic executable success and failure examples without network access, a live model API, or permanent credentials.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -40,7 +40,8 @@ Add model routing based on task complexity.
 - Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
 - Structured model attempts use a bounded five-class failure model; only explicitly transient transport failures retry through injected timing, every attempt has a fresh reservation, unknown usage consumes the reservation conservatively, and sanitized versioned attempt metadata is stored with trusted usage.
 - Every structured transport attempt acquires an injected `model-stage-credential/v1` credential scoped to its exact test/build stage and repository/specification run; credentials valid for more than fifteen minutes, unavailable, expired, future-issued, malformed, mis-scoped, or reused across stages fail before transport, while raw secrets remain outside requests and artifacts.
-- Committed `structured-provider-replay/v1` fixtures pin successful test-agent and transient-retry builder requests and responses, replay injected credentials, clock, timing, and cost accounting without repository access or a live API, and prove transport failure text does not enter provider results.
+- A `task-complexity-decision/v1` scores only validated task scope and collection counts, selects explicit lower/higher test and build routes from `model-routing-policy/v1`, and is retained in trusted `agent-usage/v4`; malformed, unsupported, duplicate, ambiguous, or response-mismatched routes fail closed without inspecting task prose, source, host paths, credentials, or rationale.
+- Committed `structured-provider-replay/v2` fixtures pin the route policy and selected complexity decision together with the established credential, retry, validation, and cost boundaries.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -61,17 +62,17 @@ Add model routing based on task complexity.
 
 ## Last verification
 
-Verified on 2026-07-17 for the deterministic provider replay slice:
+Verified on 2026-07-17 for the task-complexity model routing slice:
 
-- Focused structured provider replay tests: 2 tests passed.
-- `npm test`: 165 tests passed.
+- Focused structured provider and replay tests: 16 tests passed.
+- `npm test`: 168 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
-- Container build was not required because CLI runtime and production dependencies did not change.
+- `docker build -t daily-improver:local .` passed.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- Both structured stages replayed committed versioned requests and responses through the real provider boundaries; the builder replay included deterministic retry timing, fresh stage credentials, conservative failure accounting, and sanitized attempt metadata.
+- Lower- and higher-complexity tasks selected deterministic stage-specific routes, both structured stages replayed committed versioned route decisions through the real provider boundaries, and the builder replay retained deterministic retry timing, fresh stage credentials, conservative failure accounting, and sanitized attempt metadata.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

@@ -10,6 +10,11 @@ import {
 } from "../src/agents/structured-model-agent-provider.js";
 import { InMemoryModelCostBudgetState } from "../src/agents/model-cost-budget.js";
 import { modelStageCredentialSchemaVersion } from "../src/agents/model-stage-credential.js";
+import {
+  modelRoutingPolicySchemaVersion,
+  validateModelRoutingPolicy,
+  type ModelRoutingPolicy,
+} from "../src/agents/model-routing.js";
 
 const credentialNowMs = 1_784_236_800_000;
 
@@ -39,6 +44,20 @@ const budgets = {
   stages: {
     test: { limitUsd: 0.006, reservationUsd: 0.004 },
     build: { limitUsd: 0.006, reservationUsd: 0.004 },
+  },
+} as const;
+
+const routingPolicy = {
+  schemaVersion: modelRoutingPolicySchemaVersion,
+  routes: {
+    lower: {
+      test: { id: "fixture-test-lower", provider: "deterministic-fixture", model: "fixture-model-v1" },
+      build: { id: "fixture-build-lower", provider: "deterministic-fixture", model: "fixture-model-v1" },
+    },
+    higher: {
+      test: { id: "fixture-test-higher", provider: "deterministic-fixture", model: "fixture-test-model-v2" },
+      build: { id: "fixture-build-higher", provider: "deterministic-fixture", model: "fixture-build-model-v2" },
+    },
   },
 } as const;
 
@@ -128,7 +147,7 @@ test("constructs approved stage requests and accepts bounded deterministic model
     },
   ]);
   const credentials = validCredentials();
-  const provider = new StructuredModelAgentProvider(transport, budgets, credentials);
+  const provider = new StructuredModelAgentProvider(transport, budgets, credentials, routingPolicy);
 
   const testResult = await provider.generateTests(context);
   const buildResult = await provider.build(context);
@@ -139,6 +158,10 @@ test("constructs approved stage requests and accepts bounded deterministic model
   assert.equal(buildResult.budgetDecision?.dailyCommittedBeforeUsd, 0.002);
   assert.equal(buildResult.budgetDecision?.dailyCommittedAfterUsd, 0.004);
   assert.equal(transport.invocations[0]?.maximumCostUsd, 0.004);
+  assert.deepEqual(transport.invocations[0]?.route, routingPolicy.routes.lower.test);
+  assert.deepEqual(transport.invocations[1]?.route, routingPolicy.routes.lower.build);
+  assert.equal(testResult.routingDecision?.complexity, "lower");
+  assert.equal(buildResult.routingDecision?.complexity, "lower");
   assert.equal(transport.invocations[0]?.credential, "test-stage-secret");
   assert.equal(transport.invocations[1]?.credential, "builder-stage-secret");
   assert.deepEqual(credentials.requests.map(({ stage }) => stage), ["test", "build"]);
@@ -169,6 +192,107 @@ test("constructs approved stage requests and accepts bounded deterministic model
   assert.doesNotMatch(serializedRequests, /private\/customer/);
   assert.doesNotMatch(serializedRequests, /stage-secret/);
   assert.doesNotMatch(JSON.stringify([testResult, buildResult]), /stage-secret/);
+});
+
+test("routes higher-complexity test and builder tasks through explicit stage models", async () => {
+  const higherContext: AgentContext = {
+    ...context,
+    spec: {
+      ...context.spec,
+      constraints: { ...context.spec.constraints, maxFiles: 3 },
+    },
+  };
+  const transport = new DeterministicTransport([
+    {
+      ...testResponse,
+      usage: { ...usage, model: "fixture-test-model-v2" },
+    },
+    {
+      schemaVersion: "builder-response/v1",
+      status: "completed",
+      summary: "Distributed the remainder.",
+      changedFiles: ["app/Domain/MoneyAllocator.php"],
+      implementationNotes: [],
+      usage: { ...usage, model: "fixture-build-model-v2" },
+    },
+  ]);
+  const provider = new StructuredModelAgentProvider(
+    transport,
+    budgets,
+    validCredentials(),
+    routingPolicy,
+  );
+
+  const testResult = await provider.generateTests(higherContext);
+  const buildResult = await provider.build(higherContext);
+
+  assert.deepEqual(transport.invocations.map(({ route }) => route), [
+    routingPolicy.routes.higher.test,
+    routingPolicy.routes.higher.build,
+  ]);
+  assert.deepEqual(testResult.routingDecision, {
+    schemaVersion: "task-complexity-decision/v1",
+    stage: "test",
+    complexity: "higher",
+    score: 2,
+    inputs: {
+      maxFiles: 3,
+      maxChangedLines: 80,
+      acceptanceCriteria: 1,
+      propertyInvariants: 1,
+      evidenceItems: 1,
+    },
+    route: routingPolicy.routes.higher.test,
+  });
+  assert.equal(buildResult.routingDecision?.route.id, "fixture-build-higher");
+  assert.doesNotMatch(JSON.stringify([testResult.routingDecision, buildResult.routingDecision]), /private|credential|Remainders|allocation/);
+});
+
+test("fails closed on incomplete, unsupported, or ambiguous model routing configuration", () => {
+  const invalidPolicies: readonly unknown[] = [
+    { schemaVersion: modelRoutingPolicySchemaVersion, routes: { lower: routingPolicy.routes.lower } },
+    { ...routingPolicy, schemaVersion: "model-routing-policy/v2" },
+    {
+      ...routingPolicy,
+      routes: {
+        ...routingPolicy.routes,
+        higher: {
+          ...routingPolicy.routes.higher,
+          test: { ...routingPolicy.routes.higher.test, id: routingPolicy.routes.lower.test.id },
+        },
+      },
+    },
+    {
+      ...routingPolicy,
+      routes: {
+        ...routingPolicy.routes,
+        higher: {
+          ...routingPolicy.routes.higher,
+          test: { ...routingPolicy.routes.higher.test, provider: "deterministic-fixture", model: "fixture-model-v1" },
+        },
+      },
+    },
+  ];
+
+  for (const policy of invalidPolicies) {
+    assert.throws(() => validateModelRoutingPolicy(policy as ModelRoutingPolicy));
+  }
+});
+
+test("rejects response usage that does not match the selected model route", async () => {
+  const transport = new DeterministicTransport([{
+    ...testResponse,
+    usage: { ...usage, model: "unrouted-model" },
+  }]);
+  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy);
+
+  await assert.rejects(provider.generateTests(context), (error) => {
+    assert.ok(error instanceof StructuredModelRequestFailure);
+    assert.equal(error.classification, "policy");
+    assert.match(error.message, /selected model route/);
+    return true;
+  });
+  assert.equal(transport.invocations.length, 1);
 });
 
 test("fails closed before transport for unavailable, mis-scoped, and invalid-lifetime credentials", async () => {
@@ -220,7 +344,7 @@ test("fails closed before transport for unavailable, mis-scoped, and invalid-lif
           return item.credential(request.stage, request.scope);
         },
       },
-    });
+    }, routingPolicy);
 
     await assert.rejects(provider.generateTests(context), (error) => {
       assert.ok(error instanceof StructuredModelRequestFailure, item.name);
@@ -247,6 +371,7 @@ test("prevents one credential secret from crossing the test and builder stage bo
     transport,
     budgets,
     validCredentials({ test: "shared-stage-secret", build: "shared-stage-secret" }),
+    routingPolicy,
   );
 
   await provider.generateTests(context);
@@ -276,7 +401,7 @@ function credential(overrides: {
 }
 
 test("fails closed on malformed responses and response-declared path escapes", async () => {
-  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets, validCredentials());
+  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets, validCredentials(), routingPolicy);
   await assert.rejects(malformed.generateTests(context), /contain exactly/);
 
   const escapedTest = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -286,7 +411,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["app/Domain/MoneyAllocator.php"],
     tests: [{ path: "app/Domain/MoneyAllocator.php", purpose: "Invalid claim.", invariants: [] }],
     usage,
-  }]), budgets, validCredentials());
+  }]), budgets, validCredentials(), routingPolicy);
   await assert.rejects(escapedTest.generateTests(context), /outside its path permissions/);
 
   const protectedBuild = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -296,7 +421,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
     implementationNotes: [],
     usage,
-  }]), budgets, validCredentials());
+  }]), budgets, validCredentials(), routingPolicy);
   await assert.rejects(protectedBuild.build({
     ...context,
     spec: { ...context.spec, allowedFiles: ["app/**", "tests/**"] },
@@ -311,7 +436,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 0.1, reservationUsd: 0.2 },
       build: { limitUsd: 0.1, reservationUsd: 0.1 },
     },
-  }, validCredentials());
+  }, validCredentials(), routingPolicy);
   await assert.rejects(stageExceeded.generateTests(context), /exceeds its stage limit/);
   assert.equal(transport.invocations.length, 0);
 
@@ -321,7 +446,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 1, reservationUsd: 1 },
       build: { limitUsd: 1, reservationUsd: 1 },
     },
-  }, validCredentials());
+  }, validCredentials(), routingPolicy);
   const narrowSpec = { ...context, spec: { ...context.spec, constraints: { ...context.spec.constraints, maxCostUsd: 0.5 } } };
   await assert.rejects(specificationExceeded.generateTests(narrowSpec), /remaining specification budget/);
   assert.equal(transport.invocations.length, 0);
@@ -346,7 +471,7 @@ test("accounts actual test usage and prevents an unaffordable builder request", 
       test: { limitUsd: 0.005, reservationUsd: 0.005 },
       build: { limitUsd: 0.004, reservationUsd: 0.003 },
     },
-  }, validCredentials(), new InMemoryModelCostBudgetState());
+  }, validCredentials(), routingPolicy, new InMemoryModelCostBudgetState());
 
   const testResult = await provider.generateTests(context);
   assert.equal(testResult.budgetDecision?.actualCostUsd, 0.004);
@@ -367,7 +492,7 @@ test("rejects reported usage above the reserved transport budget", async () => {
     }],
     usage: { ...usage, estimatedCostUsd: 0.005 },
   }]);
-  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials());
+  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy);
   await assert.rejects(provider.generateTests(context), /exceeds its reserved budget/);
   assert.equal(transport.invocations.length, 1);
 });
@@ -382,6 +507,7 @@ test("retries only classified transient failures with deterministic timing and p
     transport,
     { ...budgets, dailyLimitUsd: 0.02 },
     validCredentials(),
+    routingPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 3, delaysMs: [25, 50] },
     { async wait(delayMs) { delays.push(delayMs); } },
@@ -444,6 +570,7 @@ test("does not retry permanent, malformed-response, policy, or budget failures",
       transport,
       budgets,
       validCredentials(),
+      routingPolicy,
       new InMemoryModelCostBudgetState(),
       { maxAttempts: 2, delaysMs: [0] },
       { async wait() { throw new Error("Unexpected retry timing."); } },
@@ -463,6 +590,7 @@ test("bounds retry configuration and stops after the configured transient attemp
     new DeterministicTransport([]),
     budgets,
     validCredentials(),
+    routingPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 6, delaysMs: [0, 0, 0, 0, 0] },
   ), /maxAttempts/);
@@ -476,6 +604,7 @@ test("bounds retry configuration and stops after the configured transient attemp
     transport,
     { ...budgets, dailyLimitUsd: 0.02 },
     validCredentials(),
+    routingPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },
@@ -498,6 +627,7 @@ test("fails closed before a retry transport call when conservative usage exhaust
     transport,
     { ...budgets, dailyLimitUsd: 0.007 },
     validCredentials(),
+    routingPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },

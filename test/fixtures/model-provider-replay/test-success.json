@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "structured-provider-replay/v1",
+  "schemaVersion": "structured-provider-replay/v2",
   "stage": "test",
   "clockNowMs": 1784236800000,
   "budgets": {
@@ -10,6 +10,19 @@
     }
   },
   "retryPolicy": { "maxAttempts": 1, "delaysMs": [] },
+  "routingPolicy": {
+    "schemaVersion": "model-routing-policy/v1",
+    "routes": {
+      "lower": {
+        "test": { "id": "replay-test-lower", "provider": "deterministic-fixture", "model": "fixture-model-v1" },
+        "build": { "id": "replay-build-lower", "provider": "deterministic-fixture", "model": "fixture-model-v1" }
+      },
+      "higher": {
+        "test": { "id": "replay-test-higher", "provider": "deterministic-fixture", "model": "fixture-test-model-v2" },
+        "build": { "id": "replay-build-higher", "provider": "deterministic-fixture", "model": "fixture-build-model-v2" }
+      }
+    }
+  },
   "request": {
     "schemaVersion": "test-agent-request/v1",
     "stage": "test",
@@ -106,6 +119,20 @@
             }
           }
         ]
+      },
+      "routingDecision": {
+        "schemaVersion": "task-complexity-decision/v1",
+        "stage": "test",
+        "complexity": "lower",
+        "score": 0,
+        "inputs": {
+          "maxFiles": 2,
+          "maxChangedLines": 80,
+          "acceptanceCriteria": 1,
+          "propertyInvariants": 1,
+          "evidenceItems": 1
+        },
+        "route": { "id": "replay-test-lower", "provider": "deterministic-fixture", "model": "fixture-model-v1" }
       }
     },
     "untrustedRationale": {

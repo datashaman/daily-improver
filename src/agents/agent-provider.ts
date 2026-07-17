@@ -6,6 +6,7 @@ import type {
 } from "./structured-agent-contracts.js";
 import type { ModelCostBudgetDecision } from "./model-cost-budget.js";
 import type { ModelRequestAttempts } from "./model-request-retry.js";
+import type { TaskComplexityDecision } from "./model-routing.js";
 
 export interface AgentStageInputs {
   readonly repository: AgentRepositoryContext;
@@ -27,6 +28,7 @@ export interface TestAgentExecution {
   readonly usage: AgentUsage;
   readonly budgetDecision?: ModelCostBudgetDecision;
   readonly requestAttempts?: ModelRequestAttempts;
+  readonly routingDecision?: TaskComplexityDecision;
   readonly rationale: {
     readonly summary: string;
     readonly changedFiles: readonly string[];
@@ -42,6 +44,7 @@ export interface BuilderExecution {
   readonly usage: AgentUsage;
   readonly budgetDecision?: ModelCostBudgetDecision;
   readonly requestAttempts?: ModelRequestAttempts;
+  readonly routingDecision?: TaskComplexityDecision;
   readonly rationale: {
     readonly summary: string;
     readonly changedFiles: readonly string[];

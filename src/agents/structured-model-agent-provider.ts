@@ -13,6 +13,7 @@ import {
   parseTestAgentRequest,
   parseTestAgentResponse,
   testAgentRequestSchemaVersion,
+  type AgentUsage,
   type BuilderRequest,
   type TestAgentRequest,
 } from "./structured-agent-contracts.js";
@@ -43,6 +44,13 @@ import {
   validateModelStageCredential,
   type ModelStageCredentialPolicy,
 } from "./model-stage-credential.js";
+import {
+  selectModelRoute,
+  validateModelRoutingPolicy,
+  type ModelRoute,
+  type ModelRoutingPolicy,
+  type TaskComplexityDecision,
+} from "./model-routing.js";
 
 export { ModelTransportFailure, StructuredModelRequestFailure } from "./model-request-retry.js";
 export type {
@@ -61,6 +69,7 @@ export interface ModelTransportInvocation {
   readonly workingDirectory: string;
   readonly maximumCostUsd: number;
   readonly credential: string;
+  readonly route: ModelRoute;
 }
 
 export interface ModelTransport {
@@ -71,17 +80,20 @@ export class StructuredModelAgentProvider implements AgentProvider {
   private readonly budgets: ModelCostBudgets;
   private readonly retryPolicy: ModelRetryPolicy;
   private readonly credentials: Required<ModelStageCredentialPolicy>;
+  private readonly routingPolicy: ModelRoutingPolicy;
   private readonly credentialStages = new Map<string, ModelAgentStage>();
 
   constructor(
     private readonly transport: ModelTransport,
     budgets: ModelCostBudgets,
     credentialPolicy: ModelStageCredentialPolicy,
+    routingPolicy: ModelRoutingPolicy,
     private readonly budgetState: ModelCostBudgetState = new InMemoryModelCostBudgetState(),
     retryPolicy: ModelRetryPolicy = noModelRetries,
     private readonly retryTiming: ModelRetryTiming = systemModelRetryTiming,
   ) {
     this.budgets = validateModelCostBudgets(budgets);
+    this.routingPolicy = validateModelRoutingPolicy(routingPolicy);
     this.retryPolicy = validateModelRetryPolicy(retryPolicy);
     this.credentials = {
       source: credentialPolicy.source,
@@ -114,6 +126,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
       usage: response.usage,
       budgetDecision: response.budgetDecision,
       requestAttempts: response.requestAttempts,
+      routingDecision: response.routingDecision,
       rationale: {
         summary: response.summary,
         changedFiles: response.changedFiles,
@@ -147,6 +160,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
       usage: response.usage,
       budgetDecision: response.budgetDecision,
       requestAttempts: response.requestAttempts,
+      routingDecision: response.routingDecision,
       rationale: {
         summary: response.summary,
         changedFiles: response.changedFiles,
@@ -167,15 +181,17 @@ export class StructuredModelAgentProvider implements AgentProvider {
     });
   }
 
-  private async invoke<T extends { readonly usage: { readonly estimatedCostUsd: number } }>(
+  private async invoke<T extends { readonly usage: AgentUsage }>(
     context: AgentContext,
     parser: (value: unknown) => T,
-    invocation: Omit<ModelTransportInvocation, "maximumCostUsd" | "credential">,
+    invocation: Omit<ModelTransportInvocation, "maximumCostUsd" | "credential" | "route">,
     validatePolicy: (response: T) => void,
   ): Promise<T & {
     readonly budgetDecision: ReturnType<ModelCostBudgetState["settle"]>;
     readonly requestAttempts: ModelRequestAttempts;
+    readonly routingDecision: TaskComplexityDecision;
   }> {
+    const routingDecision = selectModelRoute(invocation.request, this.routingPolicy);
     const attempts: ModelRequestAttempt[] = [];
     for (let attempt = 1; attempt <= this.retryPolicy.maxAttempts; attempt++) {
       let reservation: ModelCostReservation;
@@ -203,6 +219,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
           ...invocation,
           maximumCostUsd: reservation.request.reservationUsd,
           credential,
+          route: routingDecision.route,
         });
       } catch (error) {
         const classification = transportFailureClassification(error);
@@ -244,6 +261,9 @@ export class StructuredModelAgentProvider implements AgentProvider {
 
       const budgetDecision = this.budgetState.settle(reservation, response.usage.estimatedCostUsd);
       try {
+        if (response.usage.provider !== routingDecision.route.provider || response.usage.model !== routingDecision.route.model) {
+          throw new Error(`${invocation.stage} stage response usage does not match its selected model route.`);
+        }
         validatePolicy(response);
       } catch (error) {
         attempts.push({ attempt, classification: "policy", budgetDecision });
@@ -254,6 +274,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
         ...response,
         budgetDecision,
         requestAttempts: this.attemptLog(attempts),
+        routingDecision,
       };
     }
     throw new Error("Unreachable model retry state.");
