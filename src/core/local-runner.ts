@@ -1,6 +1,7 @@
 import { cp } from "node:fs/promises";
-import { join } from "node:path";
-import type { AgentProvider } from "../agents/agent-provider.js";
+import { join, relative } from "node:path";
+import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../agents/agent-provider.js";
+import { loadConfig } from "../config.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { GitWorkspaceManager } from "../infra/git-workspace.js";
 import { createTestManifest, runDirectory, writeArtifact } from "./artifacts.js";
@@ -33,13 +34,33 @@ export class LocalImprovementRunner {
     try {
       await cp(runDirectory(repository), runDirectory(isolated.path), { recursive: true });
       const specPath = join(runDirectory(isolated.path), "spec.json");
-      const context = { repository: isolated.path, spec, specPath };
-      await this.agents.generateTests(context);
-
       const adapter = await this.stagesAdapter(isolated.path);
       const profile = await adapter.profile(isolated.path);
+      const config = await loadConfig(isolated.path);
       const test = profile.capabilities.get("test");
       if (!test) throw new Error("A test capability is required for autonomous correctness work.");
+      const allowedTestPaths = config.protected_paths.filter((path) => path === "tests" || path === "test" || path.startsWith("tests/") || path.startsWith("test/"));
+      if (allowedTestPaths.length === 0) throw new Error("At least one protected test path is required for model-generated tests.");
+      const commands = spec.verification.flatMap((kind) => {
+        const capability = profile.capabilities.get(kind);
+        return capability ? [{ purpose: kind, argv: capability.command }] : [];
+      });
+      const baseContext: AgentContext = {
+        repository: isolated.path,
+        spec,
+        specPath,
+        inputs: {
+          repository: { language: profile.language, frameworks: profile.frameworks },
+          allowedTestPaths,
+          protectedFiles: [],
+          commands,
+          testConventions: ["Add focused regression or property tests using the repository test harness."],
+          builderConventions: ["Implement only the approved specification and preserve existing public interfaces."],
+        },
+      };
+      const testExecution = await this.agents.generateTests(baseContext);
+      await persistExecution(isolated.path, "test", testExecution);
+
       const baseline = await this.runner.run(test.command, isolated.path);
       if (baseline.exitCode === 0) throw new Error("Generated regression test did not fail against main behavior.");
       await writeArtifact(isolated.path, "test-plan.json", {
@@ -51,9 +72,17 @@ export class LocalImprovementRunner {
       const manifest = await createTestManifest(isolated.path, this.manifestKey);
       await writeArtifact(isolated.path, "test-manifest.json", manifest);
 
-      await this.agents.build(context);
+      const builderContext: AgentContext = {
+        ...baseContext,
+        inputs: {
+          ...baseContext.inputs,
+          protectedFiles: [...new Set([...config.protected_paths, ...Object.keys(manifest.files)])],
+        },
+      };
+      const builderExecution = await this.agents.build(builderContext);
+      const trustedBuilderArtifacts = await persistExecution(isolated.path, "build", builderExecution);
       await this.runner.run(["git", "add", "-N", "."], isolated.path);
-      const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey);
+      const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey, trustedBuilderArtifacts);
       const publication = await this.stages.publicationRequest(isolated.path);
       await this.runner.run(["git", "add", "."], isolated.path);
       const commit = await this.runner.run(["git", "commit", "-m", `fix: ${spec.title}`], isolated.path);
@@ -73,6 +102,26 @@ export class LocalImprovementRunner {
   private async stagesAdapter(root: string) {
     return await this.stages.resolveAdapter(root);
   }
+}
+
+async function persistExecution(
+  root: string,
+  stage: "test" | "build",
+  execution: TestAgentExecution | BuilderExecution | void,
+): Promise<readonly string[]> {
+  if (!execution) return [];
+  const usagePath = await writeArtifact(root, `${stage}-agent-usage.json`, {
+    schemaVersion: "agent-usage/v1",
+    stage,
+    ...execution.usage,
+  });
+  const rationalePath = await writeArtifact(root, `${stage}-agent-rationale.json`, {
+    schemaVersion: "agent-rationale/v1",
+    trust: "untrusted-model-output",
+    stage,
+    ...execution.rationale,
+  });
+  return [relative(root, usagePath), relative(root, rationalePath)];
 }
 
 function slugify(value: string): string {

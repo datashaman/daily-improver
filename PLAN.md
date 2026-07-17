@@ -15,8 +15,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- Versioned, bounded test-agent and builder request/response contracts now define the structured model boundary.
-- The exact next task is implementing the first model-backed provider against those contracts.
+- A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
+- The exact next task is enforcing per-stage and daily model cost budgets before transport requests.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -128,13 +128,13 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 
 - [x] Define versioned test-agent request and response schemas.
 - [x] Define versioned builder request and response schemas.
-- [ ] Send only the approved spec, allowlist, necessary context, commands, and conventions.
-- [ ] Add the first model-backed provider.
-- [ ] Track model, token usage, latency, and estimated cost.
+- [x] Send only the approved spec, allowlist, necessary context, commands, and conventions.
+- [x] Add the first model-backed provider.
+- [x] Track model, token usage, latency, and estimated cost.
 - [ ] Enforce per-stage and daily cost budgets before requests.
 - [ ] Retry only classified transient failures.
-- [ ] Reject malformed or incomplete responses.
-- [ ] Store model rationale separately from trusted evidence.
+- [x] Reject malformed or incomplete responses.
+- [x] Store model rationale separately from trusted evidence.
 - [ ] Use separate short-lived credentials for test and builder agents.
 - [ ] Add deterministic provider replay fixtures.
 - [ ] Add model routing based on task complexity.
@@ -461,9 +461,9 @@ The recent and next commit-sized milestones are:
 2. [x] `feat: add category-specific scoring weights`
 3. [x] `feat: score candidate evidence and testability`
 4. [x] `feat: define structured agent contracts`
-5. [ ] `feat: add structured model agent provider`
+5. [x] `feat: add structured model agent provider`
 
-The immediate next task is Phase 1C: implement the first model-backed provider using the versioned structured test-agent and builder contracts.
+The immediate next task is Phase 1C: enforce per-stage and daily model cost budgets before structured transport requests.
 
 ## Initial operating limits
 

@@ -64,7 +64,12 @@ export class PipelineStages {
     return { command, exitCode: result.exitCode };
   }
 
-  async verify(root: string, base = process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main", manifestKey?: string) {
+  async verify(
+    root: string,
+    base = process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main",
+    manifestKey?: string,
+    trustedArtifacts: readonly string[] = [],
+  ) {
     const key = manifestKey ?? requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
@@ -72,6 +77,7 @@ export class PipelineStages {
     if (!(await verifyTestManifest(root, manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
     const trustedPaths = new Set(Object.keys(manifest.files));
     trustedPaths.add(relative(root, `${runDirectory(root)}/test-manifest.json`));
+    for (const path of trustedArtifacts) trustedPaths.add(path);
     const diff = await new DiffGuard(this.runner).inspect(root, base, spec, config.protected_paths, trustedPaths);
     const sourceSafety = await new SourceSafetyInspector(this.runner).inspect(root, base, Object.keys(manifest.files));
     const checks = [];
