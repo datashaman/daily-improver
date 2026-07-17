@@ -71,6 +71,7 @@ export class LocalImprovementRunner {
       }
       const test = profile.capabilities.get("test");
       if (!test) throw new Error("A test capability is required for autonomous correctness work.");
+      const propertyTest = profile.capabilities.get("property-testing");
       const allowedTestPaths = config.protected_paths.filter((path) => path === "tests" || path === "test" || path.startsWith("tests/") || path.startsWith("test/"));
       if (allowedTestPaths.length === 0) throw new Error("At least one protected test path is required for model-generated tests.");
       const commands = spec.verification.flatMap((kind) => {
@@ -92,6 +93,9 @@ export class LocalImprovementRunner {
             "During every test command, write exact generated-test-lifecycle-report/v1 JSON to DAILY_IMPROVER_TEST_LIFECYCLE_PATH using DAILY_IMPROVER_TEST_LIFECYCLE_NONCE. Report every generated test path as executed, skipped, or disabled with its assertion count and a SHA-256 identity of its effective tolerance contract.",
             ...(test.framework === "pest" ? [
               "Use ordinary Pest test()/it() discovery without only(), skip(), or todo(); every declared test must contain an explicit expectation/assertion, and inline data providers must expose at least one bounded static case.",
+            ] : []),
+            ...(propertyTest?.framework === "eris" ? [
+              "Use the Eris TestTrait with supported static Eris Generators factories and a direct forAll(...)->then(...) property; rely on Eris's bounded default iteration count without limitTo or ErisRepeat overrides, invoke the selected target, and assert the approved invariant inside then().",
             ] : []),
             ...(spec.propertyTestTarget ? [
               `Exercise the selected target ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one approved property invariant for every input.`,
@@ -185,9 +189,13 @@ export class LocalImprovementRunner {
         adapterQualityInspection = await adapter.inspectGeneratedTestQuality({
           root: isolated.path,
           framework: test.framework,
+          ...(propertyTest?.framework
+            ? { propertyFramework: propertyTest.framework }
+            : {}),
           selectedTestPath: propertyProof?.testPath ?? changedTests[0]!,
           observedTestPaths: changedTests,
           baselineLifecycle,
+          ...(propertyProof ? { propertyProof } : {}),
         });
         if (adapterQualityInspection) {
           if (adapterQualityInspection.outcome !== "accepted") throw new Error("Adapter generated-test quality inspection rejected the generated test.");

@@ -31,6 +31,11 @@ import {
   requireAcceptedPhpunitGeneratedTestQuality,
   type PhpunitGeneratedTestQualityInspection,
 } from "./phpunit-generated-test-quality.js";
+import {
+  inspectErisPropertyTestQuality,
+  requireAcceptedErisPropertyTestQuality,
+  type ErisPropertyTestQualityInspection,
+} from "./eris-property-test-quality.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -182,18 +187,25 @@ export class PhpAdapter implements RepositoryAdapter {
     return "unknown";
   }
 
-  async inspectGeneratedTestQuality(request: GeneratedTestQualityInspectionRequest): Promise<PestGeneratedTestQualityInspection | PhpunitGeneratedTestQualityInspection | undefined> {
+  async inspectGeneratedTestQuality(request: GeneratedTestQualityInspectionRequest): Promise<PestGeneratedTestQualityInspection | PhpunitGeneratedTestQualityInspection | ErisPropertyTestQualityInspection | undefined> {
+    let frameworkInspection: PestGeneratedTestQualityInspection | PhpunitGeneratedTestQualityInspection | undefined;
     if (request.framework === "pest") {
       const inspection = await inspectPestGeneratedTestQuality(request);
       requireAcceptedPestGeneratedTestQuality(inspection);
-      return inspection;
+      frameworkInspection = inspection;
     }
     if (request.framework === "phpunit") {
       const inspection = await inspectPhpunitGeneratedTestQuality(request);
       requireAcceptedPhpunitGeneratedTestQuality(inspection);
+      frameworkInspection = inspection;
+    }
+    if (request.propertyFramework === "eris") {
+      if (!frameworkInspection) throw new Error("Eris property-test inspection requires accepted Pest or PHPUnit evidence.");
+      const inspection = await inspectErisPropertyTestQuality(request, frameworkInspection);
+      requireAcceptedErisPropertyTestQuality(inspection);
       return inspection;
     }
-    return undefined;
+    return frameworkInspection;
   }
 }
 

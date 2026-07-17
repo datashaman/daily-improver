@@ -13,7 +13,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
 - Phase 1B is complete. Category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; versioned explanations replay those factors and weights through priority influence, value caps, and final scores, explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
-- Phase 1D now derives or validates an exact language-neutral `improvement-intent/v1` contract before agent execution. Defects require a credible behavioral baseline failure; refactors require passing characterization tests; performance and maintainability work use distinct passing measurement and quality baselines. All four require passing post-change verification, and generated Pest and PHPUnit tests receive bounded adapter-specific discovery, marker, assertion-structure, and data-provider inspection.
+- Phase 1D now derives or validates an exact language-neutral `improvement-intent/v1` contract before agent execution. Defects require a credible behavioral baseline failure; refactors require passing characterization tests; performance and maintainability work use distinct passing measurement and quality baselines. All four require passing post-change verification, generated Pest and PHPUnit tests receive bounded adapter-specific discovery, marker, assertion-structure, and data-provider inspection, and Eris property tests receive proof-bound generator, execution, target, invariant, and iteration inspection.
 - Applicable baseline-known-mutant evidence now produces an exact `known-mutation/v1` specification requirement and a sealed `known-mutation-execution-proof/v1` over the relevant generated test, selected target, approved criterion, exact command, credible failure, and hashed output.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
@@ -170,7 +170,7 @@ Goal: prove that generated tests are meaningful and cannot be weakened by the bu
 - [x] Record bounded test commands, outcomes, durations, and output hashes without raw output.
 - [x] Add Pest-specific quality inspection.
 - [x] Add PHPUnit-specific quality inspection.
-- [ ] Add Eris-specific property-test inspection.
+- [x] Add Eris-specific property-test inspection.
 - [x] Quarantine flaky candidates instead of generating a PR.
 
 Exit gate: generated tests demonstrate an observable difference between defective and corrected behavior.
@@ -495,8 +495,9 @@ The recent and next commit-sized milestones are:
 24. [x] `feat: enforce generated test lifecycle`
 25. [x] `feat: inspect generated Pest test quality`
 26. [x] `feat: inspect generated PHPUnit test quality`
+27. [x] `feat: inspect generated Eris property tests`
 
-The immediate next task is Phase 1D: add Eris-specific property-test inspection. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: give the builder a strict filesystem allowlist. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

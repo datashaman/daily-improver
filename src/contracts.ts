@@ -10,13 +10,16 @@ import type {
   RepositoryProfile,
 } from "./domain/model.js";
 import type { GeneratedTestLifecycleDecision } from "./domain/generated-test-lifecycle.js";
+import type { PropertyTestExecutionProof } from "./domain/property-test-execution-proof.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
   readonly framework: string | undefined;
+  readonly propertyFramework?: string;
   readonly selectedTestPath: string;
   readonly observedTestPaths: readonly string[];
   readonly baselineLifecycle: GeneratedTestLifecycleDecision;
+  readonly propertyProof?: PropertyTestExecutionProof;
 }
 
 export interface AdapterGeneratedTestQualityInspection {
