@@ -33,7 +33,7 @@ Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.
 
 ## Pipeline
 
-1. `analyse` observes tool output and repository signals, deduplicates semantic overlaps, ranks evidence-backed candidates, and selects exactly one.
+1. `analyse` observes tool output and repository signals, rejects candidates without reproducible bounded evidence, deduplicates semantic overlaps, ranks the survivors, and selects exactly one.
 2. `specify` converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
 3. `test` seals generated regression, characterization, and property tests in an HMAC manifest.
 4. `build` invokes an isolated builder provider using only the approved inputs.
@@ -46,7 +46,9 @@ The PHP adapter directly runs trusted Composer, static-analysis, test-coverage, 
 
 Every executed collector records versioned, persistable provenance alongside its command result: a bounded tool version, the direct version command, and a deterministic hash of only its allowlisted configuration inputs. Individual configuration inputs are recorded as hashed, absent, unreadable, or oversized without retaining their content. Missing or malformed version output and unreadable or oversized configuration fail closed before the evidence command runs; raw version and configuration output is never persisted.
 
-Candidates may carry the language-neutral `candidate-deduplication/v1` identity: a bounded subsystem, a materially distinct defect, evidence reproducibility, and provenance. Candidates with the same subsystem and defect are reduced before scoring. The strongest reproducible candidate is preserved intact with deterministic tie-breaking, while different defects in the same subsystem remain independently rankable. Candidates without that semantic identity are deduplicated only when their stable candidate IDs match.
+Every rankable candidate carries the language-neutral `candidate-reproducibility/v1` contract: an explicit reproducible status, a bounded strength from greater than zero through one, and one to eight bounded provenance entries. Candidates with absent or unbounded evidence, a missing or non-reproducible contract, invalid strength, or missing or unbounded provenance are rejected before deduplication and scoring. Analysis fails closed when no candidate qualifies.
+
+Candidates may also carry the language-neutral `candidate-deduplication/v1` identity: a bounded subsystem and a materially distinct defect. Candidates with the same subsystem and defect are reduced before scoring. The candidate with the strongest reproducible evidence is preserved intact with deterministic tie-breaking, while different defects in the same subsystem remain independently rankable. Candidates without that semantic identity are deduplicated only when their stable candidate IDs match.
 
 Normalized static-analysis, coverage, mutation-analysis, complexity, duplicate-code, and performance evidence is cached under the ignored `.daily-improver/cache/php-evidence/` runtime directory. A cache hit requires the same relevant PHP sources, canonical trusted command, bounded tool version, relevant configuration hash, evidence schema, and collector-policy version. Only successful or code-finding evidence is reusable; unavailable tools, configuration failures, missing coverage support, timeouts, truncation, malformed output, and infrastructure failures always run again. Cache artifacts are size-limited, contain no raw tool output, and are published atomically under a per-key lock so concurrent analysis cannot expose partial JSON.
 

@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: language-neutral candidate deduplication.
-- Current checkpoint commit: `feat: deduplicate overlapping findings`.
+- Last completed milestone: reproducible candidate evidence gate and Phase 1A observer completion.
+- Current checkpoint commit: `feat: reject irreproducible candidates`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
-- Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, duplicate-code analysis, deprecation-analysis, performance-analysis, validation/error-handling analysis, shared provenance, evidence-cache, and candidate-deduplication slices are implemented and verified.
+- Current phase: Phase 1B — Deterministic candidate selection.
+- Current state: Phase 1A is complete. The Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, duplicate-code analysis, deprecation-analysis, performance-analysis, validation/error-handling analysis, shared provenance, evidence-cache, candidate-deduplication, and reproducible-evidence slices are implemented and verified.
 
 ## Exact next task
 
-Reject candidates without reproducible evidence.
+Add category-specific scoring weights.
 
 ## Acceptance criteria for the next task
 
-- Define a language-neutral reproducibility contract for ranked candidates.
-- Reject candidates whose evidence is absent, non-reproducible, or lacks bounded provenance before deduplication and ranking.
-- Preserve deterministic selection among the remaining evidence-backed candidates and fail closed when none qualify.
-- Add deterministic unit tests for accepted, rejected, and mixed candidate sets.
+- Define language-neutral, category-specific scoring weights for every candidate kind.
+- Apply the category weights without introducing PHP-specific logic into the core.
+- Preserve deterministic ranking and tie-breaking.
+- Add deterministic unit tests showing meaningful category differences while preserving existing impact, confidence, effort, and risk behavior.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -27,7 +27,7 @@ Reject candidates without reproducible evidence.
 
 - The CLI detects PHP and Laravel repositories.
 - The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, explicit Laravel deprecation rules, versioned Laravel validation/error-handling rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
-- Candidate selection deduplicates semantic overlaps before ranking and chooses one bounded improvement.
+- Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence before deduplication and ranking, then chooses one bounded improvement or fails closed.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -48,10 +48,10 @@ Reject candidates without reproducible evidence.
 
 ## Last verification
 
-Verified on 2026-07-17 for the candidate-deduplication slice:
+Verified on 2026-07-17 for the reproducible-candidate-evidence slice:
 
-- Focused deduplication and ranking tests: 6 tests passed.
-- `npm test`: 102 tests passed.
+- Focused reproducibility, deduplication, ranking, and pipeline tests: 12 tests passed.
+- `npm test`: 106 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -63,7 +63,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear after the candidate-deduplication slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear after the reproducible-candidate-evidence slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

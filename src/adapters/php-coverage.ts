@@ -11,6 +11,7 @@ import type {
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpCoverageSchemaVersion = "php-coverage-evidence/v1" as const;
 
@@ -211,12 +212,11 @@ function coverageCandidate(finding: PhpCoverageFinding): ImprovementCandidate {
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,
     estimatedDiffLines: 70,
+    reproducibility: reproducibleEvidence(0.98, [`${finding.tool} Clover collector`]),
     deduplication: {
       schemaVersion: "candidate-deduplication/v1",
       subsystem: finding.file,
       defect: "statement-coverage-gap",
-      reproducibility: 0.98,
-      provenance: [`${finding.tool} Clover collector`],
     },
   };
 }

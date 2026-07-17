@@ -44,7 +44,12 @@ export interface CandidateDeduplication {
   readonly schemaVersion: "candidate-deduplication/v1";
   readonly subsystem: string;
   readonly defect: string;
-  readonly reproducibility: number;
+}
+
+export interface CandidateReproducibility {
+  readonly schemaVersion: "candidate-reproducibility/v1";
+  readonly reproducible: boolean;
+  readonly strength: number;
   readonly provenance: readonly string[];
 }
 
@@ -62,6 +67,7 @@ export interface ImprovementCandidate {
   readonly target?: string;
   readonly estimatedDiffLines?: number;
   readonly propertyInvariants?: readonly string[];
+  readonly reproducibility?: CandidateReproducibility;
   readonly deduplication?: CandidateDeduplication;
 }
 

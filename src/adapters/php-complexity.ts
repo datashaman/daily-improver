@@ -11,6 +11,7 @@ import type {
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpComplexitySchemaVersion = "php-complexity-evidence/v1" as const;
 
@@ -219,6 +220,7 @@ function complexityCandidate(finding: PhpComplexityFinding): ImprovementCandidat
     suggestedFiles,
     target: finding.file ?? finding.symbol,
     estimatedDiffLines: 120,
+    reproducibility: reproducibleEvidence(0.96, ["PhpMetrics executed collector"]),
   };
 }
 

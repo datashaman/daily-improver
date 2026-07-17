@@ -8,6 +8,7 @@ import type {
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpStaticAnalysisSchemaVersion = "php-static-analysis-evidence/v1" as const;
 
@@ -218,6 +219,7 @@ function staticAnalysisCandidate(finding: PhpStaticAnalysisFinding): Improvement
     suggestedFiles: [finding.file, "tests"],
     target: finding.file,
     estimatedDiffLines: 40,
+    reproducibility: reproducibleEvidence(0.98, [`${finding.tool} executed collector`]),
   };
 }
 

@@ -1,10 +1,11 @@
 import type { ImprovementCandidate, RankedCandidate } from "../domain/model.js";
 import { deduplicateCandidates } from "./candidate-deduplication.js";
+import { rejectCandidatesWithoutReproducibleEvidence } from "./candidate-reproducibility.js";
 
 export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
 ): readonly RankedCandidate[] {
-  return deduplicateCandidates(candidates)
+  return deduplicateCandidates(rejectCandidatesWithoutReproducibleEvidence(candidates))
     .map((candidate) => ({
       ...candidate,
       score: round(

@@ -20,6 +20,7 @@ import { collectPhpValidationErrorEvidence } from "./php-validation-error-handli
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -173,7 +174,19 @@ export class PhpAdapter implements RepositoryAdapter {
 }
 
 function candidate(id: string, kind: ImprovementCandidate["kind"], title: string, rationale: string, confidence: number, impact: number, effort: number, risk: number, evidence: string[], suggestedFiles: string[]): ImprovementCandidate {
-  return { id, kind, title, rationale, confidence, impact, effort, risk, evidence, suggestedFiles };
+  return {
+    id,
+    kind,
+    title,
+    rationale,
+    confidence,
+    impact,
+    effort,
+    risk,
+    evidence,
+    suggestedFiles,
+    reproducibility: reproducibleEvidence(0.9, ["PHP manifest capability inspection"]),
+  };
 }
 
 function detectFrameworks(packages: PackageMap): string[] {

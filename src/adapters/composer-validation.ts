@@ -1,6 +1,7 @@
 import type { EvidenceResult, EvidenceRunner } from "../contracts.js";
 import type { ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 const composerValidateCommand = [
   "composer",
@@ -58,5 +59,6 @@ function composerValidationCandidate(result: EvidenceResult): ImprovementCandida
       `stdout ${result.stdoutHash}; stderr ${result.stderrHash}`,
     ],
     suggestedFiles: ["composer.json", "composer.lock"],
+    reproducibility: reproducibleEvidence(0.99, [result.commandIdentity, result.provenance.toolVersion ?? "unknown Composer version"]),
   };
 }

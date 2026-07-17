@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rankCandidates } from "../src/core/ranking.js";
 import type { ImprovementCandidate } from "../src/domain/model.js";
+import { reproducibleEvidence } from "../src/domain/candidate-reproducibility.js";
 
 const base: ImprovementCandidate = {
   id: "base", kind: "maintainability", title: "Base", rationale: "Base", confidence: 0.5,
-  impact: 0.5, effort: 0.5, risk: 0.5, evidence: [], suggestedFiles: [],
+  impact: 0.5, effort: 0.5, risk: 0.5, evidence: ["bounded evidence"], suggestedFiles: [],
+  reproducibility: reproducibleEvidence(0.8, ["test collector"]),
 };
 
 test("ranking rewards impact and confidence while penalizing effort and risk", () => {
@@ -22,11 +24,10 @@ test("ranking deduplicates semantic overlaps before scoring", () => {
     schemaVersion: "candidate-deduplication/v1" as const,
     subsystem: "src/Service.ts",
     defect: "coverage-gap",
-    provenance: ["collector"],
   };
   const ranked = rankCandidates([
-    { ...base, id: "weak", impact: 1, deduplication: { ...semanticIdentity, reproducibility: 0.5 } },
-    { ...base, id: "strong", impact: 0.5, deduplication: { ...semanticIdentity, reproducibility: 0.99 } },
+    { ...base, id: "weak", impact: 1, reproducibility: reproducibleEvidence(0.5, ["weak collector"]), deduplication: semanticIdentity },
+    { ...base, id: "strong", impact: 0.5, reproducibility: reproducibleEvidence(0.99, ["strong collector"]), deduplication: semanticIdentity },
     { ...base, id: "other" },
   ]);
 

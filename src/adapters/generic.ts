@@ -1,6 +1,7 @@
 import type { RepositoryAdapter } from "../contracts.js";
 import type { ImprovementCandidate, RepositoryProfile } from "../domain/model.js";
 import { exists } from "./shared.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 const signals = [".git", "README.md", "Makefile"];
 
@@ -32,6 +33,7 @@ export class GenericAdapter implements RepositoryAdapter {
         risk: 0.05,
         evidence: ["No language-specific repository adapter matched."],
         suggestedFiles: ["README.md"],
+        reproducibility: reproducibleEvidence(0.75, ["Generic repository signal inspection"]),
       },
     ];
   }

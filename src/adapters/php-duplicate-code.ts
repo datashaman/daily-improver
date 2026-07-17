@@ -6,6 +6,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import type { EvidenceCommandOutput, EvidenceResult, EvidenceResultStatus, EvidenceRunner } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpDuplicateCodeSchemaVersion = "php-duplicate-code-evidence/v1" as const;
 
@@ -242,6 +243,7 @@ function duplicateCandidate(finding: PhpDuplicateCodeFinding): ImprovementCandid
     suggestedFiles: [...files, "tests"],
     target: primaryFile,
     estimatedDiffLines: Math.min(150, finding.lines * finding.occurrenceCount + 40),
+    reproducibility: reproducibleEvidence(0.98, ["PHPCPD executed collector"]),
   };
 }
 

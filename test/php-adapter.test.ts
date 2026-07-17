@@ -7,6 +7,7 @@ import type { EvidenceCommand, EvidenceRun, EvidenceRunner } from "../src/contra
 import { evidenceStubMetadata } from "./evidence-stub.js";
 import { PhpAdapter } from "../src/adapters/php.js";
 import { PhpEvidenceCache } from "../src/infra/php-evidence-cache.js";
+import { hasReproducibleEvidence } from "../src/core/candidate-reproducibility.js";
 
 const successfulEvidenceRunner: EvidenceRunner = {
   async run(command: EvidenceCommand): Promise<EvidenceRun> {
@@ -114,6 +115,7 @@ test("ranks missing test protection as the first PHP baseline candidate", async 
   const adapter = new PhpAdapter(successfulEvidenceRunner);
   const candidates = await adapter.discoverCandidates(await adapter.profile(root));
   assert.equal(candidates[0]?.id, "php-test-baseline");
+  assert.equal(candidates.every(hasReproducibleEvidence), true);
 });
 
 test("collects versioned Laravel validation and error-handling findings as adapter candidates", async () => {

@@ -23,7 +23,7 @@ function deduplicationKey(candidate: ImprovementCandidate): string {
 }
 
 function compareEvidenceStrength(a: ImprovementCandidate, b: ImprovementCandidate): number {
-  return (b.deduplication?.reproducibility ?? 0) - (a.deduplication?.reproducibility ?? 0)
+  return (b.reproducibility?.strength ?? 0) - (a.reproducibility?.strength ?? 0)
     || b.confidence - a.confidence
     || b.impact - a.impact
     || a.effort - b.effort
@@ -39,6 +39,6 @@ function canonicalCandidate(candidate: ImprovementCandidate): string {
     candidate.target ?? "",
     [...candidate.evidence],
     [...candidate.suggestedFiles],
-    [...(candidate.deduplication?.provenance ?? [])],
+    [...(candidate.reproducibility?.provenance ?? [])],
   ]);
 }

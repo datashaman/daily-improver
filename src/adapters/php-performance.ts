@@ -7,6 +7,7 @@ import type { EvidenceResult, EvidenceResultStatus, EvidenceRunner } from "../co
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import type { ImproverConfig } from "../config.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpPerformanceSchemaVersion = "php-performance-evidence/v1" as const;
 export const phpSlowTestSchemaVersion = "php-slow-test-evidence/v1" as const;
@@ -314,6 +315,7 @@ function performanceCandidate(finding: SlowTestFinding | SlowQueryFinding): Impr
       suggestedFiles: [finding.file],
       target: finding.file,
       estimatedDiffLines: 80,
+      reproducibility: reproducibleEvidence(0.97, [`${finding.tool} JUnit executed collector`]),
     };
   }
   return {
@@ -329,6 +331,7 @@ function performanceCandidate(finding: SlowTestFinding | SlowQueryFinding): Impr
     suggestedFiles: [finding.file],
     target: finding.file,
     estimatedDiffLines: 90,
+    reproducibility: reproducibleEvidence(0.95, ["Laravel listener executed collector"]),
   };
 }
 

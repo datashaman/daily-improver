@@ -4,6 +4,7 @@ import { isAbsolute, join, relative } from "node:path";
 import type { EvidenceCommandOutput, EvidenceResult, EvidenceRunner } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpDeprecationSchemaVersion = "php-deprecated-api-evidence/v1" as const;
 export const laravelDeprecationRuleSetVersion = "laravel-deprecation-rules/v1" as const;
@@ -392,12 +393,11 @@ function deprecationCandidate(finding: DeprecatedApiFinding): ImprovementCandida
     suggestedFiles: [finding.file, "tests"],
     target: finding.file,
     estimatedDiffLines: 30,
+    reproducibility: reproducibleEvidence(0.97, [`${finding.rule} (${finding.ruleProvenance})`]),
     deduplication: {
       schemaVersion: "candidate-deduplication/v1",
       subsystem: finding.file,
       defect: `deprecated-api:${finding.line}:${finding.symbol}`,
-      reproducibility: 0.97,
-      provenance: [`${finding.rule} (${finding.ruleProvenance})`],
     },
   };
 }

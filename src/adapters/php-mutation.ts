@@ -12,6 +12,7 @@ import type {
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpMutationSchemaVersion = "php-mutation-evidence/v1" as const;
 
@@ -305,12 +306,11 @@ function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,
     estimatedDiffLines: 80,
+    reproducibility: reproducibleEvidence(0.99, ["Infection executed collector"]),
     deduplication: {
       schemaVersion: "candidate-deduplication/v1",
       subsystem: finding.file,
       defect: `mutation:${finding.line}:${finding.mutator}`,
-      reproducibility: 0.99,
-      provenance: ["Infection executed collector"],
     },
   };
 }

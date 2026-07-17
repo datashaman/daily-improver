@@ -6,6 +6,7 @@ import type {
 } from "../contracts.js";
 import type { ImprovementCandidate } from "../domain/model.js";
 import { phpEvidenceProvenance } from "./php-provenance.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 const composerAuditCommand = [
   "composer",
@@ -255,6 +256,7 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
       ],
       suggestedFiles: ["composer.json", "composer.lock"],
       target: finding.packageName,
+      reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
     };
   }
   if (finding.kind === "abandoned-package") {
@@ -272,6 +274,7 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
       evidence: [`package ${finding.packageName}; replacement ${finding.replacement ?? "not reported"}`],
       suggestedFiles: ["composer.json", "composer.lock"],
       target: finding.packageName,
+      reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
     };
   }
   return {
@@ -286,6 +289,7 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
     evidence: [`package ${finding.packageName}; policy ${finding.policyName}; entry ${finding.policyEntryId ?? "not reported"}`],
     suggestedFiles: ["composer.json", "composer.lock"],
     target: finding.packageName,
+    reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
   };
 }
 

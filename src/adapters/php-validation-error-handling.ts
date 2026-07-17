@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { glob, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ImprovementCandidate } from "../domain/model.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 export const phpValidationErrorRuleSetVersion = "php-validation-error-rules/v1" as const;
 export const phpValidationErrorSchemaVersion = "php-validation-error-evidence/v1" as const;
@@ -236,6 +237,7 @@ function validationErrorCandidate(item: ValidationErrorFinding): ImprovementCand
     suggestedFiles: [item.file, "tests"],
     target: item.file,
     estimatedDiffLines: 40,
+    reproducibility: reproducibleEvidence(0.97, [item.ruleProvenance]),
   };
 }
 

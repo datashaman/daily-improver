@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { ImprovementCandidate } from "../domain/model.js";
+import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
 
 interface MutationRecord {
   readonly status?: string;
@@ -56,12 +57,11 @@ async function mutationCandidates(root: string): Promise<ImprovementCandidate[]>
       target: mutation.file,
       estimatedDiffLines: 80,
       propertyInvariants: mutation.invariant ? [mutation.invariant] : [],
+      reproducibility: reproducibleEvidence(0.85, ["Prepared Infection report"]),
       deduplication: {
         schemaVersion: "candidate-deduplication/v1" as const,
         subsystem: mutation.file,
         defect: `mutation:${mutation.line ?? 0}:${mutation.mutator ?? "unknown"}`,
-        reproducibility: 0.85,
-        provenance: ["Prepared Infection report"],
       },
     }));
 }
@@ -95,12 +95,11 @@ async function coverageCandidates(root: string): Promise<ImprovementCandidate[]>
       suggestedFiles: [file, "tests/Property"],
       target: file,
       estimatedDiffLines: 70,
+      reproducibility: reproducibleEvidence(0.8, ["Prepared Clover report"]),
       deduplication: {
         schemaVersion: "candidate-deduplication/v1",
         subsystem: file,
         defect: "statement-coverage-gap",
-        reproducibility: 0.8,
-        provenance: ["Prepared Clover report"],
       },
     });
   }
@@ -135,6 +134,7 @@ async function complexityCandidates(root: string): Promise<ImprovementCandidate[
       suggestedFiles: [finding.file, "tests"],
       target: finding.file,
       estimatedDiffLines: 120,
+      reproducibility: reproducibleEvidence(0.75, ["Prepared complexity report"]),
     }));
 }
 
@@ -157,6 +157,7 @@ async function todoCandidates(root: string): Promise<ImprovementCandidate[]> {
         suggestedFiles: [file, "tests"],
         target: file,
         estimatedDiffLines: 60,
+        reproducibility: reproducibleEvidence(0.7, ["Repository TODO marker inspection"]),
       });
     });
   }
