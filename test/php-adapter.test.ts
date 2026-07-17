@@ -40,6 +40,7 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
       "laravel/pint": "^1",
       "infection/infection": "^0.30",
       "phpmetrics/phpmetrics": "^3",
+      "phpcompatibility/php-compatibility": "^10",
     },
   }));
   await writeFile(join(root, "phpunit.xml"), "<phpunit />");
@@ -53,6 +54,7 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
   assert.equal(profile.capabilities.get("mutation-testing")?.framework, "infection");
   assert.equal(profile.capabilities.get("complexity")?.framework, "phpmetrics");
   assert.equal(profile.capabilities.get("complexity")?.source, "manifest");
+  assert.equal(profile.capabilities.get("deprecation-analysis")?.framework, "phpcompatibility");
 });
 
 test("detects explicitly configured PhpMetrics without trusting a repository script", async () => {

@@ -1,0 +1,9 @@
+{
+  "require": {
+    "php": "^8.3",
+    "laravel/framework": "^12.0"
+  },
+  "require-dev": {
+    "phpcompatibility/php-compatibility": "^10.0"
+  }
+}

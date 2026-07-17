@@ -13,6 +13,7 @@ import { collectPhpStaticAnalysisEvidence, phpStaticAnalysisCommand, phpStaticAn
 import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersion } from "./php-coverage.js";
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
+import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
@@ -88,6 +89,13 @@ export class PhpAdapter implements RepositoryAdapter {
         () => collectPhpComplexityEvidence(profile.root, complexityCapability, this.evidenceRunner),
       )
       : undefined;
+    const deprecationCapability = profile.capabilities.get("deprecation-analysis");
+    const phpDeprecations = deprecationCapability
+      ? await collectPhpDeprecatedApiEvidence(profile.root, deprecationCapability, this.evidenceRunner)
+      : undefined;
+    const laravelDeprecations = profile.frameworks.includes("laravel")
+      ? await collectLaravelDeprecatedApiEvidence(profile.root)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
@@ -95,6 +103,8 @@ export class PhpAdapter implements RepositoryAdapter {
       ...(coverage?.candidates ?? []),
       ...(mutation?.candidates ?? []),
       ...(complexity?.candidates ?? []),
+      ...(phpDeprecations?.candidates ?? []),
+      ...(laravelDeprecations?.candidates ?? []),
       ...await collectPhpEvidence(profile.root, {
         includePreparedCoverage: coverageCapability === undefined,
         includePreparedMutation: mutationCapability === undefined,
@@ -156,6 +166,7 @@ function detectCapabilities(
   if (packages["phpstan/phpstan"] || packages["larastan/larastan"] || packages["nunomaduro/larastan"]) capabilities.set("static-analysis", command("static-analysis", ["vendor/bin/phpstan", "analyse"], "manifest", "phpstan"));
   else if (packages["vimeo/psalm"]) capabilities.set("static-analysis", command("static-analysis", ["vendor/bin/psalm"], "manifest", "psalm"));
   if (packages["infection/infection"]) capabilities.set("mutation-testing", command("mutation-testing", ["vendor/bin/infection", "--no-interaction"], "manifest", "infection"));
+  if (packages["phpcompatibility/php-compatibility"]) capabilities.set("deprecation-analysis", command("deprecation-analysis", ["vendor/bin/phpcs"], "manifest", "phpcompatibility"));
   if (configuredComplexityTool === "phpmetrics") {
     capabilities.set("complexity", command("complexity", ["vendor/bin/phpmetrics"], "configuration", "phpmetrics"));
   } else if (configuredComplexityTool === "auto" && packages["phpmetrics/phpmetrics"]) {
