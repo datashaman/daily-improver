@@ -2,14 +2,15 @@ import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { glob } from "node:fs/promises";
-import type { ImprovementSpec, RankedCandidate } from "../domain/model.js";
+import type { HumanTaskRecommendation, ImprovementSpec, RankedCandidate } from "../domain/model.js";
 
 export interface AnalysisArtifact {
-  readonly schema: 1;
+  readonly schema: 2;
   readonly repository: string;
   readonly adapter: string;
   readonly generatedAt: string;
   readonly candidates: readonly RankedCandidate[];
+  readonly humanTaskRecommendation?: HumanTaskRecommendation;
 }
 
 export interface TestManifest {

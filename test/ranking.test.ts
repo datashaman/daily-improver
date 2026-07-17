@@ -74,8 +74,9 @@ test("ranking fails closed for missing, non-finite, or unbounded scoring factors
     { ...base, id: "invalid-risk", risk: Number.POSITIVE_INFINITY },
     { ...base, id: "invalid-subsystem-risk", subsystemRisk: 1.01 },
     { ...base, id: "invalid-testability", testability: -0.01 },
-    { ...base, id: "invalid-diff", estimatedDiffLines: 251 },
+    { ...base, id: "invalid-diff", estimatedDiffLines: 10_001 },
     { ...base, id: "fractional-diff", estimatedDiffLines: 1.5 },
+    { ...base, id: "invalid-kind", kind: "formatting" } as unknown as ImprovementCandidate,
     {
       ...base,
       id: "invalid-value-classification",
@@ -226,6 +227,6 @@ test("priority influence cannot bypass fail-closed bounds or the cosmetic-only c
     },
   };
 
-  assert.deepEqual(rankCandidates([{ ...base, id: "oversized", kind: "documentation", estimatedDiffLines: 251 }], ["documentation"]), []);
+  assert.deepEqual(rankCandidates([{ ...base, id: "malformed", kind: "documentation", estimatedDiffLines: 10_001 }], ["documentation"]), []);
   assert.equal(rankCandidates([cosmetic], ["documentation"])[0]?.score, 0.01);
 });

@@ -1,4 +1,4 @@
-import type { CandidateKind, ImprovementCandidate, RankedCandidate } from "../domain/model.js";
+import { candidateKinds, type CandidateKind, type ImprovementCandidate, type RankedCandidate } from "../domain/model.js";
 import { isCandidateValueClassification } from "../domain/candidate-value.js";
 import { deduplicateCandidates } from "./candidate-deduplication.js";
 import { rejectCandidatesWithoutReproducibleEvidence } from "./candidate-reproducibility.js";
@@ -25,7 +25,8 @@ const categoryScoringWeights = {
   documentation: { impact: 0.175, confidence: 0.28, effort: 0.14, risk: 0.09, evidenceStrength: 0.12, estimatedDiff: 0.06, subsystemRisk: 0.06, testability: 0.07 },
 } satisfies Readonly<Record<CandidateKind, ScoringWeights>>;
 
-const maximumEstimatedDiffLines = 250;
+const maximumEstimatedDiffLines = 10_000;
+const scoringDiffLineReference = 250;
 const cosmeticOnlyMaximumScore = 0.01;
 const maximumPriorityInfluence = 0.05;
 
@@ -43,7 +44,7 @@ export function rankCandidates(
 function scoreCandidate(candidate: ImprovementCandidate, priorities: readonly CandidateKind[]): RankedCandidate {
   const weights = categoryScoringWeights[candidate.kind];
   const evidenceStrength = candidate.reproducibility?.strength ?? 0;
-  const estimatedDiff = candidate.estimatedDiffLines / maximumEstimatedDiffLines;
+  const estimatedDiff = Math.min(candidate.estimatedDiffLines / scoringDiffLineReference, 1);
   const categoryScore =
     candidate.impact * weights.impact +
       candidate.confidence * weights.confidence -
@@ -67,7 +68,8 @@ function scoreCandidate(candidate: ImprovementCandidate, priorities: readonly Ca
 }
 
 function hasBoundedScoringFactors(candidate: ImprovementCandidate): boolean {
-  return [
+  return candidateKinds.some((kind) => kind === candidate.kind)
+    && [
     candidate.impact,
     candidate.confidence,
     candidate.effort,

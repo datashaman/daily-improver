@@ -4,7 +4,7 @@ import type { Clock, Policy, PolicyContext, RunStore } from "../contracts.js";
 import type { ImprovementRun } from "../domain/model.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { evaluatePolicies } from "./policies.js";
-import { rankCandidates } from "./ranking.js";
+import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
 
 export interface PlanOptions {
@@ -29,14 +29,36 @@ export class ImprovementPipeline {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
     const config = await loadConfig(root);
-    const candidates = rankCandidates(await adapter.discoverCandidates(profile), config.selection.priorities);
-    const candidate = candidates[0];
-    if (!candidate) throw new Error("No credible improvement candidates were found.");
+    const limits = {
+      maxFiles: options.maxFiles ?? config.limits.max_changed_files,
+      maxChangedLines: options.maxChangedLines ?? config.limits.max_diff_lines,
+    };
+    const selection = selectCandidatesByScope(
+      await adapter.discoverCandidates(profile),
+      config.selection.priorities,
+      limits,
+    );
+    const candidate = selection.candidates[0];
+    if (!candidate) {
+      if (!selection.humanTaskRecommendation) throw new Error("No credible improvement candidates were found.");
+      const run: ImprovementRun = {
+        id: randomUUID(),
+        repository: root,
+        startedAt,
+        finishedAt: this.clock.now().toISOString(),
+        status: "rejected",
+        adapter: adapter.id,
+        humanTaskRecommendation: selection.humanTaskRecommendation,
+        policyDecisions: [],
+      };
+      await this.store.save(run);
+      return run;
+    }
 
     const spec = createSpec(candidate, profile, {
-      maxFiles: options.maxFiles ?? 8,
-      maxChangedLines: options.maxChangedLines ?? 250,
-      maxCostUsd: options.maxCostUsd ?? 5,
+      maxFiles: limits.maxFiles,
+      maxChangedLines: limits.maxChangedLines,
+      maxCostUsd: options.maxCostUsd ?? config.limits.max_cost_usd,
     });
     const context: PolicyContext = {
       estimatedFiles: options.estimatedFiles ?? (candidate.suggestedFiles.length || 1),
@@ -54,6 +76,9 @@ export class ImprovementPipeline {
       status,
       adapter: adapter.id,
       candidate,
+      ...(selection.humanTaskRecommendation === undefined
+        ? {}
+        : { humanTaskRecommendation: selection.humanTaskRecommendation }),
       spec,
       policyDecisions,
     };

@@ -6,7 +6,9 @@ import test from "node:test";
 import { createApplication } from "../src/app.js";
 import type { RepositoryAdapter, RunStore } from "../src/contracts.js";
 import { AdapterRegistry } from "../src/core/adapter-registry.js";
+import { readArtifact, type AnalysisArtifact } from "../src/core/artifacts.js";
 import { ImprovementPipeline } from "../src/core/pipeline.js";
+import { PipelineStages } from "../src/core/stages.js";
 import { reproducibleEvidence } from "../src/domain/candidate-reproducibility.js";
 import type { ImprovementCandidate, ImprovementRun, RepositoryProfile } from "../src/domain/model.js";
 
@@ -108,6 +110,58 @@ pull_request: { draft: true, labels: [] }
   const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store).plan(root);
 
   assert.equal(run.candidate?.id, "docs");
+});
+
+test("pipeline persists a human task instead of planning oversized-only work", async () => {
+  const oversized: ImprovementCandidate = {
+    id: "large-refactor", kind: "maintainability", title: "Refactor the service boundary",
+    rationale: "A credible but oversized opportunity.", confidence: 0.9, impact: 0.9,
+    effort: 0.4, risk: 0.3, subsystemRisk: 0.3, testability: 0.8, estimatedDiffLines: 251,
+    evidence: ["bounded evidence"], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.9, ["fixture collector"]),
+  };
+  const profile: RepositoryProfile = {
+    root: "/repository", adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [oversized],
+  };
+  const saved: ImprovementRun[] = [];
+  const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
+
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store).plan(profile.root);
+
+  assert.equal(run.status, "rejected");
+  assert.equal(run.candidate, undefined);
+  assert.equal(run.spec, undefined);
+  assert.equal(run.humanTaskRecommendation?.candidateId, "large-refactor");
+  assert.deepEqual(saved, [run]);
+});
+
+test("analyse emits the versioned human task in its persisted artifact", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-oversized-analysis-"));
+  const oversized: ImprovementCandidate = {
+    id: "large-analysis", kind: "maintainability", title: "Review the large service boundary",
+    rationale: "Raw rationale stays out of the recommendation.", confidence: 0.9, impact: 0.9,
+    effort: 0.4, risk: 0.3, subsystemRisk: 0.3, testability: 0.8, estimatedDiffLines: 251,
+    evidence: ["raw evidence stays private"], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.9, ["fixture collector"]),
+  };
+  const profile: RepositoryProfile = {
+    root, adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [oversized],
+  };
+
+  const artifact = await new PipelineStages(new AdapterRegistry([adapter])).analyse(root);
+  const persisted = await readArtifact<AnalysisArtifact>(root, "candidate.json");
+
+  assert.equal(artifact.schema, 2);
+  assert.deepEqual(persisted, artifact);
+  assert.equal(persisted.candidates.length, 0);
+  assert.equal(persisted.humanTaskRecommendation?.schemaVersion, "human-task-recommendation/v1");
+  assert.doesNotMatch(JSON.stringify(persisted.humanTaskRecommendation), /raw evidence|raw rationale|src\/Service/iu);
 });
 
 test("pipeline fails closed when no candidate has reproducible evidence", async () => {

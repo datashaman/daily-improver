@@ -83,6 +83,22 @@ export interface RankedCandidate extends ImprovementCandidate {
   readonly score: number;
 }
 
+export interface HumanTaskRecommendation {
+  readonly schemaVersion: "human-task-recommendation/v1";
+  readonly candidateId: string;
+  readonly candidateKind: CandidateKind;
+  readonly title: string;
+  readonly reason: string;
+  readonly estimatedScope: {
+    readonly files: number;
+    readonly changedLines: number;
+  };
+  readonly autonomousLimits: {
+    readonly maxFiles: number;
+    readonly maxChangedLines: number;
+  };
+}
+
 export interface ImprovementSpec {
   readonly id: string;
   readonly title: string;
@@ -113,6 +129,7 @@ export interface ImprovementRun {
   readonly status: RunStatus;
   readonly adapter: string;
   readonly candidate?: RankedCandidate;
+  readonly humanTaskRecommendation?: HumanTaskRecommendation;
   readonly spec?: ImprovementSpec;
   readonly policyDecisions: readonly PolicyDecision[];
 }

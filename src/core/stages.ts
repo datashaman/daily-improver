@@ -6,7 +6,7 @@ import { AdapterRegistry } from "./adapter-registry.js";
 import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
 import { DiffGuard } from "./diff-guard.js";
 import { SourceSafetyInspector } from "./source-safety.js";
-import { rankCandidates } from "./ranking.js";
+import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
 
 export class PipelineStages {
@@ -23,12 +23,20 @@ export class PipelineStages {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
     const config = await loadConfig(root);
+    const selection = selectCandidatesByScope(
+      await adapter.discoverCandidates(profile),
+      config.selection.priorities,
+      { maxFiles: config.limits.max_changed_files, maxChangedLines: config.limits.max_diff_lines },
+    );
     const artifact: AnalysisArtifact = {
-      schema: 1,
+      schema: 2,
       repository: root,
       adapter: adapter.id,
       generatedAt: new Date().toISOString(),
-      candidates: rankCandidates(await adapter.discoverCandidates(profile), config.selection.priorities),
+      candidates: selection.candidates,
+      ...(selection.humanTaskRecommendation === undefined
+        ? {}
+        : { humanTaskRecommendation: selection.humanTaskRecommendation }),
     };
     await writeArtifact(root, "candidate.json", artifact);
     return artifact;
