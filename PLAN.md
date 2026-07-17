@@ -6,6 +6,17 @@ Last updated: 2026-07-17
 
 Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 
+## Current checkpoint
+
+The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
+
+- Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
+- Phase 1A has not started.
+- The exact next task is the language-neutral evidence-runner contract plus the first `composer validate` integration.
+- A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
+
+Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
+
 ## Product objective
 
 Build a language-neutral continuous codebase improvement system that opens one independently verified draft PR every day.
