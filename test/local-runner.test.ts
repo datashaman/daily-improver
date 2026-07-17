@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../src/agents/agent-provider.js";
 import { createApplication } from "../src/app.js";
-import { LocalImprovementRunner } from "../src/core/local-runner.js";
+import { defectBaselineFailureIsCredible, LocalImprovementRunner } from "../src/core/local-runner.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../src/contracts.js";
 
@@ -208,6 +208,14 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
   assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
+});
+
+test("rejects known non-behavioral defect-test failure classifications", () => {
+  assert.equal(defectBaselineFailureIsCredible("test-assertion"), true);
+  assert.equal(defectBaselineFailureIsCredible("unknown"), true);
+  assert.equal(defectBaselineFailureIsCredible("syntax"), false);
+  assert.equal(defectBaselineFailureIsCredible("resource-limit"), false);
+  assert.equal(defectBaselineFailureIsCredible("dependency-or-autoload"), false);
 });
 
 async function expectSuccess<T extends { exitCode: number; stderr: string }>(promise: Promise<T>): Promise<T> {

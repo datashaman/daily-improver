@@ -148,7 +148,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Add an opt-in customer-runner MoneyAllocator live-proof harness outside the deterministic checkpoint suite.
 - [x] Add a simpler opt-in direct OpenAI Responses provider and MoneyAllocator proof runner for developer validation.
 - [ ] Execute and record the live proof against a configured customer-runner structured endpoint.
-- [ ] Execute the direct OpenAI proof after the API project has usable credit, then record the verified real-model result.
+- [x] Execute the direct OpenAI proof after the API project has usable credit, then record the verified real-model result.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
 
@@ -485,8 +485,9 @@ The recent and next commit-sized milestones are:
 16. [x] `feat: compose trusted runner structured model provider`
 17. [x] `test: add opt-in trusted runner live proof`
 18. [x] `feat: add opt-in OpenAI Responses proof`
+19. [x] `fix: validate generated defect test execution`
 
-The immediate next task is Phase 1C: enable usable credit for the configured OpenAI API project, rerun `npm run test:openai-live`, and record the verified real-model MoneyAllocator result without adding live calls or credentials to the deterministic checkpoint suite. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: introduce an explicit language-neutral improvement-intent classification (`defect`, `refactor`, `performance`, or `maintainability`) and use it to select the correct baseline proof semantics. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

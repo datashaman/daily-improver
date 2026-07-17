@@ -7,4 +7,5 @@ test("classifies common PHP failures for review feedback", () => {
   assert.equal(adapter.classifyFailure("Parse error: syntax error"), "syntax");
   assert.equal(adapter.classifyFailure("Failed asserting that false is true"), "test-assertion");
   assert.equal(adapter.classifyFailure("Allowed memory size exhausted"), "resource-limit");
+  assert.equal(adapter.classifyFailure("Fatal error: Class PHPUnit\\Framework\\TestCase not found"), "dependency-or-autoload");
 });

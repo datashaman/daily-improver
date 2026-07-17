@@ -34,6 +34,10 @@ export interface OpenAiResponsesAgentOptions {
   readonly maxOutputTokens: number;
   readonly maximumCostUsd: number;
   readonly pricing: OpenAiResponsesPricing;
+  readonly runnerRequirements?: {
+    readonly test: readonly string[];
+    readonly build: readonly string[];
+  };
 }
 
 export interface OpenAiResponsesRequest {
@@ -208,12 +212,13 @@ export class OpenAiResponsesAgentProvider implements AgentProvider {
     request: TestAgentRequest | BuilderRequest,
     sources: readonly SourceFile[],
   ): Promise<{ readonly output: unknown; readonly usage: AgentUsage }> {
-    const input = JSON.stringify({ request, sources });
+    const runnerRequirements = this.options.runnerRequirements?.[stage] ?? [];
+    const input = JSON.stringify({ request, runnerRequirements, sources });
     assertMaximumPossibleCost(input, this.options);
     const startedAt = this.nowMs();
     const raw = await this.client.create({
       model: this.options.model,
-      instructions: instructions(stage),
+      instructions: instructions(stage, runnerRequirements),
       input,
       reasoning: { effort: this.options.reasoningEffort },
       max_output_tokens: this.options.maxOutputTokens,
@@ -321,9 +326,15 @@ const builderOutputSchema = {
   required: ["summary", "files", "implementationNotes"],
 } as const;
 
-function instructions(stage: "test" | "build"): string {
+function instructions(stage: "test" | "build", runnerRequirements: readonly string[]): string {
   const action = stage === "test"
-    ? "Generate focused regression or property tests that must fail against the supplied defective source."
+    ? [
+        "Generate focused regression or property tests that must fail against the supplied defective source.",
+        "Use only dependencies, autoloading, and execution mechanisms visibly supplied by the test harness and command.",
+        "The test must fail because the selected behavior violates the approved invariant, never because tooling, framework classes, dependencies, or autoloading are unavailable.",
+        "When the supplied command directly loads generated test files, emit top-level executable checks using only symbols visibly loaded by that harness.",
+        "Do not create a framework test case, namespace, or framework import unless the supplied command actually invokes that framework runner and its loading mechanism is present in the supplied sources.",
+      ].join("\n")
     : "Implement the bounded task without changing protected tests or public interfaces.";
   return [
     "You are one isolated stage of Daily Improver.",
@@ -333,6 +344,9 @@ function instructions(stage: "test" | "build"): string {
     "Use repository-relative POSIX paths and stay within the request allowlists and limits.",
     "Do not add dependencies, credentials, network calls, skipped tests, suppressions, or broad exception handling.",
     "Return only the requested strict structured output.",
+    ...(runnerRequirements.length === 0
+      ? []
+      : ["The following trusted runner requirements are mandatory:", ...runnerRequirements.map((item) => `- ${item}`)]),
   ].join("\n");
 }
 
@@ -379,6 +393,8 @@ async function collectSources(context: AgentContext, stage: "test" | "build"): P
   for (const path of [...paths].sort()) {
     const absolute = join(context.repository, path);
     const metadata = await lstat(absolute);
+    if (metadata.isDirectory()) continue;
+    if (stage === "build" && context.inputs.protectedFiles.some((pattern) => matches(path, pattern))) continue;
     if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > maximumSourceFileBytes) {
       throw new Error(`OpenAI source context contains an unsupported file: ${path}`);
     }
@@ -542,7 +558,18 @@ function validateOptions(value: OpenAiResponsesAgentOptions): OpenAiResponsesAge
     || !finitePositive(value.pricing.outputUsdPerMillionTokens, 1_000)) {
     throw new Error("The OpenAI cost configuration is outside its supported bounds.");
   }
+  if (value.runnerRequirements !== undefined) {
+    validateRunnerRequirements(value.runnerRequirements.test, "test");
+    validateRunnerRequirements(value.runnerRequirements.build, "build");
+  }
   return value;
+}
+
+function validateRunnerRequirements(values: readonly string[], stage: string): void {
+  if (!Array.isArray(values) || values.length > 16
+    || values.some((value) => typeof value !== "string" || value.length < 1 || value.length > 1_024)) {
+    throw new Error(`The OpenAI ${stage} runner requirements are outside their supported bounds.`);
+  }
 }
 
 function assertMaximumPossibleCost(input: string, options: OpenAiResponsesAgentOptions): void {

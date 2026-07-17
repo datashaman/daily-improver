@@ -54,7 +54,10 @@ export class LocalImprovementRunner {
           allowedTestPaths,
           protectedFiles: [],
           commands,
-          testConventions: ["Add focused regression or property tests using the repository test harness."],
+          testConventions: [
+            "Add focused regression or property tests using the repository test harness.",
+            "Use only dependencies and loading mechanisms demonstrably available to the detected test command; the test must fail because of the selected defect, not missing tooling or autoloading.",
+          ],
           builderConventions: ["Implement only the approved specification and preserve existing public interfaces."],
         },
       };
@@ -63,9 +66,14 @@ export class LocalImprovementRunner {
 
       const baseline = await this.runner.run(test.command, isolated.path);
       if (baseline.exitCode === 0) throw new Error("Generated regression test did not fail against main behavior.");
+      const baselineClassification = adapter.classifyFailure?.(`${baseline.stdout}\n${baseline.stderr}`) ?? "unclassified";
+      if (!defectBaselineFailureIsCredible(baselineClassification)) {
+        throw new Error(`Generated defect test failed for a non-behavioral reason: ${baselineClassification}.`);
+      }
       await writeArtifact(isolated.path, "test-plan.json", {
         schema: 1,
         baseline: "failed-as-expected",
+        baselineClassification,
         command: test.command,
         propertyInvariants: spec.propertyInvariants,
       });
@@ -102,6 +110,12 @@ export class LocalImprovementRunner {
   private async stagesAdapter(root: string) {
     return await this.stages.resolveAdapter(root);
   }
+}
+
+export function defectBaselineFailureIsCredible(classification: string): boolean {
+  return classification !== "syntax"
+    && classification !== "resource-limit"
+    && classification !== "dependency-or-autoload";
 }
 
 export async function persistAgentExecution(

@@ -49,6 +49,14 @@ test("a real OpenAI model proves and fixes the MoneyAllocator defect", async (co
         maxOutputTokens: 4_000,
         maximumCostUsd: 0.25,
         pricing: { inputUsdPerMillionTokens: 2.5, outputUsdPerMillionTokens: 15 },
+        runnerRequirements: {
+          test: [
+            "tests/run.php directly requires every generated tests/Property/*.php file; generate a standalone top-level PHP script.",
+            "Do not declare a namespace, import PHPUnit, extend TestCase, or reference any framework test class.",
+            "App\\Domain\\MoneyAllocator is already loaded by the harness; instantiate it directly and throw RuntimeException only when the approved allocation invariant fails.",
+          ],
+          build: [],
+        },
       },
     );
     const app = createApplication(join(sandbox, "state"), openPullRequests(), unresolvedFindings());

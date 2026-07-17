@@ -67,12 +67,23 @@ test("uses bounded Responses structured output to materialize test and builder f
   assert.equal(client.requests.length, 2);
   assert.deepEqual(client.requests.map(({ text }) => text.format.type), ["json_schema", "json_schema"]);
   assert.deepEqual(client.requests.map(({ store }) => store), [false, false]);
+  assert.match(client.requests[0]?.instructions ?? "", /must fail because.*behavior/i);
+  assert.match(client.requests[0]?.instructions ?? "", /autoloading.*unavailable/i);
+  assert.match(client.requests[0]?.instructions ?? "", /Do not create a framework test case/);
   assert.doesNotMatch(JSON.stringify(client.requests), new RegExp(escapeRegExp(context.repository)));
-  const testInput = JSON.parse(client.requests[0]?.input ?? "") as { sources: readonly { path: string }[] };
+  const testInput = JSON.parse(client.requests[0]?.input ?? "") as {
+    runnerRequirements: readonly string[];
+    sources: readonly { path: string }[];
+  };
+  assert.deepEqual(testInput.runnerRequirements, ["Use the supplied direct-loading harness."]);
   assert.deepEqual(testInput.sources.map(({ path }) => path), [
     "app/Domain/MoneyAllocator.php",
     "tests/run.php",
   ]);
+  const builderInput = JSON.parse(client.requests[1]?.input ?? "") as {
+    sources: readonly { path: string }[];
+  };
+  assert.deepEqual(builderInput.sources.map(({ path }) => path), ["app/Domain/MoneyAllocator.php"]);
   assert.equal(testResult.usage.provider, "openai");
   assert.equal(testResult.usage.estimatedCostUsd, 0.0025);
 });
@@ -103,6 +114,23 @@ test("rejects a request whose configured maximum cost can be exceeded before tra
   });
 
   await assert.rejects(() => provider.generateTests(context), /could exceed.*cost limit/);
+  assert.equal(client.requests.length, 0);
+});
+
+test("rejects unbounded trusted runner requirements before transport", () => {
+  const client = new RecordingOpenAiClient([]);
+
+  assert.throws(() => new OpenAiResponsesAgentProvider(client, {
+    model: "gpt-5.6-terra",
+    reasoningEffort: "medium",
+    maxOutputTokens: 4_000,
+    maximumCostUsd: 0.25,
+    pricing: { inputUsdPerMillionTokens: 2.5, outputUsdPerMillionTokens: 15 },
+    runnerRequirements: {
+      test: Array.from({ length: 17 }, () => "bounded requirement"),
+      build: [],
+    },
+  }), /test runner requirements.*supported bounds/);
   assert.equal(client.requests.length, 0);
 });
 
@@ -148,6 +176,10 @@ function createProvider(client: OpenAiResponsesClient): OpenAiResponsesAgentProv
     maxOutputTokens: 4_000,
     maximumCostUsd: 0.25,
     pricing: { inputUsdPerMillionTokens: 2.5, outputUsdPerMillionTokens: 15 },
+    runnerRequirements: {
+      test: ["Use the supplied direct-loading harness."],
+      build: [],
+    },
   }, () => now += 25);
 }
 
@@ -166,7 +198,7 @@ async function fixtureContext(): Promise<AgentContext> {
       objective: "Ensure integer allocations preserve the requested total.",
       currentBehaviour: "Remainders are discarded.",
       proposedImprovement: "Distribute the remainder deterministically.",
-      allowedFiles: ["app/Domain/MoneyAllocator.php"],
+      allowedFiles: ["app/Domain/MoneyAllocator.php", "tests/Property", "tests/Property/**"],
       behavioursToPreserve: ["Reject invalid part counts."],
       acceptanceCriteria: ["Every allocation sums to the requested total."],
       propertyInvariants: ["sum(allocation) equals total"],
