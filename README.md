@@ -33,6 +33,19 @@ The command-backed provider remains available for the local CLI. The first struc
 
 Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.ai/improver.yml`](.ai/improver.yml). A setup-PR payload lives in [`templates/setup`](templates/setup), including the four-job Actions workflow.
 
+Analysis and planning require `DAILY_IMPROVER_UNRESOLVED_FINDING_STATE_PATH` to point to a trusted `unresolved-finding-state/v1` JSON artifact supplied by the control-plane/GitHub boundary, and `DAILY_IMPROVER_REPOSITORY_SCOPE` to contain its matching external repository scope:
+
+```json
+{
+  "schemaVersion": "unresolved-finding-state/v1",
+  "repositoryId": "<sha256-of-trusted-repository-scope>",
+  "observedAt": "2026-07-17T05:00:00.000Z",
+  "findingIds": ["<64-character-lowercase-sha256>"]
+}
+```
+
+The exact-schema artifact is limited to 1,000 unique finding IDs and 80,000 bytes, expires after fifteen minutes, and should be mounted read-only outside the repository. Missing, malformed, oversized, stale, future-dated, or cross-repository state fails closed. A finding ID is SHA-256 over the JSON tuple `["candidate-deduplication/v1", kind, subsystem, defect]`; candidates without that semantic contract use `["candidate-id/v1", kind, id]`. Only the hash crosses the state boundary. Matching candidates receive a deterministic `unresolved-finding` exclusion, and selection continues with the highest-ranked unmatched bounded candidate.
+
 Before creating a specification, Daily Improver atomically claims the canonical repository identity for its UTC day in local state. An active plan or completed publication request blocks another specification and publication for that repository until the next UTC date; a different repository remains independent. Candidate rejection and oversized human-task routing do not consume the daily claim, and a policy-rejected plan releases it. The versioned `daily-improvement-decision/v1` artifact records the claim and its completed publication transition without retaining the repository path.
 
 Specification also requires `DAILY_IMPROVER_OPEN_PR_STATE_PATH` to point to a trusted `open-pull-request-state/v1` JSON artifact supplied by the control-plane/GitHub boundary, and `DAILY_IMPROVER_REPOSITORY_SCOPE` to carry the matching trusted external repository scope (for example `github:123456789`):
@@ -50,7 +63,7 @@ The artifact must be no more than fifteen minutes old, repository-bound, exact-s
 
 ## Pipeline
 
-1. `analyse` observes tool output and repository signals, rejects candidates without reproducible bounded evidence, deduplicates semantic overlaps, ranks the survivors, and selects exactly one bounded candidate. Every candidate removed before autonomous selection receives one deterministic `candidate-exclusion/v1` record. A credible candidate beyond repository file or line limits is excluded from autonomous work and may produce one `human-task-recommendation/v1` summary.
+1. `analyse` observes tool output and repository signals, rejects candidates without reproducible bounded evidence, deduplicates and ranks semantic findings, filters fresh repository-scoped unresolved matches, and selects exactly one bounded candidate. Every candidate removed before autonomous selection receives one deterministic `candidate-exclusion/v2` record. A credible candidate beyond repository file or line limits is excluded from autonomous work and may produce one `human-task-recommendation/v1` summary.
 2. `specify` first enforces the fresh repository-bound open-PR limit, then acquires the repository/day claim and converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
 3. `test` seals generated regression, characterization, and property tests in an HMAC manifest.
 4. `build` invokes an isolated builder provider using only the approved inputs.
@@ -71,7 +84,7 @@ The core scores every language-neutral candidate kind with an exhaustive categor
 
 After ranking, candidate scope is compared with repository-owned `limits.max_changed_files` and `limits.max_diff_lines`. Candidates exactly at both limits remain eligible. Larger credible candidates cannot be specified or built; the highest-ranked one is emitted as a bounded `human-task-recommendation/v1` containing only its stable identity, category, generated title, estimated counts, configured limits, and a generated routing reason. Evidence, rationale, targets, and source paths do not cross into that recommendation. If another bounded candidate remains, it is still selected; an oversized-only plan is persisted as rejected without a specification.
 
-The version 3 analysis artifact and persisted planning runs include deterministically ordered `candidate-exclusion/v1` records for candidates rejected by malformed scope, evidence, scoring, semantic deduplication, or oversized autonomous scope. Each record contains only a bounded candidate reference, an optional valid candidate kind, its reason code, and the retained candidate reference when deduplication selected stronger evidence. Invalid candidate IDs are replaced by a SHA-256 reference. Raw evidence, provenance, rationale, titles, targets, and source paths are not retained in exclusions. A candidate is assigned exactly one reason at its first failed gate.
+The version 4 analysis artifact and persisted planning runs include deterministically ordered `candidate-exclusion/v2` records for candidates rejected by malformed scope, evidence, scoring, semantic deduplication, oversized autonomous scope, or an unresolved semantic finding match. Each record contains only a bounded candidate reference, an optional valid candidate kind, its reason code, the retained candidate reference when deduplication selected stronger evidence, and the finding hash for an unresolved match. Invalid candidate IDs are replaced by a SHA-256 reference. Raw evidence, provenance, rationale, titles, targets, and source paths are not retained in exclusions. A candidate is assigned exactly one reason at its first failed gate.
 
 Repository configuration may order candidate kinds under `selection.priorities`. Supported values are `test-protection`, `static-analysis`, `mutation-testing`, `property-testing`, `dependency-vulnerability`, `performance`, `maintainability`, and `documentation`; unsupported or duplicate entries make configuration loading fail closed. Earlier entries receive a larger deterministic per-candidate influence, capped at `0.05`, while an empty list preserves category scoring unchanged. Priority never admits a candidate rejected by evidence or scoring bounds, never lifts a cosmetic-only candidate above its cap, and equal priority-adjusted scores still resolve by stable candidate ID.
 

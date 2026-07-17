@@ -12,16 +12,18 @@ export function excludeCandidate(
   candidate: ImprovementCandidate,
   reason: CandidateExclusionReason,
   retainedCandidate?: ImprovementCandidate,
+  findingId?: string,
 ): CandidateExclusion {
   const candidateKind = candidateKinds.find((kind) => kind === candidate.kind);
   return {
-    schemaVersion: "candidate-exclusion/v1",
+    schemaVersion: "candidate-exclusion/v2",
     candidateReference: candidateReference(candidate),
     ...(candidateKind === undefined ? {} : { candidateKind }),
     reason,
     ...(retainedCandidate === undefined
       ? {}
       : { retainedCandidateReference: candidateReference(retainedCandidate) }),
+    ...(findingId === undefined ? {} : { findingId }),
   };
 }
 
@@ -32,6 +34,7 @@ export function sortCandidateExclusions(
     a.candidateReference.localeCompare(b.candidateReference)
       || a.reason.localeCompare(b.reason)
       || (a.retainedCandidateReference ?? "").localeCompare(b.retainedCandidateReference ?? "")
+      || (a.findingId ?? "").localeCompare(b.findingId ?? "")
       || (a.candidateKind ?? "").localeCompare(b.candidateKind ?? ""));
 }
 

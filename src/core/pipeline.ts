@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config.js";
-import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, Policy, PolicyContext, RunStore } from "../contracts.js";
+import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, Policy, PolicyContext, RunStore, UnresolvedFindingStateSource } from "../contracts.js";
 import type { ImprovementRun } from "../domain/model.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { evaluatePolicies } from "./policies.js";
 import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
 import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
+import { excludeUnresolvedFindings } from "./unresolved-findings.js";
 
 export interface PlanOptions {
   readonly maxFiles?: number;
@@ -24,6 +25,7 @@ export class ImprovementPipeline {
     private readonly store: RunStore,
     private readonly dailyImprovements: DailyImprovementStore,
     private readonly openPullRequests: OpenPullRequestStateSource,
+    private readonly unresolvedFindings: UnresolvedFindingStateSource,
     private readonly clock: Clock = { now: () => new Date() },
   ) {}
 
@@ -36,10 +38,13 @@ export class ImprovementPipeline {
       maxFiles: options.maxFiles ?? config.limits.max_changed_files,
       maxChangedLines: options.maxChangedLines ?? config.limits.max_diff_lines,
     };
-    const selection = selectCandidatesByScope(
-      await adapter.discoverCandidates(profile),
-      config.selection.priorities,
-      limits,
+    const selection = excludeUnresolvedFindings(
+      selectCandidatesByScope(
+        await adapter.discoverCandidates(profile),
+        config.selection.priorities,
+        limits,
+      ),
+      await this.unresolvedFindings.current(startedAt),
     );
     const candidate = selection.candidates[0];
     if (!candidate) {

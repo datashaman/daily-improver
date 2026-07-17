@@ -28,7 +28,7 @@ test("emits one versioned human task when the only credible candidate is oversiz
 
   assert.deepEqual(selection.candidates, []);
   assert.deepEqual(selection.exclusions, [{
-    schemaVersion: "candidate-exclusion/v1",
+    schemaVersion: "candidate-exclusion/v2",
     candidateReference: "candidate",
     candidateKind: "maintainability",
     reason: "oversized-scope",

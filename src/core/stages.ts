@@ -1,7 +1,7 @@
 import { loadConfig } from "../config.js";
 import type { DailyImprovementDecision, ImprovementSpec } from "../domain/model.js";
 import { relative } from "node:path";
-import type { Clock, DailyImprovementStore, OpenPullRequestStateSource } from "../contracts.js";
+import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../contracts.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
@@ -10,12 +10,14 @@ import { SourceSafetyInspector } from "./source-safety.js";
 import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
 import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
+import { excludeUnresolvedFindings } from "./unresolved-findings.js";
 
 export class PipelineStages {
   constructor(
     private readonly registry: AdapterRegistry,
     private readonly dailyImprovements?: DailyImprovementStore,
     private readonly openPullRequests?: OpenPullRequestStateSource,
+    private readonly unresolvedFindings?: UnresolvedFindingStateSource,
     private readonly runner = new CommandRunner(),
     private readonly clock: Clock = { now: () => new Date() },
   ) {}
@@ -28,16 +30,20 @@ export class PipelineStages {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
     const config = await loadConfig(root);
-    const selection = selectCandidatesByScope(
-      await adapter.discoverCandidates(profile),
-      config.selection.priorities,
-      { maxFiles: config.limits.max_changed_files, maxChangedLines: config.limits.max_diff_lines },
+    const generatedAt = this.clock.now().toISOString();
+    const selection = excludeUnresolvedFindings(
+      selectCandidatesByScope(
+        await adapter.discoverCandidates(profile),
+        config.selection.priorities,
+        { maxFiles: config.limits.max_changed_files, maxChangedLines: config.limits.max_diff_lines },
+      ),
+      await this.requiredUnresolvedFindings().current(generatedAt),
     );
     const artifact: AnalysisArtifact = {
-      schema: 3,
+      schema: 4,
       repository: root,
       adapter: adapter.id,
-      generatedAt: new Date().toISOString(),
+      generatedAt,
       candidates: selection.candidates,
       candidateExclusions: selection.exclusions,
       ...(selection.humanTaskRecommendation === undefined
@@ -157,6 +163,11 @@ export class PipelineStages {
   private requiredOpenPullRequests(): OpenPullRequestStateSource {
     if (!this.openPullRequests) throw new Error("Open pull request state is required for specification.");
     return this.openPullRequests;
+  }
+
+  private requiredUnresolvedFindings(): UnresolvedFindingStateSource {
+    if (!this.unresolvedFindings) throw new Error("Unresolved finding state is required for analysis.");
+    return this.unresolvedFindings;
   }
 }
 

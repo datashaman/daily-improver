@@ -7,13 +7,18 @@ import { CostBudgetPolicy, DiffLimitPolicy, TestProtectionPolicy } from "./core/
 import { JsonRunStore } from "./infra/json-run-store.js";
 import { PipelineStages } from "./core/stages.js";
 import { JsonDailyImprovementStore } from "./infra/json-daily-improvement-store.js";
-import type { OpenPullRequestStateSource } from "./contracts.js";
+import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from "./contracts.js";
 import { JsonOpenPullRequestStateSource } from "./infra/json-open-pull-request-state-source.js";
+import { JsonUnresolvedFindingStateSource } from "./infra/json-unresolved-finding-state-source.js";
 
 export function createApplication(
   stateDirectory = resolve(".daily-improver"),
   openPullRequests: OpenPullRequestStateSource = new JsonOpenPullRequestStateSource(
     process.env.DAILY_IMPROVER_OPEN_PR_STATE_PATH,
+    process.env.DAILY_IMPROVER_REPOSITORY_SCOPE,
+  ),
+  unresolvedFindings: UnresolvedFindingStateSource = new JsonUnresolvedFindingStateSource(
+    process.env.DAILY_IMPROVER_UNRESOLVED_FINDING_STATE_PATH,
     process.env.DAILY_IMPROVER_REPOSITORY_SCOPE,
   ),
 ) {
@@ -24,13 +29,14 @@ export function createApplication(
     registry,
     store,
     dailyImprovements,
-    stages: new PipelineStages(registry, dailyImprovements, openPullRequests),
+    stages: new PipelineStages(registry, dailyImprovements, openPullRequests, unresolvedFindings),
     pipeline: new ImprovementPipeline(
       registry,
       [new DiffLimitPolicy(), new CostBudgetPolicy(), new TestProtectionPolicy()],
       store,
       dailyImprovements,
       openPullRequests,
+      unresolvedFindings,
     ),
   };
 }

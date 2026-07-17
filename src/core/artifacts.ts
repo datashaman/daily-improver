@@ -5,7 +5,7 @@ import { glob } from "node:fs/promises";
 import type { CandidateExclusion, HumanTaskRecommendation, ImprovementSpec, RankedCandidate } from "../domain/model.js";
 
 export interface AnalysisArtifact {
-  readonly schema: 3;
+  readonly schema: 4;
   readonly repository: string;
   readonly adapter: string;
   readonly generatedAt: string;

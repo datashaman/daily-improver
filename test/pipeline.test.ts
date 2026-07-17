@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createApplication } from "../src/app.js";
-import type { DailyImprovementStore, OpenPullRequestStateSource, RepositoryAdapter, RunStore } from "../src/contracts.js";
+import type { DailyImprovementStore, OpenPullRequestStateSource, RepositoryAdapter, RunStore, UnresolvedFindingStateSource } from "../src/contracts.js";
 import { AdapterRegistry } from "../src/core/adapter-registry.js";
 import { readArtifact, type AnalysisArtifact } from "../src/core/artifacts.js";
 import { ImprovementPipeline } from "../src/core/pipeline.js";
 import { PipelineStages } from "../src/core/stages.js";
+import { candidateFindingId } from "../src/core/unresolved-findings.js";
 import { reproducibleEvidence } from "../src/domain/candidate-reproducibility.js";
 import type { ImprovementCandidate, ImprovementRun, OpenPullRequestLimitDecision, RepositoryProfile } from "../src/domain/model.js";
 
@@ -40,6 +41,15 @@ const acceptingOpenPullRequests: OpenPullRequestStateSource = {
   }),
 };
 
+const acceptingUnresolvedFindings: UnresolvedFindingStateSource = {
+  current: async (decidedAt) => ({
+    schemaVersion: "unresolved-finding-state/v1",
+    repositoryId: "e".repeat(64),
+    observedAt: decidedAt,
+    findingIds: [],
+  }),
+};
+
 const unexpectedOpenPullRequestRead: OpenPullRequestStateSource = {
   current: async () => { throw new Error("A rejected candidate must not consume open pull request state."); },
 };
@@ -50,7 +60,7 @@ test("pipeline creates and persists an approved language-specific plan", async (
   await writeFile(join(root, "composer.json"), JSON.stringify({
     require: { php: "^8.3" }, "require-dev": { "phpunit/phpunit": "^12" },
   }));
-  const app = createApplication(state, acceptingOpenPullRequests);
+  const app = createApplication(state, acceptingOpenPullRequests, acceptingUnresolvedFindings);
   const run = await app.pipeline.plan(root);
   assert.equal(run.adapter, "php");
   assert.equal(run.status, "planned");
@@ -72,7 +82,7 @@ test("pipeline rejects at the open pull request limit before claiming or specify
       openPullRequests: 3,
     }),
   };
-  const app = createApplication(state, atLimit);
+  const app = createApplication(state, atLimit, acceptingUnresolvedFindings);
   app.dailyImprovements.claim = async () => { throw new Error("The open PR limit must block before the daily claim."); };
 
   const run = await app.pipeline.plan(root);
@@ -90,7 +100,7 @@ test("pipeline fails closed without creating a second specification on the same 
   await writeFile(join(root, "composer.json"), JSON.stringify({
     require: { php: "^8.3" }, "require-dev": { "phpunit/phpunit": "^12" },
   }));
-  const app = createApplication(state, acceptingOpenPullRequests);
+  const app = createApplication(state, acceptingOpenPullRequests, acceptingUnresolvedFindings);
 
   const first = await app.pipeline.plan(root);
   const repeated = await app.pipeline.plan(root);
@@ -107,7 +117,7 @@ test("pipeline rejects work that exceeds its cost budget", async () => {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-repo-"));
   const state = await mkdtemp(join(tmpdir(), "daily-improver-state-"));
   await writeFile(join(root, "composer.json"), JSON.stringify({ require: { php: "^8.3" } }));
-  const run = await createApplication(state, acceptingOpenPullRequests).pipeline.plan(root, { maxCostUsd: 2, estimatedCostUsd: 3 });
+  const run = await createApplication(state, acceptingOpenPullRequests, acceptingUnresolvedFindings).pipeline.plan(root, { maxCostUsd: 2, estimatedCostUsd: 3 });
   assert.equal(run.status, "rejected");
   assert.equal(run.policyDecisions.find((decision) => decision.policy === "cost-budget")?.allowed, false);
   assert.equal(run.dailyImprovementDecision?.outcome, "released");
@@ -150,11 +160,54 @@ test("pipeline selects exactly one candidate from a deterministic ranking", asyn
     list: async () => saved,
   };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests).plan(profile.root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests, acceptingUnresolvedFindings).plan(profile.root);
 
   assert.equal(run.candidate?.id, "selected");
   assert.equal(saved.length, 1);
   assert.equal(saved[0]?.candidate?.id, "selected");
+});
+
+test("pipeline persists unresolved finding exclusion and selects the lower-ranked fallback", async () => {
+  const candidate = (id: string, impact: number, subsystem: string): ImprovementCandidate => ({
+    id, kind: "static-analysis", title: id, rationale: `raw rationale at ${subsystem}`, confidence: 0.9, impact,
+    effort: 0.2, risk: 0.1, subsystemRisk: 0.1, testability: 0.9, estimatedDiffLines: 20,
+    evidence: [`raw evidence at ${subsystem}`], suggestedFiles: [subsystem],
+    reproducibility: reproducibleEvidence(0.9, ["fixture collector"]),
+    deduplication: { schemaVersion: "candidate-deduplication/v1", subsystem, defect: "same-rule" },
+  });
+  const repeated = candidate("repeated", 0.95, "src/PrivateService.ts");
+  const fallback = candidate("fallback", 0.6, "src/Fallback.ts");
+  const profile: RepositoryProfile = {
+    root: "/repository", adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [fallback, repeated],
+  };
+  const saved: ImprovementRun[] = [];
+  const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
+  const unresolved: UnresolvedFindingStateSource = {
+    current: async (observedAt) => ({
+      schemaVersion: "unresolved-finding-state/v1",
+      repositoryId: "f".repeat(64),
+      observedAt,
+      findingIds: [candidateFindingId(repeated)],
+    }),
+  };
+
+  const run = await new ImprovementPipeline(
+    new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests, unresolved,
+  ).plan(profile.root);
+
+  assert.equal(run.status, "planned");
+  assert.equal(run.candidate?.id, "fallback");
+  assert.deepEqual(saved[0]?.candidateExclusions, [{
+    schemaVersion: "candidate-exclusion/v2",
+    candidateReference: "repeated",
+    candidateKind: "static-analysis",
+    reason: "unresolved-finding",
+    findingId: candidateFindingId(repeated),
+  }]);
+  assert.doesNotMatch(JSON.stringify(saved[0]?.candidateExclusions), /raw evidence|raw rationale|PrivateService/u);
 });
 
 test("pipeline applies repository candidate priorities", async () => {
@@ -186,7 +239,7 @@ pull_request: { draft: true, labels: [] }
   const saved: ImprovementRun[] = [];
   const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests).plan(root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests, acceptingUnresolvedFindings).plan(root);
 
   assert.equal(run.candidate?.id, "docs");
 });
@@ -208,7 +261,7 @@ test("pipeline persists a human task instead of planning oversized-only work", a
   const saved: ImprovementRun[] = [];
   const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead).plan(profile.root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead, acceptingUnresolvedFindings).plan(profile.root);
 
   assert.equal(run.status, "rejected");
   assert.equal(run.candidate, undefined);
@@ -234,10 +287,10 @@ test("analyse emits the versioned human task in its persisted artifact", async (
     id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [oversized],
   };
 
-  const artifact = await new PipelineStages(new AdapterRegistry([adapter])).analyse(root);
+  const artifact = await new PipelineStages(new AdapterRegistry([adapter]), undefined, undefined, acceptingUnresolvedFindings).analyse(root);
   const persisted = await readArtifact<AnalysisArtifact>(root, "candidate.json");
 
-  assert.equal(artifact.schema, 3);
+  assert.equal(artifact.schema, 4);
   assert.deepEqual(persisted, artifact);
   assert.equal(persisted.candidates.length, 0);
   assert.equal(persisted.humanTaskRecommendation?.schemaVersion, "human-task-recommendation/v1");
@@ -268,7 +321,7 @@ test("specify persists the blocked open pull request decision without claiming t
       openPullRequests: 3,
     }),
   };
-  const stages = new PipelineStages(new AdapterRegistry([adapter]), unexpectedDailyImprovementClaim, atLimit);
+  const stages = new PipelineStages(new AdapterRegistry([adapter]), unexpectedDailyImprovementClaim, atLimit, acceptingUnresolvedFindings);
   await stages.analyse(root);
 
   await assert.rejects(stages.specify(root), /meet or exceed the repository limit/);
@@ -319,14 +372,14 @@ test("pipeline persists a machine-readable rejection when no candidate has repro
     save: async (run) => { saved.push(run); },
     list: async () => saved,
   };
-  const pipeline = new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead);
+  const pipeline = new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead, acceptingUnresolvedFindings);
 
   const run = await pipeline.plan(profile.root);
 
   assert.equal(run.status, "rejected");
   assert.equal(run.candidate, undefined);
   assert.deepEqual(run.candidateExclusions, [{
-    schemaVersion: "candidate-exclusion/v1",
+    schemaVersion: "candidate-exclusion/v2",
     candidateReference: "unsupported",
     candidateKind: "maintainability",
     reason: "evidence",

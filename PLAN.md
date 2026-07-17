@@ -118,7 +118,7 @@ Goal: make selection predictable, bounded, and explainable.
 - [x] Add exclusion reasons to rejected candidates.
 - [x] Enforce one improvement PR per repository per day.
 - [x] Respect `max_open_prs`.
-- [ ] Prevent repeated selection of the same unresolved finding.
+- [x] Prevent repeated selection of the same unresolved finding.
 - [x] Make ties deterministic.
 - [ ] Include a machine-readable score explanation.
 
@@ -470,8 +470,9 @@ The recent and next commit-sized milestones are:
 9. [x] `feat: record candidate exclusion reasons`
 10. [x] `feat: enforce one daily repository improvement`
 11. [x] `feat: enforce open improvement PR limit`
+12. [x] `feat: prevent repeated unresolved findings`
 
-The immediate next task is Phase 1B: prevent repeated selection of the same unresolved finding.
+The immediate next task is Phase 1B: include a machine-readable score explanation.
 
 ## Initial operating limits
 

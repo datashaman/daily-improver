@@ -89,16 +89,18 @@ export const candidateExclusionReasons = [
   "scoring",
   "semantic-deduplication",
   "oversized-scope",
+  "unresolved-finding",
 ] as const;
 
 export type CandidateExclusionReason = (typeof candidateExclusionReasons)[number];
 
 export interface CandidateExclusion {
-  readonly schemaVersion: "candidate-exclusion/v1";
+  readonly schemaVersion: "candidate-exclusion/v2";
   readonly candidateReference: string;
   readonly candidateKind?: CandidateKind;
   readonly reason: CandidateExclusionReason;
   readonly retainedCandidateReference?: string;
+  readonly findingId?: string;
 }
 
 export interface HumanTaskRecommendation {
@@ -170,6 +172,13 @@ export interface OpenPullRequestLimitDecision {
   readonly maxOpenPullRequests: number;
   readonly outcome: "allowed" | "blocked";
   readonly decidedAt: string;
+}
+
+export interface UnresolvedFindingState {
+  readonly schemaVersion: "unresolved-finding-state/v1";
+  readonly repositoryId: string;
+  readonly observedAt: string;
+  readonly findingIds: readonly string[];
 }
 
 export interface ImprovementRun {

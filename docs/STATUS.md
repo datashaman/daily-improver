@@ -4,24 +4,24 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: repository-owned open Daily Improver PR limit.
-- Current checkpoint commit: `feat: enforce open improvement PR limit`.
+- Last completed milestone: repository-scoped unresolved finding suppression.
+- Current checkpoint commit: `feat: prevent repeated unresolved findings`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1B — Deterministic candidate selection.
-- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, a fresh repository-bound open-PR limit gate, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Prevent repeated selection of the same unresolved finding.
+Include a machine-readable score explanation.
 
 ## Acceptance criteria for the next task
 
-- Define bounded repository-scoped unresolved-finding state without granting the core network access.
-- Match by a stable semantic finding identity and exclude unresolved matches before autonomous selection.
-- Select the highest-ranked unmatched bounded candidate when one remains.
-- Persist a deterministic machine-readable exclusion without retaining raw evidence or source paths.
-- Fail closed on missing, malformed, unbounded, stale, or cross-repository unresolved-finding state.
-- Add executable repeated-finding, lower-ranked fallback, malformed-input, and repository-isolation examples.
+- Define a versioned bounded score explanation for every ranked candidate.
+- Record all eight normalized factors, the exhaustive category weights, raw weighted contribution, repository-priority influence, any value-classification cap, and the final rounded score.
+- Make the explanation independently replayable and require it to agree exactly with ranking order and the candidate's persisted score.
+- Retain no raw evidence, rationale, targets, or source paths in the explanation.
+- Fail closed if an explanation would be malformed, incomplete, unbounded, or inconsistent with the ranking calculation.
+- Persist explanations in versioned analysis artifacts and planning runs, including deterministic tie and cosmetic-cap examples.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -31,7 +31,8 @@ Prevent repeated selection of the same unresolved finding.
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
 - Candidate selection caps an explicitly versioned `cosmetic-only` value classification at `0.01`, rejects malformed or extended classifications, applies only validated exhaustive repository priorities with at most `0.05` influence, chooses exactly one candidate per run, and resolves equal scores by stable candidate ID.
 - Candidate selection rejects credible work beyond repository file or changed-line limits before specification, emits at most one bounded `human-task-recommendation/v1` without evidence or source paths, continues with a lower-ranked bounded candidate when available, and persists oversized-only planning as rejected.
-- Candidate selection emits one bounded `candidate-exclusion/v1` at the first failed gate for malformed scope, evidence, scoring, semantic deduplication, or oversized scope; exclusions are deterministic, replace invalid IDs with hashes, and retain no evidence, provenance, rationale, title, target, or source path. Version 3 analysis artifacts and persisted planning runs retain these reasons, including rejected runs where no candidate survives.
+- Candidate selection emits one bounded `candidate-exclusion/v2` at the first failed gate for malformed scope, evidence, scoring, semantic deduplication, oversized scope, or an unresolved finding; exclusions are deterministic, replace invalid IDs with hashes, and retain no evidence, provenance, rationale, title, target, or source path. Version 4 analysis artifacts and persisted planning runs retain these reasons, including rejected runs where no candidate survives.
+- Analysis requires fresh injected `unresolved-finding-state/v1` from the trusted control-plane/GitHub boundary; the exact schema is bound to the SHA-256 of an independently supplied trusted repository scope, expires after fifteen minutes, and contains at most 1,000 unique semantic finding hashes. Matches are excluded before autonomous selection, the highest-ranked unmatched bounded candidate remains eligible, and missing, malformed, non-regular, oversized, stale, future-dated, or cross-repository state fails closed without granting core network access.
 - Specification atomically claims `daily-improvement-decision/v1` state keyed by the SHA-256 identity of the canonical repository path and UTC date; active and completed claims block another specification, completed publication requests cannot transition twice, policy-rejected plans release their claim, and candidate rejection or human-task routing does not consume the repository day.
 - Specification requires fresh injected `open-pull-request-state/v1` from the trusted control-plane/GitHub boundary; the exact schema is bound to the SHA-256 of an independently supplied trusted repository scope, expires after fifteen minutes, and contains a bounded integer count. Missing scope or state, malformed or non-regular input, stale, future-dated, negative, fractional, unbounded, or cross-repository state fails closed, while a count at or above `limits.max_open_prs` rejects before the daily claim and specification. Candidate rejection and human-task routing do not read the state.
 - Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
@@ -50,7 +51,7 @@ Prevent repeated selection of the same unresolved finding.
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
 - The local CLI delegates to configured commands; the structured provider accepts bounded ephemeral credentials, but a production endpoint transport and production credential exchange are not implemented yet.
 - `daily-improver-auth` does not exist.
-- The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth open-pull-requests` producer is not implemented.
+- The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
 - The GHCR image is not published.
 - The GitHub App and hosted control plane do not exist.
@@ -59,10 +60,10 @@ Prevent repeated selection of the same unresolved finding.
 
 ## Last verification
 
-Verified on 2026-07-17 for the open improvement PR limit slice:
+Verified on 2026-07-17 for the unresolved finding suppression slice:
 
-- Focused open-PR state, configuration, pipeline, and local-runner tests: 20 tests passed.
-- `npm test`: 152 tests passed.
+- Focused unresolved-state, selection, and pipeline tests: 16 tests passed.
+- `npm test`: 158 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.

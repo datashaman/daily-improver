@@ -7,7 +7,7 @@ import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution 
 import { createApplication } from "../src/app.js";
 import { LocalImprovementRunner } from "../src/core/local-runner.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
-import type { OpenPullRequestStateSource } from "../src/contracts.js";
+import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../src/contracts.js";
 
 class ProvingAgent implements AgentProvider {
   async generateTests(context: AgentContext): Promise<TestAgentExecution> {
@@ -145,7 +145,15 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
       openPullRequests: 0,
     }),
   };
-  const app = createApplication(join(sandbox, "state"), openPullRequests);
+  const unresolvedFindings: UnresolvedFindingStateSource = {
+    current: async (observedAt) => ({
+      schemaVersion: "unresolved-finding-state/v1",
+      repositoryId: "f".repeat(64),
+      observedAt,
+      findingIds: [],
+    }),
+  };
+  const app = createApplication(join(sandbox, "state"), openPullRequests, unresolvedFindings);
   const result = await new LocalImprovementRunner(
     app.stages,
     new ProvingAgent(),

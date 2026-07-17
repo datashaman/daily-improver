@@ -18,11 +18,17 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      - name: Read repository-bound unresolved Daily Improver findings
+        run: daily-improver-auth unresolved-findings > "$RUNNER_TEMP/unresolved-finding-state.json"
       - name: Read repository-bound open Daily Improver PR state
         run: daily-improver-auth open-pull-requests > "$RUNNER_TEMP/open-pr-state.json"
       - name: Analyse and select exactly one candidate
         run: |
-          docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" analyse /repo
+          docker run --rm \
+            -e DAILY_IMPROVER_UNRESOLVED_FINDING_STATE_PATH=/trusted/unresolved-finding-state.json \
+            -e DAILY_IMPROVER_REPOSITORY_SCOPE=github:${{ github.repository_id }} \
+            -v "$RUNNER_TEMP/unresolved-finding-state.json:/trusted/unresolved-finding-state.json:ro" \
+            -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" analyse /repo
           docker run --rm \
             -e DAILY_IMPROVER_OPEN_PR_STATE_PATH=/trusted/open-pr-state.json \
             -e DAILY_IMPROVER_REPOSITORY_SCOPE=github:${{ github.repository_id }} \

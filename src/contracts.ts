@@ -5,6 +5,7 @@ import type {
   ImprovementRun,
   ImprovementSpec,
   OpenPullRequestState,
+  UnresolvedFindingState,
   PolicyDecision,
   RepositoryProfile,
 } from "./domain/model.js";
@@ -30,6 +31,10 @@ export interface DailyImprovementStore {
 
 export interface OpenPullRequestStateSource {
   current(decidedAt: string): Promise<OpenPullRequestState>;
+}
+
+export interface UnresolvedFindingStateSource {
+  current(decidedAt: string): Promise<UnresolvedFindingState>;
 }
 
 export interface Policy {
