@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -113,6 +113,25 @@ final class MoneyAllocator
         implementationNotes: ["Preserved the public method signature."],
       },
     };
+  }
+}
+
+class SourceInspectingAgent extends ProvingAgent {
+  buildCalled = false;
+
+  override async generateTests(context: AgentContext): Promise<TestAgentExecution> {
+    const execution = await super.generateTests(context);
+    await appendFile(
+      join(context.repository, "tests", "Property", "MoneyAllocatorInvariantTest.php"),
+      "\nfile_get_contents(__DIR__ . '/../../app/Domain/MoneyAllocator.php');\n",
+      "utf8",
+    );
+    return execution;
+  }
+
+  override async build(context: AgentContext): Promise<BuilderExecution> {
+    this.buildCalled = true;
+    return await super.build(context);
   }
 }
 
@@ -230,10 +249,11 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
   const testPlan = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-plan.json`], repository));
-  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v4"/);
+  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v5"/);
   assert.match(testPlan.stdout, /"baselineProof": "defect-regression"/);
   assert.match(testPlan.stdout, /"outcome": "failed-as-expected"/);
   assert.match(testPlan.stdout, /"generatedInputCount": 510/);
+  assert.match(testPlan.stdout, /"outcome": "accepted"/);
   const propertyProof = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/property-test-execution-proof.json`], repository));
   assert.match(propertyProof.stdout, /"schemaVersion": "property-test-execution-proof\/v1"/);
   assert.match(propertyProof.stdout, /"targetExecutionCount": 510/);
@@ -242,6 +262,13 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(mutationProof.stdout, /"status": "failed-as-required"/);
   assert.match(mutationProof.stdout, /"classification": "property-invariant-violation"/);
   assert.doesNotMatch(mutationProof.stdout, /Allocation did not preserve/);
+  const implementationInspection = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-implementation-inspection.json`], repository));
+  assert.match(implementationInspection.stdout, /"schemaVersion": "test-implementation-inspection\/v1"/);
+  assert.match(implementationInspection.stdout, /"outcome": "accepted"/);
+  assert.match(implementationInspection.stdout, /"testSha256": "[a-f0-9]{64}"/);
+  assert.doesNotMatch(implementationInspection.stdout, /array_sum|intdiv|Allocation did not preserve/);
+  const testManifest = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-manifest.json`], repository));
+  assert.match(testManifest.stdout, /test-implementation-inspection\.json/);
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);
@@ -257,6 +284,44 @@ test("rejects known non-behavioral defect-test failure classifications", () => {
   assert.equal(defectBaselineFailureIsCredible("syntax"), false);
   assert.equal(defectBaselineFailureIsCredible("resource-limit"), false);
   assert.equal(defectBaselineFailureIsCredible("dependency-or-autoload"), false);
+});
+
+test("rejects implementation-restating generated tests before the builder", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-restatement-"));
+  const repository = join(sandbox, "repository");
+  await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
+  const shell = new CommandRunner();
+  await expectSuccess(shell.run(["git", "init", "-b", "main"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.email", "improver@example.test"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
+  await expectSuccess(shell.run(["git", "add", "."], repository));
+  await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
+
+  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
+  const app = createApplication(join(sandbox, "state"), {
+    current: async (observedAt) => ({
+      schemaVersion: "open-pull-request-state/v1",
+      repositoryId: "b".repeat(64),
+      observedAt,
+      openPullRequests: 0,
+    }),
+  }, {
+    current: async (observedAt) => ({
+      schemaVersion: "unresolved-finding-state/v1",
+      repositoryId: "f".repeat(64),
+      observedAt,
+      findingIds: [],
+    }),
+  });
+  const agent = new SourceInspectingAgent();
+  await assert.rejects(new LocalImprovementRunner(
+    app.stages,
+    agent,
+    join(sandbox, "worktrees"),
+    "ephemeral-test-key",
+  ).run(repository), /production-source-inspection/);
+  assert.equal(agent.buildCalled, false);
+  delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 
 async function expectSuccess<T extends { exitCode: number; stderr: string }>(promise: Promise<T>): Promise<T> {

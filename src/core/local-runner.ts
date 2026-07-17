@@ -20,6 +20,11 @@ import {
   createKnownMutationExecutionProof,
   type KnownMutationExecutionProof,
 } from "../domain/known-mutation-execution-proof.js";
+import {
+  inspectGeneratedTestImplementation,
+  requireBlackBoxTest,
+  type TestImplementationInspection,
+} from "../domain/test-implementation-inspection.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -104,6 +109,7 @@ export class LocalImprovementRunner {
       const baselineProof = proveBaseline(improvementIntent, baseline.exitCode, baselineClassification);
       let propertyProof: PropertyTestExecutionProof | undefined;
       let knownMutationProof: KnownMutationExecutionProof | undefined;
+      let implementationInspection: TestImplementationInspection | undefined;
       const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
       if (spec.propertyTestTarget) {
         propertyProof = await readPropertyTestExecutionProof(propertyProofRuntimePath, {
@@ -135,9 +141,22 @@ export class LocalImprovementRunner {
         });
         await writeArtifact(isolated.path, "known-mutation-execution-proof.json", knownMutationProof);
       }
+      if (propertyProof && spec.propertyTestTarget) {
+        implementationInspection = await inspectGeneratedTestImplementation({
+          root: isolated.path,
+          testPath: propertyProof.testPath,
+          observedTestPaths: changedTests,
+          target: spec.propertyTestTarget,
+          criterion: { kind: "property-invariant", statement: propertyProof.invariant },
+          approvedPropertyInvariants: spec.propertyInvariants,
+          approvedAcceptanceCriteria: spec.acceptanceCriteria,
+        });
+        await writeArtifact(isolated.path, "test-implementation-inspection.json", implementationInspection);
+        requireBlackBoxTest(implementationInspection);
+      }
       await rm(propertyProofRuntimePath, { force: true });
       await writeArtifact(isolated.path, "test-plan.json", {
-        schemaVersion: "test-plan/v4",
+        schemaVersion: "test-plan/v5",
         improvementIntent,
         baseline: baselineProof,
         command: test.command,
@@ -159,6 +178,16 @@ export class LocalImprovementRunner {
             testPath: knownMutationProof.testPath,
             target: knownMutationProof.target,
             criterion: knownMutationProof.criterion,
+          },
+        } : {}),
+        ...(implementationInspection ? {
+          implementationInspection: {
+            schemaVersion: implementationInspection.schemaVersion,
+            artifact: "test-implementation-inspection.json",
+            testPath: implementationInspection.testPath,
+            target: implementationInspection.target,
+            criterion: implementationInspection.criterion,
+            outcome: implementationInspection.outcome,
           },
         } : {}),
       });

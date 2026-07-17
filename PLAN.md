@@ -164,7 +164,7 @@ Goal: prove that generated tests are meaningful and cannot be weakened by the bu
 - [x] Require property tests to execute a meaningful generated input space.
 - [x] Require property tests to exercise the selected target and invariant.
 - [x] Require the relevant test to fail under a known mutation where applicable.
-- [ ] Detect tests that merely restate implementation details.
+- [x] Detect tests that merely restate implementation details.
 - [ ] Detect deleted, skipped, weakened, or newly flaky tests.
 - [ ] Detect reduced assertion counts and broadened tolerances.
 - [ ] Record test command, baseline output, duration, and hashes.
@@ -491,8 +491,9 @@ The recent and next commit-sized milestones are:
 20. [x] `feat: classify improvement proof intent`
 21. [x] `feat: prove generated property test execution`
 22. [x] `feat: require known mutation test proof`
+23. [x] `feat: reject implementation-restating tests`
 
-The immediate next task is Phase 1D: detect generated tests that merely restate implementation details. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: detect deleted, skipped, weakened, or newly flaky generated tests. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

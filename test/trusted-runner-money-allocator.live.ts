@@ -13,6 +13,7 @@ import { createTestManifest, runDirectory, writeArtifact } from "../src/core/art
 import { persistAgentExecution } from "../src/core/local-runner.js";
 import { readPropertyTestExecutionProof } from "../src/domain/property-test-execution-proof.js";
 import { createKnownMutationExecutionProof } from "../src/domain/known-mutation-execution-proof.js";
+import { inspectGeneratedTestImplementation, requireBlackBoxTest } from "../src/domain/test-implementation-inspection.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import {
   assertWorkspaceCanBeCreated,
@@ -130,9 +131,20 @@ test("MoneyAllocator passes through the live trusted structured provider", async
       command: testCapability.command,
     });
     await writeArtifact(live.workspace, "known-mutation-execution-proof.json", mutationProof);
+    const implementationInspection = await inspectGeneratedTestImplementation({
+      root: live.workspace,
+      testPath: propertyProof.testPath,
+      observedTestPaths: changedTestPaths,
+      target: spec.propertyTestTarget,
+      criterion: { kind: "property-invariant", statement: propertyProof.invariant },
+      approvedPropertyInvariants: spec.propertyInvariants,
+      approvedAcceptanceCriteria: spec.acceptanceCriteria,
+    });
+    await writeArtifact(live.workspace, "test-implementation-inspection.json", implementationInspection);
+    requireBlackBoxTest(implementationInspection);
     await rm(proofRuntimePath, { force: true });
     await writeArtifact(live.workspace, "test-plan.json", {
-      schemaVersion: "test-plan/v4",
+      schemaVersion: "test-plan/v5",
       improvementIntent: spec.improvementIntent,
       baseline: { expected: "fail", outcome: "failed-as-expected" },
       command: testCapability.command,
@@ -151,6 +163,14 @@ test("MoneyAllocator passes through the live trusted structured provider", async
         testPath: mutationProof.testPath,
         target: mutationProof.target,
         criterion: mutationProof.criterion,
+      },
+      implementationInspection: {
+        schemaVersion: implementationInspection.schemaVersion,
+        artifact: "test-implementation-inspection.json",
+        testPath: implementationInspection.testPath,
+        target: implementationInspection.target,
+        criterion: implementationInspection.criterion,
+        outcome: implementationInspection.outcome,
       },
     });
     const manifestKey = randomBytes(32).toString("hex");

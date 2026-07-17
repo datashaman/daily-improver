@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: language-neutral known-mutation execution proof bound to the relevant generated test, selected target, and approved criterion.
-- Current checkpoint commit: `feat: require known mutation test proof`.
+- Last completed milestone: language-neutral generated-test inspection rejects credible implementation restatements before the builder.
+- Current checkpoint commit: `feat: reject implementation-restating tests`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1D — Generated-test quality.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D now has exhaustive intent-specific baseline semantics, a nonce-bound `property-test-execution-proof/v1` gate over a bounded unique input space, and an applicable `known-mutation-execution-proof/v1` gate over the relevant generated test, target, criterion, command, and hashed outcome. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D now has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, and a source-free `test-implementation-inspection/v1` gate that binds the observed generated test to its selected target and approved criterion. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Detect generated tests that merely restate implementation details.
+Detect deleted, skipped, weakened, or newly flaky generated tests.
 
 ## Acceptance criteria for the next task
 
-- Define language-neutral signals for tests that duplicate the selected target's implementation instead of observing public behavior.
-- Bind inspection to the observed generated test, selected target, and approved invariant or acceptance criterion.
-- Reject credible implementation-restatement patterns before the builder while preserving valid black-box tests.
-- Retain a bounded versioned inspection decision without raw source.
-- Preserve intent, property-test execution, known-mutation, sealed-artifact, and independent-verification gates.
+- Define language-neutral lifecycle evidence for generated tests from baseline execution through independent verification.
+- Reject generated tests that are absent, skipped, disabled, or observably weakened at any required gate.
+- Detect newly flaky behavior with bounded deterministic reruns and quarantine the candidate rather than invoking the builder or publishing.
+- Retain bounded versioned decisions with command outcomes, durations, and hashes but no raw output.
+- Preserve intent, property-test execution, implementation-restatement, known-mutation, sealed-artifact, and independent-verification gates.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -52,9 +52,10 @@ Detect generated tests that merely restate implementation details.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
 - Every specification and structured agent request carries an exact `improvement-intent/v1` contract. Candidate categories provide exhaustive deterministic defaults, while adapters may declare more precise bounded intent from evidence; escaped mutations are defects and uncovered behavior remains refactor/test-protection work.
-- `test-plan/v4` retains the sealed intent and observed baseline outcome. Defects require a credible behavioral failure; refactor characterization, performance measurement, and maintainability quality baselines must pass before the builder runs; every intent must then pass independent verification.
+- `test-plan/v5` retains the sealed intent, observed baseline outcome, execution-proof references, and implementation-inspection reference. Defects require a credible behavioral failure; refactor characterization, performance measurement, and maintainability quality baselines must pass before the builder runs; every intent must then pass independent verification.
 - Property specifications require one evidence-backed production target. Their executed tests must emit an exact nonce-bound `property-test-execution-proof/v1` with 32–1,000 unique input digests, one target execution and approved-invariant check per input, and intent-consistent failure counts. Missing, malformed, stale, trivial, duplicate, unexecuted, wrong-test, wrong-target, or wrong-invariant proof fails before the builder, and the validated artifact is sealed.
 - Evidence that explicitly marks the baseline target as a known mutant produces exact `known-mutation/v1` specification input. Before the builder, the relevant observed generated test must fail its approved invariant or acceptance criterion; `known-mutation-execution-proof/v1` retains only the bounded mutation identity, test, target, criterion, exact command, behavioral outcome, duration, and output hashes. Missing, malformed, unexecuted, survived, wrong-test, wrong-target, wrong-criterion, or non-behavioral proof fails closed, and the validated artifact is sealed.
+- Property work also produces exact `test-implementation-inspection/v1` evidence over the observed generated test and selected target. Direct production-source inspection, exact token runs of at least 24 tokens, and identifier-normalized structural runs of at least 48 tokens reject before the builder; accepted decisions retain only bounded paths, SHA-256 identities, metrics, exhaustive signals, and the approved criterion, and are sealed through `test-plan/v5` and the test manifest.
 - The opt-in direct OpenAI MoneyAllocator proof passed end to end with separate real-model test and builder calls, sealed protected artifacts, independent verification, and a draft publication request.
 - Builder changes are checked against sealed test/spec artifacts.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
@@ -74,16 +75,16 @@ Detect generated tests that merely restate implementation details.
 
 ## Last verification
 
-Verified on 2026-07-17 for the known-mutation execution proof slice:
+Verified on 2026-07-17 for the implementation-restatement inspection slice:
 
-- Focused known-mutation, property-proof, and local-runner tests: 10 tests passed.
-- `npm test`: 204 tests passed; both live model proofs remained excluded.
+- Focused implementation-inspection, local-runner, and manifest tests: 8 tests passed.
+- `npm test`: 209 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .`: not required; CLI runtime and production dependencies did not change.
-- End-to-end defect → 510-input target/invariant proof → known-mutant failure proof → bounded fix → independently verified daily branch flow passed with sealed `property-test-execution-proof/v1`, `known-mutation-execution-proof/v1`, and `test-plan/v4` artifacts.
+- End-to-end defect → 510-input target/invariant proof → known-mutant failure proof → accepted black-box implementation inspection → bounded fix → independently verified daily branch flow passed with sealed `property-test-execution-proof/v1`, `known-mutation-execution-proof/v1`, `test-implementation-inspection/v1`, and `test-plan/v5` artifacts.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
