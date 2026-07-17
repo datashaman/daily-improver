@@ -69,7 +69,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- The local CLI remains command-backed; production endpoint resolution and credential exchange boundaries exist but are not yet wired into a customer-controlled runner entrypoint.
+- The local CLI remains command-backed; production customer-controlled runners have an explicit structured-provider composition boundary but no live MoneyAllocator provider proof yet.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
 - `publish` emits a request artifact but does not push or open a PR.
@@ -478,8 +478,9 @@ The recent and next commit-sized milestones are:
 13. [x] `feat: explain candidate scores`
 14. [x] `feat: add HTTPS structured endpoint transport`
 15. [x] `feat: exchange trusted runner identity for model credentials`
+16. [x] `feat: compose trusted runner structured model provider`
 
-The immediate next task is Phase 1C: wire trusted endpoint resolution and credential exchange into a production customer-controlled runner entrypoint while keeping repository configuration unable to select locators, identity claims, or credentials.
+The immediate next task is Phase 1C: add an opt-in customer-runner integration proof that drives the MoneyAllocator fixture through the trusted structured-provider composition against a real model endpoint while keeping permanent credentials and live calls out of the deterministic checkpoint suite.
 
 ## Initial operating limits
 

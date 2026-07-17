@@ -50,6 +50,50 @@ The transport accepts HTTPS only, rejects embedded URL credentials and fragments
 
 Production stage credentials can be supplied by `TrustedRunnerModelStageCredentialSource`. Its trusted resolver takes no repository-controlled arguments and returns an exact `model-credential-exchange-resolution/v1` containing the HTTPS exchange URL, expected runner issuer and audience, timeout, and request/response limits. A separate injected identity source receives only the derived test/build stage, hashed repository/specification scope, and those trusted issuer/audience values, then returns an exact `trusted-runner-identity/v1`. The assertion is sent only in the exchange authorization header; the bounded exchange body contains its non-secret claims. The exact response must be a `model-stage-credential/v1` for the requested stage and scope with a lifetime no longer than fifteen minutes. Unsupported identity claims, protocols, redirects/statuses, oversized payloads, malformed responses, and scope mismatches fail closed with sanitized retry classifications. No assertion, locator, authorization header, or returned secret enters a model request, usage, rationale, attempt record, or error. Deterministic tests inject all identity, resolution, and HTTPS behavior without network access, a live identity provider, a model API, or permanent credentials.
 
+Customer-controlled production runners compose these boundaries with `createTrustedRunnerStructuredProvider`. The runner owns the exact configuration value; do not load it from the checkout or `.ai/improver.yml`:
+
+```json
+{
+  "schemaVersion": "trusted-runner-structured-provider-configuration/v1",
+  "budgets": {
+    "dailyLimitUsd": 5,
+    "stages": {
+      "test": { "limitUsd": 2.5, "reservationUsd": 1 },
+      "build": { "limitUsd": 2.5, "reservationUsd": 1 }
+    }
+  },
+  "retryPolicy": { "maxAttempts": 2, "delaysMs": [1000] },
+  "routingPolicy": {
+    "schemaVersion": "model-routing-policy/v1",
+    "routes": {
+      "lower": {
+        "test": { "id": "test-lower", "provider": "customer", "model": "model-v1" },
+        "build": { "id": "build-lower", "provider": "customer", "model": "model-v1" }
+      },
+      "higher": {
+        "test": { "id": "test-higher", "provider": "customer", "model": "test-model-v2" },
+        "build": { "id": "build-higher", "provider": "customer", "model": "build-model-v2" }
+      }
+    }
+  },
+  "endpointPolicy": {
+    "schemaVersion": "model-endpoint-policy/v1",
+    "endpoints": [{
+      "id": "customer-private-endpoint",
+      "routeIds": ["test-lower", "build-lower", "test-higher", "build-higher"],
+      "capabilities": {
+        "protocol": "structured-agent/v1",
+        "stages": ["test", "build"],
+        "authentication": "ephemeral-credential",
+        "costLimit": "maximum-cost-usd"
+      }
+    }]
+  }
+}
+```
+
+The runner must inject its endpoint resolver, trusted identity source, and no-argument credential-exchange resolver. It may also inject its HTTPS client, clock, cost state, and retry timing. Repository content is never consulted for those dependencies, endpoint locators, issuer/audience claims, assertions, or credentials. The ordinary `daily-improver run` command remains command-backed for local proving and does not read this production configuration. `test/trusted-runner-structured-provider.test.ts` is the executable no-network composition example: it proves separate test/build identity, exchange, credential, and endpoint acquisition and the fail-closed cross-stage, cross-scope, and cross-endpoint cases.
+
 Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.ai/improver.yml`](.ai/improver.yml). A setup-PR payload lives in [`templates/setup`](templates/setup), including the four-job Actions workflow.
 
 Analysis and planning require `DAILY_IMPROVER_UNRESOLVED_FINDING_STATE_PATH` to point to a trusted `unresolved-finding-state/v1` JSON artifact supplied by the control-plane/GitHub boundary, and `DAILY_IMPROVER_REPOSITORY_SCOPE` to contain its matching external repository scope:

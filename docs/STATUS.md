@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded production exchange of injected trusted runner identity for stage-scoped model credentials.
-- Current checkpoint commit: `feat: exchange trusted runner identity for model credentials`.
+- Last completed milestone: explicit production composition of trusted runner policy, endpoint resolution, identity, credential exchange, and structured model transport.
+- Current checkpoint commit: `feat: compose trusted runner structured model provider`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, and bounded trusted-runner identity exchange for exact stage/scope credentials; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, bounded trusted-runner identity exchange for exact stage/scope credentials, and an explicit production composition boundary for runner-owned inputs; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Wire trusted endpoint resolution and credential exchange into a production customer-controlled runner entrypoint.
+Add an opt-in customer-runner integration proof that drives the MoneyAllocator fixture through the trusted structured-provider composition against a real model endpoint without adding live calls to the deterministic checkpoint suite.
 
 ## Acceptance criteria for the next task
 
-- Add an explicit production runner composition that constructs the structured provider from trusted runner-owned endpoint, routing, budget, identity, and credential-exchange inputs without accepting those values from the customer repository.
-- Preserve the command-backed local CLI path and keep language-specific behavior out of the composition boundary.
-- Fail closed before a model call when any trusted production input is absent, malformed, cross-stage, or cross-scope.
-- Add a deterministic executable composition example proving separate test/build identity and endpoint acquisition without network access, live identity, a model API, or permanent credentials.
-- Document the runner-facing configuration and trust ownership without introducing long-lived repository secrets.
+- Exercise both test and builder stages through `createTrustedRunnerStructuredProvider` against an explicitly enabled real structured endpoint on a customer-controlled runner.
+- Keep the integration opt-in and excluded from `npm run checkpoint`; absence of live runner identity or endpoint configuration must skip or fail before any network call according to the explicit invocation mode.
+- Prove the MoneyAllocator defect test fails against baseline and the independently verified bounded patch passes.
+- Retain distinct short-lived stage credentials, trusted opaque endpoint resolution, cost limits, protected artifacts, and sanitized run outputs.
+- Document the invocation and required runner-owned configuration without placing permanent credentials in the repository.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -56,7 +56,7 @@ Wire trusted endpoint resolution and credential exchange into a production custo
 ## Known placeholders
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
-- The local CLI delegates to configured commands; production trusted-runner endpoint resolution and credential exchange exist as injected boundaries but are not wired into a production customer-controlled runner entrypoint yet.
+- The local CLI delegates to configured commands; production customer-controlled runners now have an explicit structured-provider composition boundary, but the real-model MoneyAllocator integration proof is not yet implemented.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
@@ -67,17 +67,17 @@ Wire trusted endpoint resolution and credential exchange into a production custo
 
 ## Last verification
 
-Verified on 2026-07-17 for the trusted runner identity exchange slice:
+Verified on 2026-07-17 for the trusted runner structured-provider composition slice:
 
-- Focused credential-exchange and structured-provider tests: 20 tests passed.
-- `npm test`: 178 tests passed.
+- Focused trusted-runner composition tests: 5 tests passed.
+- `npm test`: 183 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
-- `docker build -t daily-improver:local .` passed.
+- `docker build -t daily-improver:local .`: not required; CLI runtime and production dependencies did not change.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- Deterministic injected-exchange examples proved trusted no-argument exchange resolution, exact identity and credential scope, the assertion/body split, protocol/request/response/timeout limits, sanitized retry classifications, zero-cost acquisition retries, and no network, live identity provider, model API, or permanent credential dependency.
+- The deterministic composition example proved separate test/build identity, credential exchange, opaque endpoint resolution, and authenticated structured calls with no network, live identity provider, model API, or permanent credentials; absent, malformed, cross-stage, cross-scope, and cross-endpoint inputs failed before a model call.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
