@@ -33,6 +33,21 @@ The command-backed provider remains available for the local CLI. The first struc
 
 Committed `structured-provider-replay/v3` fixtures under `test/fixtures/model-provider-replay/` replay both structured stages against a deterministic private endpoint without network access or permanent credentials. They pin the explicit routing and endpoint policies plus the trusted complexity decision. The builder replay includes a classified transient failure and verifies deterministic retry timing, fresh credential acquisition, conservative failure accounting, validated response usage, and removal of transport error text and authentication from provider results.
 
+Production structured calls use `HttpsStructuredEndpointTransport`. Its injected trusted runner resolver maps only an opaque endpoint ID to an exact bounded value outside repository configuration:
+
+```json
+{
+  "schemaVersion": "model-endpoint-resolution/v1",
+  "endpointId": "customer-private-model-endpoint",
+  "url": "https://models.customer.example/structured-agent",
+  "timeoutMs": 30000,
+  "maxRequestBytes": 128000,
+  "maxResponseBytes": 128000
+}
+```
+
+The transport accepts HTTPS only, rejects embedded URL credentials and fragments, caps request and response bodies at 1 MiB and timeouts at two minutes, and does not follow redirects. Its versioned JSON body contains the validated stage request, selected route, and reserved maximum cost. The ephemeral stage credential is sent only as a bearer authorization header. Connection, timeout, HTTP, body-size, content-type, and JSON failures are classified without copying locators, authentication, response bodies, headers, or underlying error text into provider results. Tests inject the HTTP client and resolver, so no network access or permanent credential is required.
+
 Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.ai/improver.yml`](.ai/improver.yml). A setup-PR payload lives in [`templates/setup`](templates/setup), including the four-job Actions workflow.
 
 Analysis and planning require `DAILY_IMPROVER_UNRESOLVED_FINDING_STATE_PATH` to point to a trusted `unresolved-finding-state/v1` JSON artifact supplied by the control-plane/GitHub boundary, and `DAILY_IMPROVER_REPOSITORY_SCOPE` to contain its matching external repository scope:

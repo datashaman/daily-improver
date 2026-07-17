@@ -368,7 +368,9 @@ function message(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function transportFailureClassification(error: unknown): "transient" | "permanent" {
+function transportFailureClassification(
+  error: unknown,
+): Extract<ModelRequestFailureClassification, "transient" | "permanent" | "malformed-response" | "policy"> {
   if (!(error instanceof ModelTransportFailure)) return "permanent";
-  return error.classification === "transient" ? "transient" : "permanent";
+  return error.classification;
 }

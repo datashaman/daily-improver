@@ -39,7 +39,10 @@ export class ModelTransportFailure extends Error {
   override readonly name = "ModelTransportFailure";
 
   constructor(
-    readonly classification: "transient" | "permanent",
+    readonly classification: Extract<
+      ModelRequestFailureClassification,
+      "transient" | "permanent" | "malformed-response" | "policy"
+    >,
     message = "The model transport request failed.",
   ) {
     super(message);

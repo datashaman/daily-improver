@@ -634,6 +634,8 @@ test("does not retry permanent, malformed-response, policy, or budget failures",
     readonly response: unknown;
   }[] = [
     { expected: "permanent", response: new ModelTransportFailure("permanent", "credential rejected") },
+    { expected: "malformed-response", response: new ModelTransportFailure("malformed-response", "private endpoint body detail") },
+    { expected: "policy", response: new ModelTransportFailure("policy", "private endpoint resolution detail") },
     { expected: "malformed-response", response: { status: "completed" } },
     { expected: "policy", response: { ...testResponse, changedFiles: ["app/Domain/MoneyAllocator.php"] } },
     { expected: "budget", response: { ...testResponse, usage: { ...usage, estimatedCostUsd: 0.005 } } },
@@ -655,6 +657,7 @@ test("does not retry permanent, malformed-response, policy, or budget failures",
       assert.ok(error instanceof StructuredModelRequestFailure);
       assert.equal(error.classification, item.expected);
       assert.equal(error.requestAttempts.attempts.length, 1);
+      assert.doesNotMatch(error.message, /credential rejected|private endpoint/);
       return true;
     });
     assert.equal(transport.invocations.length, 1);

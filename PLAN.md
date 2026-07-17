@@ -142,6 +142,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Add deterministic provider replay fixtures.
 - [x] Add model routing based on task complexity.
 - [x] Keep the provider interface compatible with private customer endpoints.
+- [x] Add a bounded production HTTPS transport behind trusted opaque endpoint resolution.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
 
@@ -473,8 +474,9 @@ The recent and next commit-sized milestones are:
 11. [x] `feat: enforce open improvement PR limit`
 12. [x] `feat: prevent repeated unresolved findings`
 13. [x] `feat: explain candidate scores`
+14. [x] `feat: add HTTPS structured endpoint transport`
 
-The immediate next task is Phase 1C: add a production HTTPS structured endpoint transport behind trusted opaque endpoint resolution while retaining deterministic offline coverage.
+The immediate next task is Phase 1C: add production exchange of trusted runner identity for short-lived, stage-scoped model credentials without exposing OIDC assertions or credential secrets to core requests or artifacts.
 
 ## Initial operating limits
 

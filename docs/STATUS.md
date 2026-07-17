@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: private customer endpoint compatibility at the structured transport boundary.
-- Current checkpoint commit: `feat: bind structured transports to private endpoints`.
+- Last completed milestone: bounded production HTTPS structured endpoint transport behind trusted opaque resolution.
+- Current checkpoint commit: `feat: add HTTPS structured endpoint transport`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays through every injected provider boundary, versioned lower/higher model routing from bounded structured task complexity, and exact endpoint-neutral private-endpoint capabilities plus invocation metadata; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, and a production HTTPS transport that resolves only opaque IDs through an injected trusted runner boundary and bounds payloads, timeouts, protocols, status handling, and sanitized failures; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add a production HTTPS structured endpoint transport behind trusted opaque endpoint resolution.
+Add production exchange of trusted runner identity for short-lived, stage-scoped model credentials.
 
 ## Acceptance criteria for the next task
 
-- Resolve opaque endpoint IDs only through injected trusted runner configuration; do not place endpoint URLs in core requests, routing decisions, or persisted artifacts.
-- Send the validated structured request, selected route, maximum cost, and ephemeral credential through a bounded HTTPS transport contract.
-- Bound request/response sizes and timeouts, classify connection, HTTP, and malformed-response failures explicitly, and fail closed on unsupported protocols or endpoint resolution.
-- Keep authentication headers and endpoint locators out of requests, usage, rationale, attempts, and sanitized errors.
-- Add deterministic injected-HTTP success and failure examples without network access, a live model API, or permanent credentials.
+- Acquire trusted runner identity only through an injected boundary; repository inputs cannot provide an OIDC assertion, exchange URL, audience, or credential.
+- Exchange identity for an exact `model-stage-credential/v1` bound to the requested test/build stage and repository/specification scope with at most a fifteen-minute lifetime.
+- Bound exchange request/response sizes and timeouts, fail closed on unsupported protocols, identity claims, status codes, malformed responses, or scope mismatches, and classify retryability explicitly.
+- Keep runner assertions, exchange locators, authorization headers, and returned credential secrets out of requests, usage, rationale, attempts, and sanitized errors.
+- Add deterministic injected-exchange success and failure examples without network access, a live identity provider, a model API, or permanent credentials.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -43,6 +43,8 @@ Add a production HTTPS structured endpoint transport behind trusted opaque endpo
 - A `task-complexity-decision/v1` scores only validated task scope and collection counts, selects explicit lower/higher test and build routes from `model-routing-policy/v1`, and is retained in trusted `agent-usage/v4`; malformed, unsupported, duplicate, ambiguous, or response-mismatched routes fail closed without inspecting task prose, source, host paths, credentials, or rationale.
 - An exact `model-endpoint-policy/v1` assigns every route once to an opaque endpoint ID with explicit structured-protocol, stage, ephemeral-authentication, and maximum-cost capabilities; incomplete, unsupported, extended, duplicate, uncovered, or route-incompatible policies fail before reservation, credential acquisition, or transport.
 - Committed `structured-provider-replay/v3` fixtures bind both routed stages to a deterministic private endpoint while pinning route and endpoint policies together with the established credential, retry, validation, and cost boundaries.
+- `HttpsStructuredEndpointTransport` resolves the selected opaque endpoint ID only through an injected trusted resolver, accepts an exact bounded `model-endpoint-resolution/v1`, sends a versioned JSON body containing only the validated stage request, route, and maximum cost, and keeps the ephemeral credential in the authorization header.
+- The production HTTPS path rejects non-HTTPS or mismatched resolution, embedded URL authentication, fragments, redirects, invalid bounds, oversized bodies, invalid content types, and malformed JSON; connection, timeout, HTTP, and malformed-response outcomes are explicit and sanitized without retaining locators, headers, bodies, credentials, or underlying client error text.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -52,7 +54,7 @@ Add a production HTTPS structured endpoint transport behind trusted opaque endpo
 ## Known placeholders
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
-- The local CLI delegates to configured commands; the structured provider accepts bounded ephemeral credentials and private-endpoint invocation metadata, but a production endpoint transport and production credential exchange are not implemented yet.
+- The local CLI delegates to configured commands; the structured provider has a production HTTPS endpoint transport, but production trusted-runner endpoint-resolution wiring and credential exchange are not implemented yet.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
@@ -63,17 +65,17 @@ Add a production HTTPS structured endpoint transport behind trusted opaque endpo
 
 ## Last verification
 
-Verified on 2026-07-17 for the private customer endpoint compatibility slice:
+Verified on 2026-07-17 for the production HTTPS structured endpoint transport slice:
 
-- Focused structured provider and replay tests: 17 tests passed.
-- `npm test`: 169 tests passed.
+- Focused HTTPS transport and structured-provider tests: 19 tests passed.
+- `npm test`: 173 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .` passed.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- Both structured stages targeted the same deterministic private endpoint through explicit bounded capabilities while retaining route selection, exact stage contracts, fresh credentials, retry behavior, conservative budget accounting, and sanitized artifacts; invalid endpoint policies failed before transport.
+- Deterministic injected-HTTP examples proved opaque trusted resolution, the exact bounded HTTPS payload and authentication split, protocol/request/response/timeout limits, sanitized connection and status failures, malformed-response handling, and no network or permanent credential dependency.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
