@@ -12,6 +12,7 @@ interface MutationRecord {
   readonly mutator?: string;
   readonly description?: string;
   readonly invariant?: string;
+  readonly baselineMutation?: boolean;
 }
 
 interface InfectionReport {
@@ -60,6 +61,16 @@ async function mutationCandidates(root: string): Promise<ImprovementCandidate[]>
       target: mutation.file,
       estimatedDiffLines: 80,
       propertyInvariants: mutation.invariant ? [mutation.invariant] : [],
+      ...(mutation.status === "escaped" && mutation.baselineMutation === true && mutation.invariant ? {
+        knownMutation: {
+          schemaVersion: "known-mutation/v1" as const,
+          id: `prepared-infection-${fingerprint(`${mutation.file}:${mutation.line ?? 0}:${mutation.mutator ?? "unknown"}`)}`,
+          target: mutation.file,
+          operator: mutation.mutator ?? "Unknown mutator",
+          executionMode: "baseline-known-mutant" as const,
+          criterion: { kind: "property-invariant" as const, statement: mutation.invariant },
+        },
+      } : {}),
       reproducibility: reproducibleEvidence(0.85, ["Prepared Infection report"]),
       deduplication: {
         schemaVersion: "candidate-deduplication/v1" as const,

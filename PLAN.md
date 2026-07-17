@@ -14,6 +14,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
 - Phase 1B is complete. Category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; versioned explanations replay those factors and weights through priority influence, value caps, and final scores, explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
 - Phase 1D now derives or validates an exact language-neutral `improvement-intent/v1` contract before agent execution. Defects require a credible behavioral baseline failure; refactors require passing characterization tests; performance and maintainability work use distinct passing measurement and quality baselines. All four require passing post-change verification.
+- Applicable baseline-known-mutant evidence now produces an exact `known-mutation/v1` specification requirement and a sealed `known-mutation-execution-proof/v1` over the relevant generated test, selected target, approved criterion, exact command, credible failure, and hashed output.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
@@ -162,7 +163,7 @@ Goal: prove that generated tests are meaningful and cannot be weakened by the bu
 - [x] Require refactor characterization tests to pass before and after.
 - [x] Require property tests to execute a meaningful generated input space.
 - [x] Require property tests to exercise the selected target and invariant.
-- [ ] Require the relevant test to fail under a known mutation where applicable.
+- [x] Require the relevant test to fail under a known mutation where applicable.
 - [ ] Detect tests that merely restate implementation details.
 - [ ] Detect deleted, skipped, weakened, or newly flaky tests.
 - [ ] Detect reduced assertion counts and broadened tolerances.
@@ -489,8 +490,9 @@ The recent and next commit-sized milestones are:
 19. [x] `fix: validate generated defect test execution`
 20. [x] `feat: classify improvement proof intent`
 21. [x] `feat: prove generated property test execution`
+22. [x] `feat: require known mutation test proof`
 
-The immediate next task is Phase 1D: require the relevant generated test to fail under a known mutation where applicable. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: detect generated tests that merely restate implementation details. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

@@ -92,6 +92,14 @@ test("specification binds property proof to one evidence-backed approved target"
     target,
     estimatedDiffLines: 60,
     propertyInvariants: [invariant],
+    knownMutation: {
+      schemaVersion: "known-mutation/v1",
+      id: "known-remainder-mutation",
+      target,
+      operator: "Arithmetic/RemainderAllocation",
+      executionMode: "baseline-known-mutant",
+      criterion: { kind: "property-invariant", statement: invariant },
+    },
     score: 0.8,
   };
   const profile: RepositoryProfile = {
@@ -102,7 +110,9 @@ test("specification binds property proof to one evidence-backed approved target"
     signals: [],
     capabilities: new Map([["test", { kind: "test", command: ["php", "tests/run.php"], source: "manifest" }]]),
   };
-  assert.equal(createSpec(candidate, profile, { maxFiles: 2, maxChangedLines: 80, maxCostUsd: 1 }).propertyTestTarget, target);
+  const spec = createSpec(candidate, profile, { maxFiles: 2, maxChangedLines: 80, maxCostUsd: 1 });
+  assert.equal(spec.propertyTestTarget, target);
+  assert.equal(spec.knownMutation?.criterion.statement, invariant);
   const { target: selectedTarget, ...candidateWithoutTarget } = candidate;
   assert.equal(selectedTarget, target);
   assert.throws(() => createSpec(candidateWithoutTarget, profile, {

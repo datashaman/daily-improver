@@ -1,5 +1,6 @@
 import type { ImprovementSpec, RankedCandidate, RepositoryProfile } from "../domain/model.js";
 import { classifyImprovementIntent } from "../domain/improvement-intent.js";
+import { assertKnownMutationRequirement } from "../domain/known-mutation-execution-proof.js";
 
 export function createSpec(
   candidate: RankedCandidate,
@@ -21,6 +22,14 @@ export function createSpec(
       throw new Error("Property-test invariants must be unique bounded approved statements.");
     }
   }
+  const acceptanceCriteria = [
+    "The targeted improvement is implemented without unrelated changes.",
+    "Existing tests remain green and new behavior is protected by tests.",
+    "Every available verification capability required by this spec passes.",
+  ];
+  const knownMutation = candidate.knownMutation
+    ? assertKnownMutationRequirement(candidate.knownMutation, propertyInvariants, acceptanceCriteria, candidate.target)
+    : undefined;
   return {
     id: `spec-${candidate.id}`,
     improvementIntent: classifyImprovementIntent(candidate.kind, candidate.improvementIntent),
@@ -30,13 +39,10 @@ export function createSpec(
     proposedImprovement: candidate.rationale,
     allowedFiles: candidate.suggestedFiles,
     behavioursToPreserve: ["All behavior outside the approved objective remains unchanged."],
-    acceptanceCriteria: [
-      "The targeted improvement is implemented without unrelated changes.",
-      "Existing tests remain green and new behavior is protected by tests.",
-      "Every available verification capability required by this spec passes.",
-    ],
+    acceptanceCriteria,
     propertyInvariants,
     ...(propertyInvariants.length > 0 && candidate.target ? { propertyTestTarget: candidate.target } : {}),
+    ...(knownMutation ? { knownMutation } : {}),
     exclusions: ["Dependency upgrades", "Database migrations", "Public API changes", "CI configuration changes"],
     verification: verification.filter((kind) => profile.capabilities.has(kind)),
     constraints: limits,

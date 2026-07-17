@@ -16,6 +16,10 @@ import {
   readPropertyTestExecutionProof,
   type PropertyTestExecutionProof,
 } from "../domain/property-test-execution-proof.js";
+import {
+  createKnownMutationExecutionProof,
+  type KnownMutationExecutionProof,
+} from "../domain/known-mutation-execution-proof.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -76,6 +80,9 @@ export class LocalImprovementRunner {
               `Exercise the selected target ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one approved property invariant for every input.`,
               "During the test command, write property-test-execution-proof/v1 JSON to DAILY_IMPROVER_PROPERTY_PROOF_PATH using DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE. Include the generated test path, selected target, exact approved invariant, unique SHA-256 input digests, and execution/check/failure counts.",
             ] : []),
+            ...(spec.knownMutation ? [
+              `The selected target is a known ${spec.knownMutation.operator} mutant. The generated test must fail for the approved ${spec.knownMutation.criterion.kind} before the builder runs.`,
+            ] : []),
           ],
           builderConventions: ["Implement only the approved specification and preserve existing public interfaces."],
         },
@@ -96,8 +103,9 @@ export class LocalImprovementRunner {
       const baselineClassification = adapter.classifyFailure?.(`${baseline.stdout}\n${baseline.stderr}`) ?? "unclassified";
       const baselineProof = proveBaseline(improvementIntent, baseline.exitCode, baselineClassification);
       let propertyProof: PropertyTestExecutionProof | undefined;
+      let knownMutationProof: KnownMutationExecutionProof | undefined;
+      const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
       if (spec.propertyTestTarget) {
-        const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
         propertyProof = await readPropertyTestExecutionProof(propertyProofRuntimePath, {
           executionNonce: propertyExecutionNonce,
           target: spec.propertyTestTarget,
@@ -107,9 +115,29 @@ export class LocalImprovementRunner {
         });
         await writeArtifact(isolated.path, "property-test-execution-proof.json", propertyProof);
       }
+      if (spec.knownMutation) {
+        if (!propertyProof || propertyProof.invariant !== spec.knownMutation.criterion.statement || propertyProof.failedInvariantCheckCount < 1) {
+          throw new Error("Known mutation proof did not identify a relevant generated test failing the approved criterion.");
+        }
+        knownMutationProof = createKnownMutationExecutionProof({
+          exitCode: baseline.exitCode,
+          stdout: baseline.stdout,
+          stderr: baseline.stderr,
+          durationMs: baseline.durationMs,
+          classification: "property-invariant-violation",
+        }, {
+          requirement: spec.knownMutation,
+          approvedPropertyInvariants: spec.propertyInvariants,
+          approvedAcceptanceCriteria: spec.acceptanceCriteria,
+          changedTestPaths: changedTests,
+          relevantTestPath: propertyProof.testPath,
+          command: test.command,
+        });
+        await writeArtifact(isolated.path, "known-mutation-execution-proof.json", knownMutationProof);
+      }
       await rm(propertyProofRuntimePath, { force: true });
       await writeArtifact(isolated.path, "test-plan.json", {
-        schemaVersion: "test-plan/v3",
+        schemaVersion: "test-plan/v4",
         improvementIntent,
         baseline: baselineProof,
         command: test.command,
@@ -121,6 +149,16 @@ export class LocalImprovementRunner {
             target: propertyProof.target,
             invariant: propertyProof.invariant,
             generatedInputCount: propertyProof.inputDigests.length,
+          },
+        } : {}),
+        ...(knownMutationProof ? {
+          knownMutationExecutionProof: {
+            schemaVersion: knownMutationProof.schemaVersion,
+            artifact: "known-mutation-execution-proof.json",
+            mutationId: knownMutationProof.mutationId,
+            testPath: knownMutationProof.testPath,
+            target: knownMutationProof.target,
+            criterion: knownMutationProof.criterion,
           },
         } : {}),
       });

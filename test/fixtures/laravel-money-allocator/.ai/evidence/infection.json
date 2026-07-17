@@ -5,6 +5,7 @@
       "file": "app/Domain/MoneyAllocator.php",
       "line": 24,
       "mutator": "Arithmetic/RemainderAllocation",
+      "baselineMutation": true,
       "description": "Remainder allocation can lose units when the total is not evenly divisible.",
       "invariant": "For every non-negative total and positive part count, the allocated amounts sum to the original total."
     }

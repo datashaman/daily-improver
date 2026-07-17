@@ -1,6 +1,7 @@
 import type { CandidateValueClassification } from "./candidate-value.js";
 import type { CandidateScoreExplanation } from "./candidate-score.js";
 import type { ImprovementIntent, ImprovementIntentContract } from "./improvement-intent.js";
+import type { KnownMutationRequirement } from "./known-mutation-execution-proof.js";
 
 export const capabilityKinds = [
   "install",
@@ -80,6 +81,7 @@ export interface ImprovementCandidate {
   readonly reproducibility?: CandidateReproducibility;
   readonly deduplication?: CandidateDeduplication;
   readonly valueClassification?: CandidateValueClassification;
+  readonly knownMutation?: KnownMutationRequirement;
 }
 
 export interface RankedCandidate extends ImprovementCandidate {
@@ -134,6 +136,7 @@ export interface ImprovementSpec {
   readonly acceptanceCriteria: readonly string[];
   readonly propertyInvariants: readonly string[];
   readonly propertyTestTarget?: string;
+  readonly knownMutation?: KnownMutationRequirement;
   readonly exclusions: readonly string[];
   readonly verification: readonly CapabilityKind[];
   readonly constraints: {

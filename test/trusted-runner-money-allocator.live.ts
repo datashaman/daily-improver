@@ -12,6 +12,7 @@ import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from ".
 import { createTestManifest, runDirectory, writeArtifact } from "../src/core/artifacts.js";
 import { persistAgentExecution } from "../src/core/local-runner.js";
 import { readPropertyTestExecutionProof } from "../src/domain/property-test-execution-proof.js";
+import { createKnownMutationExecutionProof } from "../src/domain/known-mutation-execution-proof.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import {
   assertWorkspaceCanBeCreated,
@@ -53,6 +54,7 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     const spec = await app.stages.specify(live.workspace);
     assert.equal(analysis.candidates.length, 1);
     assert.ok(spec.propertyTestTarget, "The live property proof requires a selected target.");
+    assert.ok(spec.knownMutation, "The live proof requires an applicable known mutation.");
 
     const provider = createTrustedRunnerStructuredProvider(live.configuration, {
       endpointResolver: { async resolve() { return live.endpointResolution; } },
@@ -104,17 +106,33 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     });
     assert.notEqual(baseline.exitCode, 0, "The generated defect test must fail against the baseline.");
     const observedChanges = await expectSuccess(shell.run(["git", "ls-files", "--modified", "--others", "--exclude-standard"], live.workspace));
+    const changedTestPaths = observedChanges.stdout.split("\n").filter((path) => path.startsWith("tests/"));
     const propertyProof = await readPropertyTestExecutionProof(proofRuntimePath, {
       executionNonce,
       target: spec.propertyTestTarget,
       approvedInvariants: spec.propertyInvariants,
-      changedTestPaths: observedChanges.stdout.split("\n").filter((path) => path.startsWith("tests/")),
+      changedTestPaths,
       baselineMustFail: true,
     });
     await writeArtifact(live.workspace, "property-test-execution-proof.json", propertyProof);
+    const mutationProof = createKnownMutationExecutionProof({
+      exitCode: baseline.exitCode,
+      stdout: baseline.stdout,
+      stderr: baseline.stderr,
+      durationMs: baseline.durationMs,
+      classification: "property-invariant-violation",
+    }, {
+      requirement: spec.knownMutation,
+      approvedPropertyInvariants: spec.propertyInvariants,
+      approvedAcceptanceCriteria: spec.acceptanceCriteria,
+      changedTestPaths,
+      relevantTestPath: propertyProof.testPath,
+      command: testCapability.command,
+    });
+    await writeArtifact(live.workspace, "known-mutation-execution-proof.json", mutationProof);
     await rm(proofRuntimePath, { force: true });
     await writeArtifact(live.workspace, "test-plan.json", {
-      schemaVersion: "test-plan/v3",
+      schemaVersion: "test-plan/v4",
       improvementIntent: spec.improvementIntent,
       baseline: { expected: "fail", outcome: "failed-as-expected" },
       command: testCapability.command,
@@ -125,6 +143,14 @@ test("MoneyAllocator passes through the live trusted structured provider", async
         target: propertyProof.target,
         invariant: propertyProof.invariant,
         generatedInputCount: propertyProof.inputDigests.length,
+      },
+      knownMutationExecutionProof: {
+        schemaVersion: mutationProof.schemaVersion,
+        artifact: "known-mutation-execution-proof.json",
+        mutationId: mutationProof.mutationId,
+        testPath: mutationProof.testPath,
+        target: mutationProof.target,
+        criterion: mutationProof.criterion,
       },
     });
     const manifestKey = randomBytes(32).toString("hex");
