@@ -17,19 +17,14 @@ interface InfectionReport {
   readonly mutations?: readonly MutationRecord[];
 }
 
-interface PhpStanReport {
-  readonly files?: Readonly<Record<string, { readonly messages?: readonly { readonly message?: string; readonly line?: number }[] }>>;
-}
-
 export async function collectPhpEvidence(root: string): Promise<readonly ImprovementCandidate[]> {
-  const [mutations, staticAnalysis, coverage, complexity, todos] = await Promise.all([
+  const [mutations, coverage, complexity, todos] = await Promise.all([
     mutationCandidates(root),
-    phpStanCandidates(root),
     coverageCandidates(root),
     complexityCandidates(root),
     todoCandidates(root),
   ]);
-  return [...mutations, ...staticAnalysis, ...coverage, ...complexity, ...todos];
+  return [...mutations, ...coverage, ...complexity, ...todos];
 }
 
 async function mutationCandidates(root: string): Promise<ImprovementCandidate[]> {
@@ -52,30 +47,6 @@ async function mutationCandidates(root: string): Promise<ImprovementCandidate[]>
       estimatedDiffLines: 80,
       propertyInvariants: mutation.invariant ? [mutation.invariant] : [],
     }));
-}
-
-async function phpStanCandidates(root: string): Promise<ImprovementCandidate[]> {
-  const report = await optionalJson<PhpStanReport>(join(root, ".ai", "evidence", "phpstan.json"));
-  if (!report?.files) return [];
-  return Object.entries(report.files).flatMap(([absoluteOrRelative, result]) =>
-    (result.messages ?? []).map((message) => {
-      const file = absoluteOrRelative.startsWith(root) ? relative(root, absoluteOrRelative) : absoluteOrRelative;
-      return {
-        id: `phpstan-${fingerprint(`${file}:${message.line ?? 0}:${message.message ?? "finding"}`)}`,
-        kind: "static-analysis" as const,
-        title: `Resolve static-analysis finding in ${file}`,
-        rationale: message.message ?? "PHPStan reported a source-level defect.",
-        confidence: 0.9,
-        impact: 0.72,
-        effort: 0.3,
-        risk: 0.15,
-        evidence: [`PHPStan finding at ${file}:${message.line ?? "unknown"}`],
-        suggestedFiles: [file, "tests"],
-        target: file,
-        estimatedDiffLines: 40,
-      };
-    }),
-  );
 }
 
 async function coverageCandidates(root: string): Promise<ImprovementCandidate[]> {

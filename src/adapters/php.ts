@@ -9,6 +9,7 @@ import { exists, readJson } from "./shared.js";
 import { collectPhpEvidence } from "./php-evidence.js";
 import { collectComposerValidationEvidence } from "./composer-validation.js";
 import { collectComposerAuditEvidence } from "./composer-audit.js";
+import { collectPhpStaticAnalysisEvidence } from "./php-static-analysis.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 
 interface ComposerManifest {
@@ -46,9 +47,14 @@ export class PhpAdapter implements RepositoryAdapter {
   async discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]> {
     const composerValidation = await collectComposerValidationEvidence(profile.root, this.evidenceRunner);
     const composerAudit = await collectComposerAuditEvidence(profile.root, this.evidenceRunner);
+    const staticAnalysisCapability = profile.capabilities.get("static-analysis");
+    const staticAnalysis = staticAnalysisCapability
+      ? await collectPhpStaticAnalysisEvidence(profile.root, staticAnalysisCapability, this.evidenceRunner)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
+      ...(staticAnalysis?.candidates ?? []),
       ...await collectPhpEvidence(profile.root),
     ];
     if (!profile.capabilities.has("test")) {

@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: trusted Composer audit execution and bounded dependency finding normalization.
-- Last completed implementation commit: `f6b0166` (`feat: execute and normalize composer audit`).
+- Last completed milestone: trusted PHPStan/Psalm execution and bounded static-analysis finding normalization.
+- Last completed implementation commit: `d6ac767` (`feat: execute and normalize php static analysis`).
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation and audit slices are implemented, verified, and committed.
+- Current state: the Composer validation/audit and static-analysis slices are implemented, verified, and committed.
 
 ## Exact next task
 
-Invoke PHPStan or Psalm through the evidence-runner contract with machine-readable output and normalize static-analysis findings.
+Invoke PHPUnit or Pest through the evidence-runner contract and generate bounded Clover coverage evidence.
 
 ## Acceptance criteria for the next task
 
-- Select PHPStan or Psalm from detected manifest capabilities without invoking repository scripts.
-- Request a supported machine-readable format and normalize file, line, rule/identifier, and bounded message evidence.
-- Code findings, malformed output, configuration failure, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
-- Findings and execution metadata do not persist raw command output.
-- Unit tests cover clean output, findings, malformed output/configuration failure, missing executable, timeout, and truncation.
+- Select PHPUnit or Pest from detected manifest capabilities without invoking repository scripts.
+- Request Clover XML at an isolated, trusted output path and normalize bounded per-file coverage evidence.
+- Coverage findings, malformed output, configuration failure, missing coverage support, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
+- Findings and execution metadata do not persist raw command output or unbounded XML.
+- Unit tests cover clean coverage, low coverage, malformed XML/configuration failure, missing executable, timeout, and truncation.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -37,7 +37,7 @@ Invoke PHPStan or Psalm through the evidence-runner contract with machine-readab
 
 ## Known placeholders
 
-- Only Composer validation and audit are automatically executed; the other PHP evidence tools still depend on prepared artifacts.
+- Composer validation/audit and PHPStan/Psalm are automatically executed; the remaining PHP evidence tools still depend on prepared artifacts.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -49,10 +49,10 @@ Invoke PHPStan or Psalm through the evidence-runner contract with machine-readab
 
 ## Last verification
 
-Verified on 2026-07-17 for the Composer audit slice:
+Verified on 2026-07-17 for the PHPStan/Psalm slice:
 
-- Focused Composer audit tests: 8 tests passed.
-- `npm test`: 26 tests passed.
+- Focused static-analysis and adapter-integration tests: 9 tests passed.
+- `npm test`: 33 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -64,7 +64,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the Composer audit slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
+This checkpoint is safe to clear: the static-analysis slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
 
 ## Updating this file
 

@@ -81,7 +81,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Add an evidence-runner contract with timeouts and resource limits.
 - [x] Run `composer validate`.
 - [x] Run `composer audit --format=json`.
-- [ ] Run PHPStan or Psalm with machine-readable output.
+- [x] Run PHPStan or Psalm with machine-readable output.
 - [ ] Run PHPUnit or Pest with Clover coverage.
 - [ ] Run targeted Infection analysis.
 - [ ] Run a configured complexity tool.
