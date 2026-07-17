@@ -3,6 +3,7 @@ import test from "node:test";
 import { rankCandidates } from "../src/core/ranking.js";
 import type { CandidateKind, ImprovementCandidate } from "../src/domain/model.js";
 import { reproducibleEvidence } from "../src/domain/candidate-reproducibility.js";
+import { candidateValueClassificationSchemaVersion } from "../src/domain/candidate-value.js";
 
 const base: ImprovementCandidate = {
   id: "base", kind: "maintainability", title: "Base", rationale: "Base", confidence: 0.5,
@@ -30,6 +31,38 @@ test("ranking rewards evidence strength, smaller diffs, lower subsystem risk, an
   assert.ok(score({ ...base, testability: 0.8 }) > score({ ...base, testability: 0.2 }));
 });
 
+test("ranking caps explicitly cosmetic-only changes near zero", () => {
+  const cosmetic: ImprovementCandidate = {
+    ...base,
+    id: "cosmetic",
+    confidence: 1,
+    impact: 1,
+    effort: 0,
+    risk: 0,
+    subsystemRisk: 0,
+    testability: 1,
+    reproducibility: reproducibleEvidence(1, ["visual review"]),
+    valueClassification: {
+      schemaVersion: candidateValueClassificationSchemaVersion,
+      classification: "cosmetic-only",
+    },
+  };
+  const substantive: ImprovementCandidate = {
+    ...base,
+    id: "substantive",
+    impact: 0.2,
+    valueClassification: {
+      schemaVersion: candidateValueClassificationSchemaVersion,
+      classification: "substantive",
+    },
+  };
+
+  const ranked = rankCandidates([cosmetic, substantive]);
+
+  assert.equal(ranked.find(({ id }) => id === "cosmetic")?.score, 0.01);
+  assert.equal(ranked[0]?.id, "substantive");
+});
+
 test("ranking fails closed for missing, non-finite, or unbounded scoring factors", () => {
   const missingTestability = { ...base, testability: undefined } as unknown as ImprovementCandidate;
 
@@ -43,6 +76,20 @@ test("ranking fails closed for missing, non-finite, or unbounded scoring factors
     { ...base, id: "invalid-testability", testability: -0.01 },
     { ...base, id: "invalid-diff", estimatedDiffLines: 251 },
     { ...base, id: "fractional-diff", estimatedDiffLines: 1.5 },
+    {
+      ...base,
+      id: "invalid-value-classification",
+      valueClassification: { schemaVersion: "candidate-value-classification/v0", classification: "cosmetic-only" },
+    } as unknown as ImprovementCandidate,
+    {
+      ...base,
+      id: "unbounded-value-classification",
+      valueClassification: {
+        schemaVersion: candidateValueClassificationSchemaVersion,
+        classification: "cosmetic-only",
+        extra: true,
+      },
+    } as unknown as ImprovementCandidate,
   ]), []);
 });
 

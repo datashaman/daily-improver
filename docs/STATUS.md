@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: isolated structured-model stage credentials.
-- Current checkpoint commit: `feat: isolate structured model stage credentials`.
+- Last completed milestone: bounded cosmetic-only candidate scoring.
+- Current checkpoint commit: `feat: cap cosmetic-only candidate scores`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
-- Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, and bounded scoring factors; its remaining ranking-policy work stays planned. Phase 1C now has strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
+- Current phase: Phase 1B — Deterministic candidate selection.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add deterministic provider replay fixtures.
+Apply repository priority configuration during deterministic candidate ranking.
 
 ## Acceptance criteria for the next task
 
-- Define bounded, versioned replay fixtures for test and builder requests, responses, usage, and classified failures without credentials or host paths.
-- Replay the structured provider deterministically without a live endpoint while preserving response parsing, policy, cost, retry, and credential gates.
-- Reject malformed, mismatched, exhausted, or out-of-order replay data before it can mask an unexpected model invocation.
-- Add executable successful and failure-mode examples that remain stable across concurrent test runs.
+- Validate configured priority entries against the exhaustive language-neutral candidate kinds and reject duplicates or unsupported values.
+- Apply priorities as a bounded deterministic ranking influence without overriding reproducibility, autonomous-size, or other fail-closed gates.
+- Preserve stable-ID tie-breaking for candidates with the same configured priority and weighted score.
+- Add executable configured, empty, malformed, and repeated-run examples.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -27,6 +27,7 @@ Add deterministic provider replay fixtures.
 - The CLI detects PHP and Laravel repositories.
 - The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, explicit Laravel deprecation rules, versioned Laravel validation/error-handling rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
+- Candidate selection caps an explicitly versioned `cosmetic-only` value classification at `0.01`, rejects malformed or extended classifications, chooses exactly one candidate per run, and resolves equal scores by stable candidate ID.
 - Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
 - The structured model provider builds requests only from approved stage inputs, invokes an injected transport, rejects malformed or unauthorized response claims, and persists validated usage separately from model rationale marked as untrusted.
 - Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
@@ -52,22 +53,22 @@ Add deterministic provider replay fixtures.
 
 ## Last verification
 
-Verified on 2026-07-17 for the committed structured-model credential slice:
+Verified on 2026-07-17 for the committed cosmetic-only scoring slice:
 
-- Focused structured-provider tests: 11 tests passed.
-- `npm test`: 126 tests passed.
+- Focused ranking and pipeline tests: 12 tests passed.
+- `npm test`: 128 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - Docker image build not required; CLI runtime and production dependencies are unchanged.
-- End-to-end defect → failing property test → bounded fix → independently verified budget/attempt/usage/rationale artifacts → daily branch flow passed.
+- End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the structured-model credential slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear: the cosmetic-only scoring slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

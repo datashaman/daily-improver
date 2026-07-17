@@ -1,4 +1,5 @@
 import type { CandidateKind, ImprovementCandidate, RankedCandidate } from "../domain/model.js";
+import { isCandidateValueClassification } from "../domain/candidate-value.js";
 import { deduplicateCandidates } from "./candidate-deduplication.js";
 import { rejectCandidatesWithoutReproducibleEvidence } from "./candidate-reproducibility.js";
 
@@ -25,6 +26,7 @@ const categoryScoringWeights = {
 } satisfies Readonly<Record<CandidateKind, ScoringWeights>>;
 
 const maximumEstimatedDiffLines = 250;
+const cosmeticOnlyMaximumScore = 0.01;
 
 export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
@@ -40,18 +42,21 @@ function scoreCandidate(candidate: ImprovementCandidate): RankedCandidate {
   const weights = categoryScoringWeights[candidate.kind];
   const evidenceStrength = candidate.reproducibility?.strength ?? 0;
   const estimatedDiff = candidate.estimatedDiffLines / maximumEstimatedDiffLines;
+  const weightedScore = round(
+    candidate.impact * weights.impact +
+      candidate.confidence * weights.confidence -
+      candidate.effort * weights.effort -
+      candidate.risk * weights.risk +
+      evidenceStrength * weights.evidenceStrength -
+      estimatedDiff * weights.estimatedDiff -
+      candidate.subsystemRisk * weights.subsystemRisk +
+      candidate.testability * weights.testability,
+  );
   return {
     ...candidate,
-    score: round(
-      candidate.impact * weights.impact +
-        candidate.confidence * weights.confidence -
-        candidate.effort * weights.effort -
-        candidate.risk * weights.risk +
-        evidenceStrength * weights.evidenceStrength -
-        estimatedDiff * weights.estimatedDiff -
-        candidate.subsystemRisk * weights.subsystemRisk +
-        candidate.testability * weights.testability,
-    ),
+    score: candidate.valueClassification?.classification === "cosmetic-only"
+      ? Math.min(weightedScore, cosmeticOnlyMaximumScore)
+      : weightedScore,
   };
 }
 
@@ -64,6 +69,7 @@ function hasBoundedScoringFactors(candidate: ImprovementCandidate): boolean {
     candidate.subsystemRisk,
     candidate.testability,
   ].every(isUnitInterval)
+    && (candidate.valueClassification === undefined || isCandidateValueClassification(candidate.valueClassification))
     && Number.isInteger(candidate.estimatedDiffLines)
     && candidate.estimatedDiffLines > 0
     && candidate.estimatedDiffLines <= maximumEstimatedDiffLines;

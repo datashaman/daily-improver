@@ -1,3 +1,5 @@
+import type { CandidateValueClassification } from "./candidate-value.js";
+
 export const capabilityKinds = [
   "install",
   "test",
@@ -71,6 +73,7 @@ export interface ImprovementCandidate {
   readonly propertyInvariants?: readonly string[];
   readonly reproducibility?: CandidateReproducibility;
   readonly deduplication?: CandidateDeduplication;
+  readonly valueClassification?: CandidateValueClassification;
 }
 
 export interface RankedCandidate extends ImprovementCandidate {

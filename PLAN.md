@@ -12,13 +12,13 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
-- Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind.
+- Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; explicitly cosmetic-only candidates are capped near zero.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- The exact next task is adding deterministic provider replay fixtures.
+- The exact next task is applying repository priority configuration during deterministic candidate ranking.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -111,15 +111,15 @@ Goal: make selection predictable, bounded, and explainable.
 
 - [x] Add category-specific scoring weights.
 - [x] Include evidence strength, confidence, likely impact, estimated effort, estimated diff, subsystem risk, and testability.
-- [ ] Score cosmetic-only changes near zero.
+- [x] Score cosmetic-only changes near zero.
 - [ ] Apply repository priority configuration.
-- [ ] Enforce exactly one candidate per run.
+- [x] Enforce exactly one candidate per run.
 - [ ] Detect candidates too large for autonomous work and emit a human-task recommendation.
 - [ ] Add exclusion reasons to rejected candidates.
 - [ ] Enforce one improvement PR per repository per day.
 - [ ] Respect `max_open_prs`.
 - [ ] Prevent repeated selection of the same unresolved finding.
-- [ ] Make ties deterministic.
+- [x] Make ties deterministic.
 - [ ] Include a machine-readable score explanation.
 
 Exit gate: repeated analysis against unchanged code produces the same candidate and a clear explanation.
