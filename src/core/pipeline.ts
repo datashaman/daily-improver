@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { loadConfig } from "../config.js";
 import type { Clock, Policy, PolicyContext, RunStore } from "../contracts.js";
 import type { ImprovementRun } from "../domain/model.js";
 import { AdapterRegistry } from "./adapter-registry.js";
@@ -27,7 +28,8 @@ export class ImprovementPipeline {
     const startedAt = this.clock.now().toISOString();
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
-    const candidates = rankCandidates(await adapter.discoverCandidates(profile));
+    const config = await loadConfig(root);
+    const candidates = rankCandidates(await adapter.discoverCandidates(profile), config.selection.priorities);
     const candidate = candidates[0];
     if (!candidate) throw new Error("No credible improvement candidates were found.");
 

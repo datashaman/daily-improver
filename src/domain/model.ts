@@ -32,15 +32,18 @@ export interface RepositoryProfile {
   readonly capabilities: ReadonlyMap<CapabilityKind, CommandCapability>;
 }
 
-export type CandidateKind =
-  | "test-protection"
-  | "static-analysis"
-  | "mutation-testing"
-  | "property-testing"
-  | "dependency-vulnerability"
-  | "performance"
-  | "maintainability"
-  | "documentation";
+export const candidateKinds = [
+  "test-protection",
+  "static-analysis",
+  "mutation-testing",
+  "property-testing",
+  "dependency-vulnerability",
+  "performance",
+  "maintainability",
+  "documentation",
+] as const;
+
+export type CandidateKind = (typeof candidateKinds)[number];
 
 export interface CandidateDeduplication {
   readonly schemaVersion: "candidate-deduplication/v1";

@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
+import { candidateKinds, type CandidateKind } from "./domain/model.js";
 
 export interface ImproverConfig {
   readonly version: 1;
   readonly schedule: { readonly timezone: string; readonly time: string };
-  readonly selection: { readonly priorities: readonly string[] };
+  readonly selection: { readonly priorities: readonly CandidateKind[] };
   readonly analysis: {
     readonly php: {
       readonly complexity_tool: "auto" | "phpmetrics" | "off";
@@ -34,7 +35,7 @@ export interface ImproverConfig {
 export const defaultConfig: ImproverConfig = {
   version: 1,
   schedule: { timezone: "UTC", time: "05:00" },
-  selection: { priorities: ["correctness", "static-analysis", "maintainability"] },
+  selection: { priorities: ["property-testing", "static-analysis", "maintainability"] },
   analysis: {
     php: {
       complexity_tool: "auto",
@@ -69,7 +70,7 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
   return {
     version: 1,
     schedule: { timezone: string(schedule.timezone, "schedule.timezone"), time: time(schedule.time) },
-    selection: { priorities: strings(selection.priorities, "selection.priorities") },
+    selection: { priorities: candidatePriorities(selection.priorities) },
     analysis: {
       php: {
         complexity_tool: complexityTool(phpAnalysis?.complexity_tool),
@@ -110,6 +111,17 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function record(value: unknown, name: string): Record<string, unknown> { if (!isRecord(value)) throw new Error(`${name} must be a mapping`); return value; }
 function string(value: unknown, name: string): string { if (typeof value !== "string" || !value) throw new Error(`${name} must be a non-empty string`); return value; }
 function strings(value: unknown, name: string): string[] { if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new Error(`${name} must be a string list`); return value as string[]; }
+function candidatePriorities(value: unknown): CandidateKind[] {
+  const priorities = strings(value, "selection.priorities");
+  const supported = new Set<string>(candidateKinds);
+  const seen = new Set<string>();
+  for (const priority of priorities) {
+    if (!supported.has(priority)) throw new Error(`selection.priorities contains unsupported candidate kind: ${priority}`);
+    if (seen.has(priority)) throw new Error(`selection.priorities contains duplicate candidate kind: ${priority}`);
+    seen.add(priority);
+  }
+  return priorities as CandidateKind[];
+}
 function positive(value: unknown, name: string): number { if (!Number.isInteger(value) || (value as number) < 1) throw new Error(`${name} must be a positive integer`); return value as number; }
 function time(value: unknown): string { const result = string(value, "schedule.time"); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result)) throw new Error("schedule.time must be HH:MM"); return result; }
 function mutationMode(value: unknown): "off" | "targeted" | "full" { if (value !== "off" && value !== "targeted" && value !== "full") throw new Error("verification.mutation_testing must be off, targeted, or full"); return value; }

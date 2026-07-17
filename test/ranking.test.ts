@@ -181,3 +181,51 @@ test("ranking resolves equal scores by stable candidate id", () => {
     ["alpha", "zulu"],
   );
 });
+
+test("repository priorities provide a bounded ordered ranking influence", () => {
+  const candidates: readonly ImprovementCandidate[] = [
+    { ...base, id: "mutation", kind: "mutation-testing" },
+    { ...base, id: "docs", kind: "documentation" },
+  ];
+
+  const unconfigured = rankCandidates(candidates);
+  const configured = rankCandidates(candidates, ["documentation"]);
+  const unconfiguredDocumentationScore = unconfigured.find(({ id }) => id === "docs")?.score ?? Number.NaN;
+  const configuredDocumentationScore = configured.find(({ id }) => id === "docs")?.score ?? Number.NaN;
+
+  assert.equal(unconfigured[0]?.id, "mutation");
+  assert.equal(configured[0]?.id, "docs");
+  assert.ok(configuredDocumentationScore > unconfiguredDocumentationScore);
+  assert.ok(configuredDocumentationScore - unconfiguredDocumentationScore <= 0.05);
+});
+
+test("empty priorities preserve weighted ranking and configured ranking repeats deterministically", () => {
+  const candidates: readonly ImprovementCandidate[] = [
+    { ...base, id: "zulu", kind: "documentation" },
+    { ...base, id: "alpha", kind: "documentation" },
+    { ...base, id: "mutation", kind: "mutation-testing" },
+  ];
+  const unconfigured = rankCandidates(candidates);
+
+  assert.deepEqual(rankCandidates(candidates, []), unconfigured);
+  const expected = rankCandidates(candidates, ["documentation", "mutation-testing"]);
+  for (let run = 0; run < 5; run += 1) {
+    assert.deepEqual(rankCandidates([...candidates].reverse(), ["documentation", "mutation-testing"]), expected);
+  }
+  assert.deepEqual(expected.filter(({ kind }) => kind === "documentation").map(({ id }) => id), ["alpha", "zulu"]);
+});
+
+test("priority influence cannot bypass fail-closed bounds or the cosmetic-only cap", () => {
+  const cosmetic: ImprovementCandidate = {
+    ...base,
+    id: "cosmetic",
+    kind: "documentation",
+    valueClassification: {
+      schemaVersion: candidateValueClassificationSchemaVersion,
+      classification: "cosmetic-only",
+    },
+  };
+
+  assert.deepEqual(rankCandidates([{ ...base, id: "oversized", kind: "documentation", estimatedDiffLines: 251 }], ["documentation"]), []);
+  assert.equal(rankCandidates([cosmetic], ["documentation"])[0]?.score, 0.01);
+});

@@ -22,12 +22,13 @@ export class PipelineStages {
   async analyse(root: string): Promise<AnalysisArtifact> {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
+    const config = await loadConfig(root);
     const artifact: AnalysisArtifact = {
       schema: 1,
       repository: root,
       adapter: adapter.id,
       generatedAt: new Date().toISOString(),
-      candidates: rankCandidates(await adapter.discoverCandidates(profile)),
+      candidates: rankCandidates(await adapter.discoverCandidates(profile), config.selection.priorities),
     };
     await writeArtifact(root, "candidate.json", artifact);
     return artifact;

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -74,6 +74,40 @@ test("pipeline selects exactly one candidate from a deterministic ranking", asyn
   assert.equal(run.candidate?.id, "selected");
   assert.equal(saved.length, 1);
   assert.equal(saved[0]?.candidate?.id, "selected");
+});
+
+test("pipeline applies repository candidate priorities", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-priorities-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [documentation] }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+  const candidate = (id: string, kind: ImprovementCandidate["kind"]): ImprovementCandidate => ({
+    id, kind, title: id, rationale: `${id} rationale`, confidence: 0.5, impact: 0.5,
+    effort: 0.5, risk: 0.5, subsystemRisk: 0.5, testability: 0.5, estimatedDiffLines: 80,
+    evidence: [`${id} evidence`], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.8, [`${id} collector`]),
+  });
+  const profile: RepositoryProfile = {
+    root, adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture",
+    detect: async () => 1,
+    profile: async () => profile,
+    discoverCandidates: async () => [candidate("mutation", "mutation-testing"), candidate("docs", "documentation")],
+  };
+  const saved: ImprovementRun[] = [];
+  const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
+
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store).plan(root);
+
+  assert.equal(run.candidate?.id, "docs");
 });
 
 test("pipeline fails closed when no candidate has reproducible evidence", async () => {

@@ -10,7 +10,7 @@ test("loads the repository-owned versioned product configuration", async () => {
   await mkdir(join(root, ".ai"));
   await writeFile(join(root, ".ai", "improver.yml"), `version: 1
 schedule: { timezone: Africa/Johannesburg, time: "05:00" }
-selection: { priorities: [correctness] }
+selection: { priorities: [property-testing] }
 analysis:
   php:
     complexity_tool: phpmetrics
@@ -30,6 +30,24 @@ pull_request: { draft: true, labels: [ai-improvement] }
   assert.equal(config.analysis.php.duplicate_code_tool, "phpcpd");
   assert.equal(config.analysis.php.slow_test_threshold_ms, 750);
   assert.deepEqual(config.analysis.php.slow_query, { mechanism: "laravel-listener", threshold_ms: 125 });
+  assert.deepEqual(config.selection.priorities, ["property-testing"]);
+});
+
+test("rejects unsupported and duplicate candidate priorities", async () => {
+  for (const priorities of ["[correctness]", "[static-analysis, static-analysis]"]) {
+    const root = await mkdtemp(join(tmpdir(), "daily-improver-config-"));
+    await mkdir(join(root, ".ai"));
+    await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: ${priorities} }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+
+    await assert.rejects(loadConfig(root), /selection\.priorities contains (unsupported|duplicate) candidate kind/);
+  }
 });
 
 test("rejects unbounded PHP performance configuration", async () => {

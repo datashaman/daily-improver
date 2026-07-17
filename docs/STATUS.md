@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded cosmetic-only candidate scoring.
-- Current checkpoint commit: `feat: cap cosmetic-only candidate scores`.
+- Last completed milestone: repository-configured deterministic candidate priorities.
+- Current checkpoint commit: `feat: apply repository candidate priorities`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1B — Deterministic candidate selection.
-- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Apply repository priority configuration during deterministic candidate ranking.
+Detect candidates too large for autonomous work and emit a human-task recommendation.
 
 ## Acceptance criteria for the next task
 
-- Validate configured priority entries against the exhaustive language-neutral candidate kinds and reject duplicates or unsupported values.
-- Apply priorities as a bounded deterministic ranking influence without overriding reproducibility, autonomous-size, or other fail-closed gates.
-- Preserve stable-ID tie-breaking for candidates with the same configured priority and weighted score.
-- Add executable configured, empty, malformed, and repeated-run examples.
+- Reject otherwise credible candidates whose estimated file or line scope exceeds repository autonomous limits before selection.
+- Emit a bounded, versioned human-task recommendation that explains the oversized candidate without exposing raw source evidence.
+- Continue selecting exactly one autonomous candidate when a lower-ranked bounded candidate remains available.
+- Add executable oversized-only, mixed-size, boundary, malformed, and repeated-run examples.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -27,7 +27,7 @@ Apply repository priority configuration during deterministic candidate ranking.
 - The CLI detects PHP and Laravel repositories.
 - The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, explicit Laravel deprecation rules, versioned Laravel validation/error-handling rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
-- Candidate selection caps an explicitly versioned `cosmetic-only` value classification at `0.01`, rejects malformed or extended classifications, chooses exactly one candidate per run, and resolves equal scores by stable candidate ID.
+- Candidate selection caps an explicitly versioned `cosmetic-only` value classification at `0.01`, rejects malformed or extended classifications, applies only validated exhaustive repository priorities with at most `0.05` influence, chooses exactly one candidate per run, and resolves equal scores by stable candidate ID.
 - Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
 - The structured model provider builds requests only from approved stage inputs, invokes an injected transport, rejects malformed or unauthorized response claims, and persists validated usage separately from model rationale marked as untrusted.
 - Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
@@ -53,10 +53,10 @@ Apply repository priority configuration during deterministic candidate ranking.
 
 ## Last verification
 
-Verified on 2026-07-17 for the committed cosmetic-only scoring slice:
+Verified on 2026-07-17 for the repository-priority ranking slice:
 
-- Focused ranking and pipeline tests: 12 tests passed.
-- `npm test`: 128 tests passed.
+- Focused configuration, ranking, and pipeline tests: 21 tests passed.
+- `npm test`: 133 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -68,7 +68,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the cosmetic-only scoring slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear: the repository-priority ranking slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

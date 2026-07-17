@@ -3,7 +3,7 @@ schedule:
   timezone: Africa/Johannesburg
   time: "05:00"
 selection:
-  priorities: [correctness, mutation-survivors, static-analysis]
+  priorities: [property-testing, mutation-testing, static-analysis]
 limits:
   max_changed_files: 5
   max_diff_lines: 250

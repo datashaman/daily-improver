@@ -27,22 +27,24 @@ const categoryScoringWeights = {
 
 const maximumEstimatedDiffLines = 250;
 const cosmeticOnlyMaximumScore = 0.01;
+const maximumPriorityInfluence = 0.05;
 
 export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
+  priorities: readonly CandidateKind[] = [],
 ): readonly RankedCandidate[] {
   return deduplicateCandidates(
     rejectCandidatesWithoutReproducibleEvidence(candidates).filter(hasBoundedScoringFactors),
   )
-    .map((candidate) => scoreCandidate(candidate))
+    .map((candidate) => scoreCandidate(candidate, priorities))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
-function scoreCandidate(candidate: ImprovementCandidate): RankedCandidate {
+function scoreCandidate(candidate: ImprovementCandidate, priorities: readonly CandidateKind[]): RankedCandidate {
   const weights = categoryScoringWeights[candidate.kind];
   const evidenceStrength = candidate.reproducibility?.strength ?? 0;
   const estimatedDiff = candidate.estimatedDiffLines / maximumEstimatedDiffLines;
-  const weightedScore = round(
+  const categoryScore =
     candidate.impact * weights.impact +
       candidate.confidence * weights.confidence -
       candidate.effort * weights.effort -
@@ -50,8 +52,12 @@ function scoreCandidate(candidate: ImprovementCandidate): RankedCandidate {
       evidenceStrength * weights.evidenceStrength -
       estimatedDiff * weights.estimatedDiff -
       candidate.subsystemRisk * weights.subsystemRisk +
-      candidate.testability * weights.testability,
-  );
+      candidate.testability * weights.testability;
+  const priorityIndex = priorities.indexOf(candidate.kind);
+  const priorityInfluence = priorityIndex === -1
+    ? 0
+    : maximumPriorityInfluence * ((priorities.length - priorityIndex) / priorities.length);
+  const weightedScore = round(categoryScore + priorityInfluence);
   return {
     ...candidate,
     score: candidate.valueClassification?.classification === "cosmetic-only"

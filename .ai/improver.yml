@@ -4,9 +4,9 @@ schedule:
   time: "05:00"
 selection:
   priorities:
-    - correctness
+    - property-testing
     - static-analysis
-    - mutation-survivors
+    - mutation-testing
     - maintainability
     - performance
 analysis:
