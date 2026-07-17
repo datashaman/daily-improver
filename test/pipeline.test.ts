@@ -135,6 +135,7 @@ test("pipeline persists a human task instead of planning oversized-only work", a
   assert.equal(run.candidate, undefined);
   assert.equal(run.spec, undefined);
   assert.equal(run.humanTaskRecommendation?.candidateId, "large-refactor");
+  assert.equal(run.candidateExclusions[0]?.reason, "oversized-scope");
   assert.deepEqual(saved, [run]);
 });
 
@@ -157,14 +158,15 @@ test("analyse emits the versioned human task in its persisted artifact", async (
   const artifact = await new PipelineStages(new AdapterRegistry([adapter])).analyse(root);
   const persisted = await readArtifact<AnalysisArtifact>(root, "candidate.json");
 
-  assert.equal(artifact.schema, 2);
+  assert.equal(artifact.schema, 3);
   assert.deepEqual(persisted, artifact);
   assert.equal(persisted.candidates.length, 0);
   assert.equal(persisted.humanTaskRecommendation?.schemaVersion, "human-task-recommendation/v1");
+  assert.equal(persisted.candidateExclusions[0]?.reason, "oversized-scope");
   assert.doesNotMatch(JSON.stringify(persisted.humanTaskRecommendation), /raw evidence|raw rationale|src\/Service/iu);
 });
 
-test("pipeline fails closed when no candidate has reproducible evidence", async () => {
+test("pipeline persists a machine-readable rejection when no candidate has reproducible evidence", async () => {
   const candidate: ImprovementCandidate = {
     id: "unsupported",
     kind: "maintainability",
@@ -201,9 +203,15 @@ test("pipeline fails closed when no candidate has reproducible evidence", async 
   };
   const pipeline = new ImprovementPipeline(new AdapterRegistry([adapter]), [], store);
 
-  await assert.rejects(
-    pipeline.plan(profile.root),
-    /No credible improvement candidates were found/,
-  );
-  assert.deepEqual(saved, []);
+  const run = await pipeline.plan(profile.root);
+
+  assert.equal(run.status, "rejected");
+  assert.equal(run.candidate, undefined);
+  assert.deepEqual(run.candidateExclusions, [{
+    schemaVersion: "candidate-exclusion/v1",
+    candidateReference: "unsupported",
+    candidateKind: "maintainability",
+    reason: "evidence",
+  }]);
+  assert.deepEqual(saved, [run]);
 });

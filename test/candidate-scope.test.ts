@@ -27,6 +27,12 @@ test("emits one versioned human task when the only credible candidate is oversiz
   const selection = selectCandidatesByScope([{ ...base, estimatedDiffLines: 251 }], [], limits);
 
   assert.deepEqual(selection.candidates, []);
+  assert.deepEqual(selection.exclusions, [{
+    schemaVersion: "candidate-exclusion/v1",
+    candidateReference: "candidate",
+    candidateKind: "maintainability",
+    reason: "oversized-scope",
+  }]);
   assert.deepEqual(selection.humanTaskRecommendation, {
     schemaVersion: "human-task-recommendation/v1",
     candidateId: "candidate",
@@ -61,6 +67,7 @@ test("accepts candidates exactly at repository file and line limits", () => {
 
   assert.equal(selection.candidates[0]?.id, "candidate");
   assert.equal(selection.humanTaskRecommendation, undefined);
+  assert.deepEqual(selection.exclusions, []);
 });
 
 test("rejects malformed or unbounded scope without emitting a recommendation", () => {
@@ -71,7 +78,52 @@ test("rejects malformed or unbounded scope without emitting a recommendation", (
     { ...base, id: "unbounded-title", title: "x".repeat(241) },
   ], [], limits);
 
-  assert.deepEqual(selection, { candidates: [] });
+  assert.equal(selection.candidates.length, 0);
+  assert.equal(selection.humanTaskRecommendation, undefined);
+  assert.deepEqual(selection.exclusions.map(({ candidateReference, reason }) => ({ candidateReference, reason })), [
+    { candidateReference: "malformed-file", reason: "malformed-scope" },
+    { candidateReference: "unbounded-files", reason: "malformed-scope" },
+    { candidateReference: "unbounded-lines", reason: "scoring" },
+    { candidateReference: "unbounded-title", reason: "malformed-scope" },
+  ]);
+});
+
+test("emits bounded machine-readable reasons for every pre-selection rejection", () => {
+  const { reproducibility, ...candidateWithoutReproducibility } = base;
+  assert.ok(reproducibility);
+  const identity = {
+    schemaVersion: "candidate-deduplication/v1" as const,
+    subsystem: "billing",
+    defect: "missing-boundary-test",
+  };
+  const selected = { ...base, id: "selected", deduplication: identity };
+  const candidates: readonly ImprovementCandidate[] = [
+    { ...candidateWithoutReproducibility, id: "bad-evidence", evidence: ["raw evidence that must not be retained"] },
+    { ...base, id: "bad-score", rationale: "raw scoring rationale", impact: Number.NaN },
+    { ...base, id: "", title: "Malformed identity" },
+    { ...base, id: "duplicate", rationale: "raw duplicate rationale", confidence: 0.2, deduplication: identity },
+    { ...base, id: "large", rationale: "raw oversized rationale", estimatedDiffLines: 251 },
+    selected,
+  ];
+  const selection = selectCandidatesByScope(candidates, [], limits);
+
+  assert.equal(selection.candidates[0]?.id, "selected");
+  assert.deepEqual(selection.exclusions.slice(0, 4).map(({ candidateReference, reason, retainedCandidateReference }) => ({
+    candidateReference,
+    reason,
+    ...(retainedCandidateReference === undefined ? {} : { retainedCandidateReference }),
+  })), [
+    { candidateReference: "bad-evidence", reason: "evidence" },
+    { candidateReference: "bad-score", reason: "scoring" },
+    { candidateReference: "duplicate", reason: "semantic-deduplication", retainedCandidateReference: "selected" },
+    { candidateReference: "large", reason: "oversized-scope" },
+  ]);
+  assert.match(selection.exclusions[4]?.candidateReference ?? "", /^sha256:[a-f0-9]{64}$/);
+  assert.equal(selection.exclusions[4]?.reason, "malformed-scope");
+  const serialized = JSON.stringify(selection.exclusions);
+  assert.doesNotMatch(serialized, /raw evidence|raw scoring|raw duplicate|raw oversized/);
+  assert.ok(serialized.length < 2_000);
+  assert.deepEqual(selectCandidatesByScope([...candidates].reverse(), [], limits), selection);
 });
 
 test("repeated selection is stable across collector ordering", () => {

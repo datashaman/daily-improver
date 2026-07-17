@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: oversized candidate routing to bounded human tasks.
-- Current checkpoint commit: `feat: route oversized candidates to human review`.
+- Last completed milestone: machine-readable candidate exclusion reasons.
+- Current checkpoint commit: `feat: record candidate exclusion reasons`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1B — Deterministic candidate selection.
-- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, exactly-one selection in a run, and stable-ID tie-breaking; its remaining ranking-policy work is active. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add machine-readable exclusion reasons to rejected candidates.
+Enforce one improvement PR per repository per day.
 
 ## Acceptance criteria for the next task
 
-- Define a bounded, versioned exclusion-reason contract for every candidate rejected before autonomous selection.
-- Distinguish evidence, scoring, malformed scope, oversized scope, and semantic-deduplication exclusions without retaining raw source evidence.
-- Preserve deterministic ordering and exactly-one autonomous selection.
-- Add executable mixed-rejection, malformed, deduplicated, and repeated-run examples.
+- Define the repository/day identity and persisted decision used to prevent a second improvement plan or publication on the same UTC repository day.
+- Fail closed without creating a second specification when a completed or active daily improvement already exists.
+- Keep rejected candidate planning and human-task routing behavior explicit and deterministic.
+- Add executable first-run, repeated-run, date-boundary, and repository-isolation examples.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -29,6 +29,7 @@ Add machine-readable exclusion reasons to rejected candidates.
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
 - Candidate selection caps an explicitly versioned `cosmetic-only` value classification at `0.01`, rejects malformed or extended classifications, applies only validated exhaustive repository priorities with at most `0.05` influence, chooses exactly one candidate per run, and resolves equal scores by stable candidate ID.
 - Candidate selection rejects credible work beyond repository file or changed-line limits before specification, emits at most one bounded `human-task-recommendation/v1` without evidence or source paths, continues with a lower-ranked bounded candidate when available, and persists oversized-only planning as rejected.
+- Candidate selection emits one bounded `candidate-exclusion/v1` at the first failed gate for malformed scope, evidence, scoring, semantic deduplication, or oversized scope; exclusions are deterministic, replace invalid IDs with hashes, and retain no evidence, provenance, rationale, title, target, or source path. Version 3 analysis artifacts and persisted planning runs retain these reasons, including rejected runs where no candidate survives.
 - Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
 - The structured model provider builds requests only from approved stage inputs, invokes an injected transport, rejects malformed or unauthorized response claims, and persists validated usage separately from model rationale marked as untrusted.
 - Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
@@ -54,10 +55,10 @@ Add machine-readable exclusion reasons to rejected candidates.
 
 ## Last verification
 
-Verified on 2026-07-17 for the oversized-candidate routing slice:
+Verified on 2026-07-17 for the candidate-exclusion slice:
 
-- Focused candidate-scope, ranking, and pipeline tests: 23 tests passed.
-- `npm test`: 140 tests passed.
+- Focused candidate-scope, deduplication, reproducibility, ranking, and pipeline tests: 31 tests passed.
+- `npm test`: 141 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -69,7 +70,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the oversized-candidate routing slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint will be safe to clear after the candidate-exclusion slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

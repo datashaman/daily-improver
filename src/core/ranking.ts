@@ -1,7 +1,8 @@
-import { candidateKinds, type CandidateKind, type ImprovementCandidate, type RankedCandidate } from "../domain/model.js";
+import { candidateKinds, type CandidateExclusion, type CandidateKind, type ImprovementCandidate, type RankedCandidate } from "../domain/model.js";
 import { isCandidateValueClassification } from "../domain/candidate-value.js";
-import { deduplicateCandidates } from "./candidate-deduplication.js";
-import { rejectCandidatesWithoutReproducibleEvidence } from "./candidate-reproducibility.js";
+import { deduplicateCandidatesWithDuplicates } from "./candidate-deduplication.js";
+import { excludeCandidate, sortCandidateExclusions } from "./candidate-exclusion.js";
+import { hasReproducibleEvidence } from "./candidate-reproducibility.js";
 
 interface ScoringWeights {
   readonly impact: number;
@@ -34,11 +35,30 @@ export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
   priorities: readonly CandidateKind[] = [],
 ): readonly RankedCandidate[] {
-  return deduplicateCandidates(
-    rejectCandidatesWithoutReproducibleEvidence(candidates).filter(hasBoundedScoringFactors),
-  )
+  return rankCandidatesWithExclusions(candidates, priorities).candidates;
+}
+
+export function rankCandidatesWithExclusions(
+  candidates: readonly ImprovementCandidate[],
+  priorities: readonly CandidateKind[] = [],
+): { readonly candidates: readonly RankedCandidate[]; readonly exclusions: readonly CandidateExclusion[] } {
+  const evidenceAccepted = candidates.filter(hasReproducibleEvidence);
+  const scoringAccepted = evidenceAccepted.filter(hasBoundedScoringFactors);
+  const deduplicated = deduplicateCandidatesWithDuplicates(scoringAccepted);
+  const ranked = deduplicated.candidates
     .map((candidate) => scoreCandidate(candidate, priorities))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return {
+    candidates: ranked,
+    exclusions: sortCandidateExclusions([
+      ...candidates.filter((candidate) => !hasReproducibleEvidence(candidate))
+        .map((candidate) => excludeCandidate(candidate, "evidence")),
+      ...evidenceAccepted.filter((candidate) => !hasBoundedScoringFactors(candidate))
+        .map((candidate) => excludeCandidate(candidate, "scoring")),
+      ...deduplicated.duplicates.map(({ candidate, retainedCandidate }) =>
+        excludeCandidate(candidate, "semantic-deduplication", retainedCandidate)),
+    ]),
+  };
 }
 
 function scoreCandidate(candidate: ImprovementCandidate, priorities: readonly CandidateKind[]): RankedCandidate {

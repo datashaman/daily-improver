@@ -40,7 +40,7 @@ export class ImprovementPipeline {
     );
     const candidate = selection.candidates[0];
     if (!candidate) {
-      if (!selection.humanTaskRecommendation) throw new Error("No credible improvement candidates were found.");
+      if (selection.exclusions.length === 0) throw new Error("No improvement candidates were found.");
       const run: ImprovementRun = {
         id: randomUUID(),
         repository: root,
@@ -48,7 +48,10 @@ export class ImprovementPipeline {
         finishedAt: this.clock.now().toISOString(),
         status: "rejected",
         adapter: adapter.id,
-        humanTaskRecommendation: selection.humanTaskRecommendation,
+        candidateExclusions: selection.exclusions,
+        ...(selection.humanTaskRecommendation === undefined
+          ? {}
+          : { humanTaskRecommendation: selection.humanTaskRecommendation }),
         policyDecisions: [],
       };
       await this.store.save(run);
@@ -76,6 +79,7 @@ export class ImprovementPipeline {
       status,
       adapter: adapter.id,
       candidate,
+      candidateExclusions: selection.exclusions,
       ...(selection.humanTaskRecommendation === undefined
         ? {}
         : { humanTaskRecommendation: selection.humanTaskRecommendation }),

@@ -29,11 +29,12 @@ export class PipelineStages {
       { maxFiles: config.limits.max_changed_files, maxChangedLines: config.limits.max_diff_lines },
     );
     const artifact: AnalysisArtifact = {
-      schema: 2,
+      schema: 3,
       repository: root,
       adapter: adapter.id,
       generatedAt: new Date().toISOString(),
       candidates: selection.candidates,
+      candidateExclusions: selection.exclusions,
       ...(selection.humanTaskRecommendation === undefined
         ? {}
         : { humanTaskRecommendation: selection.humanTaskRecommendation }),

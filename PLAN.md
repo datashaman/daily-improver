@@ -18,7 +18,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- The exact next task is adding exclusion reasons to rejected candidates.
+- The exact next task is enforcing one improvement PR per repository per day.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -115,7 +115,7 @@ Goal: make selection predictable, bounded, and explainable.
 - [x] Apply repository priority configuration.
 - [x] Enforce exactly one candidate per run.
 - [x] Detect candidates too large for autonomous work and emit a human-task recommendation.
-- [ ] Add exclusion reasons to rejected candidates.
+- [x] Add exclusion reasons to rejected candidates.
 - [ ] Enforce one improvement PR per repository per day.
 - [ ] Respect `max_open_prs`.
 - [ ] Prevent repeated selection of the same unresolved finding.

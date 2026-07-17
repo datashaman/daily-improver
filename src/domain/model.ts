@@ -83,6 +83,24 @@ export interface RankedCandidate extends ImprovementCandidate {
   readonly score: number;
 }
 
+export const candidateExclusionReasons = [
+  "malformed-scope",
+  "evidence",
+  "scoring",
+  "semantic-deduplication",
+  "oversized-scope",
+] as const;
+
+export type CandidateExclusionReason = (typeof candidateExclusionReasons)[number];
+
+export interface CandidateExclusion {
+  readonly schemaVersion: "candidate-exclusion/v1";
+  readonly candidateReference: string;
+  readonly candidateKind?: CandidateKind;
+  readonly reason: CandidateExclusionReason;
+  readonly retainedCandidateReference?: string;
+}
+
 export interface HumanTaskRecommendation {
   readonly schemaVersion: "human-task-recommendation/v1";
   readonly candidateId: string;
@@ -129,6 +147,7 @@ export interface ImprovementRun {
   readonly status: RunStatus;
   readonly adapter: string;
   readonly candidate?: RankedCandidate;
+  readonly candidateExclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
   readonly spec?: ImprovementSpec;
   readonly policyDecisions: readonly PolicyDecision[];

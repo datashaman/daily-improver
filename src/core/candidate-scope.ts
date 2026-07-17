@@ -1,10 +1,12 @@
 import type {
   CandidateKind,
+  CandidateExclusion,
   HumanTaskRecommendation,
   ImprovementCandidate,
   RankedCandidate,
 } from "../domain/model.js";
-import { rankCandidates } from "./ranking.js";
+import { excludeCandidate, sortCandidateExclusions } from "./candidate-exclusion.js";
+import { rankCandidatesWithExclusions } from "./ranking.js";
 
 export interface AutonomousScopeLimits {
   readonly maxFiles: number;
@@ -13,6 +15,7 @@ export interface AutonomousScopeLimits {
 
 export interface CandidateSelection {
   readonly candidates: readonly RankedCandidate[];
+  readonly exclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
 }
 
@@ -25,12 +28,21 @@ export function selectCandidatesByScope(
   priorities: readonly CandidateKind[],
   limits: AutonomousScopeLimits,
 ): CandidateSelection {
-  const ranked = rankCandidates(candidates.filter(hasBoundedScope), priorities);
+  const boundedScope = candidates.filter(hasBoundedScope);
+  const ranking = rankCandidatesWithExclusions(boundedScope, priorities);
+  const ranked = ranking.candidates;
   const autonomous = ranked.filter((candidate) => fits(candidate, limits));
   const oversized = ranked.find((candidate) => !fits(candidate, limits));
 
   return {
     candidates: autonomous,
+    exclusions: sortCandidateExclusions([
+      ...candidates.filter((candidate) => !hasBoundedScope(candidate))
+        .map((candidate) => excludeCandidate(candidate, "malformed-scope")),
+      ...ranking.exclusions,
+      ...ranked.filter((candidate) => !fits(candidate, limits))
+        .map((candidate) => excludeCandidate(candidate, "oversized-scope")),
+    ]),
     ...(oversized === undefined ? {} : { humanTaskRecommendation: recommendation(oversized, limits) }),
   };
 }
