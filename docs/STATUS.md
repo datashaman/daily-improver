@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: Pest-specific generated-test inspection rejects unsafe discovery, markers, assertion structure, and unprovable data-provider coverage before the builder.
-- Current checkpoint commit: `feat: inspect generated Pest test quality`.
+- Last completed milestone: PHPUnit-specific generated-test inspection rejects unsafe discovery, skip/incomplete markers, assertion structure, and unprovable data-provider coverage before the builder.
+- Current checkpoint commit: `feat: inspect generated PHPUnit test quality`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1D — Generated-test quality.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D now has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest-specific quality inspection before building and publishing. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D now has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest- and PHPUnit-specific quality inspection before building and publishing. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add PHPUnit-specific generated-test quality inspection.
+Add Eris-specific property-test inspection.
 
 ## Acceptance criteria for the next task
 
-- Define bounded PHPUnit-specific inspection evidence without moving PHP behavior into `src/core/`.
-- Detect focused PHPUnit test discovery, skipped/incomplete markers, assertion structure, and data-provider coverage using exact versioned adapter evidence.
-- Bind adapter inspection to the generated-test lifecycle and selected test path without retaining source text.
-- Reject malformed, unsupported, or unbounded PHPUnit inspection input before the builder.
+- Define bounded Eris-specific inspection evidence without moving PHP behavior into `src/core/`.
+- Detect actual Eris generator construction, bounded iteration/execution structure, target invocation, and approved invariant checks using exact versioned adapter evidence.
+- Bind adapter inspection to the generated-test lifecycle, property execution proof, selected test path, target, and invariant without retaining source text.
+- Reject malformed, unsupported, trivial, bypassed, or unbounded Eris inspection input before the builder.
 - Preserve intent, property-test execution, lifecycle, implementation-restatement, known-mutation, sealed-artifact, and independent-verification gates.
 - `npm run checkpoint` passes.
 
@@ -58,6 +58,7 @@ Add PHPUnit-specific generated-test quality inspection.
 - Property work also produces exact `test-implementation-inspection/v1` evidence over the observed generated test and selected target. Direct production-source inspection, exact token runs of at least 24 tokens, and identifier-normalized structural runs of at least 48 tokens reject before the builder; accepted decisions retain only bounded paths, SHA-256 identities, metrics, exhaustive signals, and the approved criterion, and are sealed through `test-plan/v7` and the test manifest.
 - Every generated test emits exact nonce-bound `generated-test-lifecycle-report/v1` observations during three baseline and three verification attempts. Missing, skipped, disabled, assertion-free, deleted, changed, reduced-assertion, tolerance-changed, or inconsistently executing tests fail closed. Varying outcomes or metrics produce bounded `candidate-quarantine/v1`, release the daily claim, and stop before the builder or publication. Sealed baseline and post-change decisions retain only commands, file identities, exit codes, durations, assertion/tolerance metrics, and output hashes.
 - Detected Pest work runs the PHP adapter's exact `pest-generated-test-quality-inspection/v1` after accepted baseline lifecycle proof and before the builder. Every bounded generated test is inspected; focused `only`, `skip`/`todo`, assertion-free declarations, empty providers, dynamic or named providers without locally provable cases, malformed lexical structure, unsupported discovery syntax, non-regular/oversized files, and lifecycle/path/hash/metric mismatches fail closed. Accepted sealed evidence retains no source text, only framework/schema identity, paths, SHA-256 identities, bounded counts, and exhaustive signals.
+- Detected PHPUnit work runs the PHP adapter's exact `phpunit-generated-test-quality-inspection/v1` at the same lifecycle boundary. Public convention-, attribute-, and docblock-discovered methods are accepted only inside `TestCase` subclasses; skipped/incomplete markers, per-method assertion gaps, non-public discovery, empty providers, external providers, and missing or dynamic named providers fail closed. Exact evidence is bound to the selected path, every observed lifecycle path, hashes, attempts, and assertion metrics and retains no source text.
 - The opt-in direct OpenAI MoneyAllocator proof passed end to end with separate real-model test and builder calls, sealed protected artifacts, independent verification, and a draft publication request.
 - Builder changes are checked against sealed test/spec artifacts.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
@@ -77,16 +78,16 @@ Add PHPUnit-specific generated-test quality inspection.
 
 ## Last verification
 
-Verified on 2026-07-17 for the Pest generated-test quality slice:
+Verified on 2026-07-17 for the PHPUnit generated-test quality slice:
 
-- Focused Pest-quality and lifecycle tests: 8 tests passed.
-- `npm test`: 218 tests passed; both live model proofs remained excluded.
+- Focused Pest/PHPUnit adapter-quality tests: 11 tests passed.
+- `npm test`: 224 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - The container was not rebuilt because production dependencies and CLI runtime packaging did not change.
-- The established end-to-end non-Pest defect proof remained green with `test-plan/v7`; Pest-specific executable examples separately proved accepted inline providers and every new rejection class without invoking a live model.
+- The established end-to-end defect proof remained green with `test-plan/v7`; PHPUnit-specific executable examples separately proved convention, attribute, and docblock discovery, local array/generator providers, and every new rejection class without invoking a live model.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.

@@ -82,7 +82,7 @@ test("the PHP adapter gates Pest evidence and leaves other test frameworks uncha
 
   const focused = await fixture("<?php\nit('x', function () { expect(true)->toBeTrue(); })->only();\n", 1);
   await assert.rejects(adapter.inspectGeneratedTestQuality(focused), /focused-test/);
-  assert.equal(await adapter.inspectGeneratedTestQuality({ ...accepted, framework: "phpunit" }), undefined);
+  assert.equal(await adapter.inspectGeneratedTestQuality({ ...accepted, framework: "codeception" }), undefined);
 });
 
 async function fixture(source: string, assertionCount: number): Promise<GeneratedTestQualityInspectionRequest> {

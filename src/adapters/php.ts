@@ -26,6 +26,11 @@ import {
   requireAcceptedPestGeneratedTestQuality,
   type PestGeneratedTestQualityInspection,
 } from "./pest-generated-test-quality.js";
+import {
+  inspectPhpunitGeneratedTestQuality,
+  requireAcceptedPhpunitGeneratedTestQuality,
+  type PhpunitGeneratedTestQualityInspection,
+} from "./phpunit-generated-test-quality.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -177,11 +182,18 @@ export class PhpAdapter implements RepositoryAdapter {
     return "unknown";
   }
 
-  async inspectGeneratedTestQuality(request: GeneratedTestQualityInspectionRequest): Promise<PestGeneratedTestQualityInspection | undefined> {
-    if (request.framework !== "pest") return undefined;
-    const inspection = await inspectPestGeneratedTestQuality(request);
-    requireAcceptedPestGeneratedTestQuality(inspection);
-    return inspection;
+  async inspectGeneratedTestQuality(request: GeneratedTestQualityInspectionRequest): Promise<PestGeneratedTestQualityInspection | PhpunitGeneratedTestQualityInspection | undefined> {
+    if (request.framework === "pest") {
+      const inspection = await inspectPestGeneratedTestQuality(request);
+      requireAcceptedPestGeneratedTestQuality(inspection);
+      return inspection;
+    }
+    if (request.framework === "phpunit") {
+      const inspection = await inspectPhpunitGeneratedTestQuality(request);
+      requireAcceptedPhpunitGeneratedTestQuality(inspection);
+      return inspection;
+    }
+    return undefined;
   }
 }
 
