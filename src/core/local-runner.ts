@@ -111,9 +111,10 @@ async function persistExecution(
 ): Promise<readonly string[]> {
   if (!execution) return [];
   const usagePath = await writeArtifact(root, `${stage}-agent-usage.json`, {
-    schemaVersion: "agent-usage/v1",
+    schemaVersion: execution.budgetDecision ? "agent-usage/v2" : "agent-usage/v1",
     stage,
     ...execution.usage,
+    ...(execution.budgetDecision ? { budgetDecision: execution.budgetDecision } : {}),
   });
   const rationalePath = await writeArtifact(root, `${stage}-agent-rationale.json`, {
     schemaVersion: "agent-rationale/v1",

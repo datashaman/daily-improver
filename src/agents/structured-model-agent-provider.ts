@@ -15,6 +15,14 @@ import {
   type BuilderRequest,
   type TestAgentRequest,
 } from "./structured-agent-contracts.js";
+import {
+  InMemoryModelCostBudgetState,
+  validateModelCostBudgets,
+  type ModelAgentStage,
+  type ModelCostBudgets,
+  type ModelCostBudgetState,
+  type ModelCostReservation,
+} from "./model-cost-budget.js";
 
 export type ModelRequest = TestAgentRequest | BuilderRequest;
 
@@ -22,6 +30,7 @@ export interface ModelTransportInvocation {
   readonly stage: "test" | "build";
   readonly request: ModelRequest;
   readonly workingDirectory: string;
+  readonly maximumCostUsd: number;
 }
 
 export interface ModelTransport {
@@ -29,7 +38,15 @@ export interface ModelTransport {
 }
 
 export class StructuredModelAgentProvider implements AgentProvider {
-  constructor(private readonly transport: ModelTransport) {}
+  private readonly budgets: ModelCostBudgets;
+
+  constructor(
+    private readonly transport: ModelTransport,
+    budgets: ModelCostBudgets,
+    private readonly budgetState: ModelCostBudgetState = new InMemoryModelCostBudgetState(),
+  ) {
+    this.budgets = validateModelCostBudgets(budgets);
+  }
 
   async generateTests(context: AgentContext): Promise<TestAgentExecution> {
     const request = parseTestAgentRequest({
@@ -41,11 +58,10 @@ export class StructuredModelAgentProvider implements AgentProvider {
       commands: context.inputs.commands,
       conventions: context.inputs.testConventions,
     });
-    const response = parseTestAgentResponse(await this.transport.invoke({
-      stage: "test",
-      request,
-      workingDirectory: context.repository,
-    }));
+    const reservation = this.reserve("test", context);
+    const response = await this.invoke(reservation, parseTestAgentResponse, {
+      stage: "test", request, workingDirectory: context.repository,
+    });
     assertAllowed(response.changedFiles, request.allowedTestPaths, "test-agent response");
     for (const test of response.tests) {
       if (!response.changedFiles.includes(test.path)) {
@@ -54,6 +70,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
     }
     return {
       usage: response.usage,
+      budgetDecision: response.budgetDecision,
       rationale: {
         summary: response.summary,
         changedFiles: response.changedFiles,
@@ -73,11 +90,10 @@ export class StructuredModelAgentProvider implements AgentProvider {
       commands: context.inputs.commands,
       conventions: context.inputs.builderConventions,
     });
-    const response = parseBuilderResponse(await this.transport.invoke({
-      stage: "build",
-      request,
-      workingDirectory: context.repository,
-    }));
+    const reservation = this.reserve("build", context);
+    const response = await this.invoke(reservation, parseBuilderResponse, {
+      stage: "build", request, workingDirectory: context.repository,
+    });
     assertAllowed(response.changedFiles, request.allowedFiles, "builder response");
     for (const file of response.changedFiles) {
       if (request.protectedFiles.some((pattern) => matches(file, pattern))) {
@@ -86,12 +102,47 @@ export class StructuredModelAgentProvider implements AgentProvider {
     }
     return {
       usage: response.usage,
+      budgetDecision: response.budgetDecision,
       rationale: {
         summary: response.summary,
         changedFiles: response.changedFiles,
         implementationNotes: response.implementationNotes,
       },
     };
+  }
+
+  private reserve(stage: ModelAgentStage, context: AgentContext): ModelCostReservation {
+    const stageBudget = this.budgets.stages[stage];
+    return this.budgetState.reserve({
+      scope: `${context.repository}\0${context.spec.id}`,
+      stage,
+      stageLimitUsd: stageBudget.limitUsd,
+      dailyLimitUsd: this.budgets.dailyLimitUsd,
+      specificationLimitUsd: context.spec.constraints.maxCostUsd,
+      reservationUsd: stageBudget.reservationUsd,
+    });
+  }
+
+  private async invoke<T extends { readonly usage: { readonly estimatedCostUsd: number } }>(
+    reservation: ModelCostReservation,
+    parser: (value: unknown) => T,
+    invocation: Omit<ModelTransportInvocation, "maximumCostUsd">,
+  ): Promise<T & { readonly budgetDecision: ReturnType<ModelCostBudgetState["settle"]> }> {
+    try {
+      const response = parser(await this.transport.invoke({
+        ...invocation,
+        maximumCostUsd: reservation.request.reservationUsd,
+      }));
+      const budgetDecision = this.budgetState.settle(reservation, response.usage.estimatedCostUsd);
+      return { ...response, budgetDecision };
+    } catch (error) {
+      try {
+        this.budgetState.consumeReservation(reservation);
+      } catch {
+        // The reservation was settled before an over-budget response was rejected.
+      }
+      throw error;
+    }
   }
 }
 

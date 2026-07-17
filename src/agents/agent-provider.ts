@@ -4,6 +4,7 @@ import type {
   AgentRepositoryContext,
   AgentUsage,
 } from "./structured-agent-contracts.js";
+import type { ModelCostBudgetDecision } from "./model-cost-budget.js";
 
 export interface AgentStageInputs {
   readonly repository: AgentRepositoryContext;
@@ -23,6 +24,7 @@ export interface AgentContext {
 
 export interface TestAgentExecution {
   readonly usage: AgentUsage;
+  readonly budgetDecision?: ModelCostBudgetDecision;
   readonly rationale: {
     readonly summary: string;
     readonly changedFiles: readonly string[];
@@ -36,6 +38,7 @@ export interface TestAgentExecution {
 
 export interface BuilderExecution {
   readonly usage: AgentUsage;
+  readonly budgetDecision?: ModelCostBudgetDecision;
   readonly rationale: {
     readonly summary: string;
     readonly changedFiles: readonly string[];

@@ -4,23 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: first structured model agent provider.
-- Current checkpoint commit: `feat: add structured model agent provider`.
+- Last completed milestone: structured model cost budgets.
+- Current checkpoint commit: `feat: enforce structured model cost budgets`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, and bounded scoring factors; its remaining ranking-policy work stays planned. Phase 1C now has strict versioned stage contracts and a structured model provider behind an injected transport; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, and bounded scoring factors; its remaining ranking-policy work stays planned. Phase 1C now has strict versioned stage contracts, a structured model provider behind an injected transport, and deterministic pre-request stage/daily/specification cost enforcement; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Enforce per-stage and daily model cost budgets before structured transport requests.
+Retry structured model requests only after classified transient failures.
 
 ## Acceptance criteria for the next task
 
-- Define explicit test-stage, builder-stage, and aggregate daily budget inputs without weakening the specification cost ceiling.
-- Reject a stage before invoking its transport when its reserved budget is unavailable or exceeds either the stage or remaining daily limit.
-- Account validated actual usage after each response and prevent the builder request when test-stage usage leaves insufficient budget.
-- Keep budget state injectable and deterministic in tests; do not require live credentials or wall-clock timing.
-- Persist bounded budget decisions alongside usage while keeping model rationale separate from trusted evidence.
+- Define an explicit bounded model-transport failure classification that distinguishes transient failures from permanent, malformed-response, policy, and budget failures.
+- Retry only classified transient transport failures with injected deterministic retry timing; never retry malformed responses, path/policy failures, or budget rejection.
+- Reserve cost before every attempt and keep daily/specification accounting fail-closed when an attempt has no validated usage.
+- Bound attempt count and persist attempt/classification metadata with trusted usage while keeping transport messages out of trusted evidence.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -30,6 +29,7 @@ Enforce per-stage and daily model cost budgets before structured transport reque
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
 - Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
 - The structured model provider builds requests only from approved stage inputs, invokes an injected transport, rejects malformed or unauthorized response claims, and persists validated usage separately from model rationale marked as untrusted.
+- Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -50,22 +50,22 @@ Enforce per-stage and daily model cost budgets before structured transport reque
 
 ## Last verification
 
-Verified on 2026-07-17 for the committed structured-model-provider slice:
+Verified on 2026-07-17 for the committed structured-model-cost-budget slice:
 
-- Focused structured-provider and end-to-end tests: 3 tests passed.
-- `npm test`: 117 tests passed.
+- Focused structured-provider tests: 5 tests passed.
+- `npm test`: 120 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - Docker image build not required; CLI runtime and production dependencies are unchanged.
-- End-to-end defect → failing property test → bounded fix → independently verified usage/rationale artifacts → daily branch flow passed.
+- End-to-end defect → failing property test → bounded fix → independently verified budget/usage/rationale artifacts → daily branch flow passed.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
 ## Clear-safety state
 
-This checkpoint is safe to clear after the structured-model-provider slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear after the structured-model-cost-budget slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

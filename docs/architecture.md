@@ -32,6 +32,8 @@ Only these approved inputs cross the builder boundary: the same semantic task an
 
 `StructuredModelAgentProvider` constructs and re-validates each versioned request before invoking an injected model transport. The transport receives the host working directory as execution context, but that path is not serialized into the model request. Responses are parsed fail-closed, and every response-declared path must match the stage allowlist; builder claims must also avoid protected paths. Validated provider, model, token, latency, and cost usage is stored in versioned usage artifacts. Model summaries, generated-test descriptions, and implementation notes are stored in separate artifacts marked `untrusted-model-output`; test-stage artifacts are sealed before the builder runs.
 
+Structured transports also require explicit test-stage, builder-stage, and aggregate daily cost budgets. An injectable deterministic ledger reserves each stage before transport against the stage limit, remaining daily budget, and the specification's unchanged aggregate cost ceiling. The approved reservation is exposed to the transport as its maximum cost. Validated actual usage replaces the reservation after a response; malformed responses consume the reservation conservatively, and usage above the reservation fails closed. Versioned budget decisions are persisted inside the trusted usage artifact, never in model rationale.
+
 GitHub OIDC is exchanged for short-lived, stage-scoped control-plane credentials. The workflow token only needs repository-local permissions appropriate to its job. The setup workflow is introduced through a human-reviewed setup PR; the App does not request workflow-write permission.
 
 ## Extension model

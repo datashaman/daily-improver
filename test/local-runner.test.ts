@@ -30,6 +30,7 @@ for ($total = 0; $total <= 50; $total++) {
 `);
     return {
       usage: fixtureUsage,
+      budgetDecision: fixtureBudgetDecision("test", 0, 0),
       rationale: {
         summary: "Added the allocation invariant test.",
         changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
@@ -74,6 +75,7 @@ final class MoneyAllocator
 `);
     return {
       usage: fixtureUsage,
+      budgetDecision: fixtureBudgetDecision("build", 0, 0),
       rationale: {
         summary: "Distributed the allocation remainder.",
         changedFiles: ["app/Domain/MoneyAllocator.php"],
@@ -91,6 +93,23 @@ const fixtureUsage = {
   latencyMs: 25,
   estimatedCostUsd: 0,
 } as const;
+
+function fixtureBudgetDecision(stage: "test" | "build", before: number, after: number) {
+  return {
+    schemaVersion: "model-cost-budget-decision/v1" as const,
+    status: "approved" as const,
+    stage,
+    stageLimitUsd: 0.5,
+    dailyLimitUsd: 1,
+    specificationLimitUsd: 1,
+    reservedCostUsd: 0.25,
+    actualCostUsd: 0,
+    dailyCommittedBeforeUsd: before,
+    dailyCommittedAfterUsd: after,
+    specificationCommittedBeforeUsd: before,
+    specificationCommittedAfterUsd: after,
+  };
+}
 
 test("one local run proves a Laravel correctness fix before producing a draft PR request", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-e2e-"));
@@ -121,6 +140,8 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
   const usageArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository));
   assert.match(usageArtifact.stdout, /"model": "fixture-model-v1"/);
+  assert.match(usageArtifact.stdout, /"schemaVersion": "agent-usage\/v2"/);
+  assert.match(usageArtifact.stdout, /"budgetDecision"/);
   const rationaleArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
   assert.match(rationaleArtifact.stdout, /"trust": "untrusted-model-output"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;

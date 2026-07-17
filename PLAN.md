@@ -131,7 +131,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Send only the approved spec, allowlist, necessary context, commands, and conventions.
 - [x] Add the first model-backed provider.
 - [x] Track model, token usage, latency, and estimated cost.
-- [ ] Enforce per-stage and daily cost budgets before requests.
+- [x] Enforce per-stage and daily cost budgets before requests.
 - [ ] Retry only classified transient failures.
 - [x] Reject malformed or incomplete responses.
 - [x] Store model rationale separately from trusted evidence.
@@ -462,8 +462,9 @@ The recent and next commit-sized milestones are:
 3. [x] `feat: score candidate evidence and testability`
 4. [x] `feat: define structured agent contracts`
 5. [x] `feat: add structured model agent provider`
+6. [x] `feat: enforce structured model cost budgets`
 
-The immediate next task is Phase 1C: enforce per-stage and daily model cost budgets before structured transport requests.
+The immediate next task is Phase 1C: retry structured model requests only after classified transient failures.
 
 ## Initial operating limits
 
