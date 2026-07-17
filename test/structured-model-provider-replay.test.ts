@@ -6,6 +6,7 @@ import type { AgentContext, BuilderExecution, TestAgentExecution } from "../src/
 import { InMemoryModelCostBudgetState, type ModelCostBudgets } from "../src/agents/model-cost-budget.js";
 import { modelStageCredentialSchemaVersion } from "../src/agents/model-stage-credential.js";
 import type { ModelRoutingPolicy } from "../src/agents/model-routing.js";
+import type { ModelEndpointPolicy } from "../src/agents/model-endpoint.js";
 import {
   ModelTransportFailure,
   StructuredModelAgentProvider,
@@ -18,12 +19,13 @@ import {
 const replayDirectory = path.join(process.cwd(), "test", "fixtures", "model-provider-replay");
 
 interface ReplayFixture {
-  readonly schemaVersion: "structured-provider-replay/v2";
+  readonly schemaVersion: "structured-provider-replay/v3";
   readonly stage: "test" | "build";
   readonly clockNowMs: number;
   readonly budgets: ModelCostBudgets;
   readonly retryPolicy: ModelRetryPolicy;
   readonly routingPolicy: ModelRoutingPolicy;
+  readonly endpointPolicy: ModelEndpointPolicy;
   readonly request: ModelRequest;
   readonly events: readonly ReplayEvent[];
   readonly expected: {
@@ -86,6 +88,9 @@ class ReplayTransport implements ModelTransport {
     assert.equal(invocation.stage, this.fixture.stage);
     assert.deepEqual(invocation.request, this.fixture.request);
     assert.deepEqual(invocation.route, (this.fixture.expected.trusted.routingDecision as { readonly route: unknown }).route);
+    assert.equal(invocation.endpoint.id, "customer-private-model-endpoint");
+    assert.equal(invocation.endpoint.capabilities.protocol, "structured-agent/v1");
+    assert.ok(invocation.endpoint.capabilities.stages.includes(this.fixture.stage));
     const event = this.fixture.events[this.invocations.length - 1];
     assert.ok(event, "Replay transport received an unexpected invocation.");
     if (event.kind === "failure") {
@@ -121,6 +126,7 @@ for (const name of ["test-success.json", "builder-transient-retry.json"] as cons
         },
       },
       fixture.routingPolicy,
+      fixture.endpointPolicy,
       new InMemoryModelCostBudgetState(),
       fixture.retryPolicy,
       { async wait(delayMs) { retryDelaysMs.push(delayMs); } },
@@ -147,9 +153,11 @@ for (const name of ["test-success.json", "builder-transient-retry.json"] as cons
     assert.equal(transport.invocations.length, fixture.events.length);
 
     const serializedRequests = JSON.stringify(transport.invocations.map(({ request }) => request));
+    const serializedEndpointMetadata = JSON.stringify(transport.invocations.map(({ endpoint }) => endpoint));
     const serializedTrusted = JSON.stringify(trusted);
     const serializedResult = JSON.stringify(result);
     assert.doesNotMatch(serializedRequests, /deterministic\/replay\/repository|replay-credential/);
+    assert.doesNotMatch(serializedEndpointMetadata, /replay-credential|sensitive upstream timeout/);
     assert.doesNotMatch(serializedTrusted, /Added an allocation|Distributed the remainder|public API unchanged/);
     assert.doesNotMatch(serializedResult, /sensitive upstream timeout replay sentinel|replay-credential/);
   });
@@ -165,7 +173,7 @@ async function execute(
 async function loadFixture(name: string): Promise<ReplayFixture> {
   const parsed: unknown = JSON.parse(await readFile(path.join(replayDirectory, name), "utf8"));
   assert.ok(isRecord(parsed));
-  assert.equal(parsed.schemaVersion, "structured-provider-replay/v2");
+  assert.equal(parsed.schemaVersion, "structured-provider-replay/v3");
   assert.ok(parsed.stage === "test" || parsed.stage === "build");
   assert.ok(Array.isArray(parsed.events) && parsed.events.length > 0);
   return parsed as unknown as ReplayFixture;

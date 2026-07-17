@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "structured-provider-replay/v2",
+  "schemaVersion": "structured-provider-replay/v3",
   "stage": "build",
   "clockNowMs": 1784236800000,
   "budgets": {
@@ -22,6 +22,21 @@
         "build": { "id": "replay-build-higher", "provider": "deterministic-fixture", "model": "fixture-build-model-v2" }
       }
     }
+  },
+  "endpointPolicy": {
+    "schemaVersion": "model-endpoint-policy/v1",
+    "endpoints": [
+      {
+        "id": "customer-private-model-endpoint",
+        "routeIds": ["replay-test-lower", "replay-build-lower", "replay-test-higher", "replay-build-higher"],
+        "capabilities": {
+          "protocol": "structured-agent/v1",
+          "stages": ["test", "build"],
+          "authentication": "ephemeral-credential",
+          "costLimit": "maximum-cost-usd"
+        }
+      }
+    ]
   },
   "request": {
     "schemaVersion": "builder-request/v1",

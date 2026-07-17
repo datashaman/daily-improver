@@ -15,6 +15,11 @@ import {
   validateModelRoutingPolicy,
   type ModelRoutingPolicy,
 } from "../src/agents/model-routing.js";
+import {
+  modelEndpointPolicySchemaVersion,
+  validateModelEndpointPolicy,
+  type ModelEndpointPolicy,
+} from "../src/agents/model-endpoint.js";
 
 const credentialNowMs = 1_784_236_800_000;
 
@@ -59,6 +64,20 @@ const routingPolicy = {
       build: { id: "fixture-build-higher", provider: "deterministic-fixture", model: "fixture-build-model-v2" },
     },
   },
+} as const;
+
+const endpointPolicy = {
+  schemaVersion: modelEndpointPolicySchemaVersion,
+  endpoints: [{
+    id: "customer-private-model-endpoint",
+    routeIds: ["fixture-test-lower", "fixture-build-lower", "fixture-test-higher", "fixture-build-higher"],
+    capabilities: {
+      protocol: "structured-agent/v1",
+      stages: ["test", "build"],
+      authentication: "ephemeral-credential",
+      costLimit: "maximum-cost-usd",
+    },
+  }],
 } as const;
 
 const usage = {
@@ -147,7 +166,7 @@ test("constructs approved stage requests and accepts bounded deterministic model
     },
   ]);
   const credentials = validCredentials();
-  const provider = new StructuredModelAgentProvider(transport, budgets, credentials, routingPolicy);
+  const provider = new StructuredModelAgentProvider(transport, budgets, credentials, routingPolicy, endpointPolicy);
 
   const testResult = await provider.generateTests(context);
   const buildResult = await provider.build(context);
@@ -160,6 +179,10 @@ test("constructs approved stage requests and accepts bounded deterministic model
   assert.equal(transport.invocations[0]?.maximumCostUsd, 0.004);
   assert.deepEqual(transport.invocations[0]?.route, routingPolicy.routes.lower.test);
   assert.deepEqual(transport.invocations[1]?.route, routingPolicy.routes.lower.build);
+  assert.deepEqual(transport.invocations.map(({ endpoint }) => endpoint), [
+    { id: "customer-private-model-endpoint", capabilities: endpointPolicy.endpoints[0].capabilities },
+    { id: "customer-private-model-endpoint", capabilities: endpointPolicy.endpoints[0].capabilities },
+  ]);
   assert.equal(testResult.routingDecision?.complexity, "lower");
   assert.equal(buildResult.routingDecision?.complexity, "lower");
   assert.equal(transport.invocations[0]?.credential, "test-stage-secret");
@@ -221,6 +244,7 @@ test("routes higher-complexity test and builder tasks through explicit stage mod
     budgets,
     validCredentials(),
     routingPolicy,
+    endpointPolicy,
   );
 
   const testResult = await provider.generateTests(higherContext);
@@ -279,12 +303,61 @@ test("fails closed on incomplete, unsupported, or ambiguous model routing config
   }
 });
 
+test("fails closed before transport on incomplete, unsupported, extended, or route-incompatible endpoint configuration", () => {
+  const invalidPolicies: readonly unknown[] = [
+    { schemaVersion: modelEndpointPolicySchemaVersion, endpoints: [] },
+    { ...endpointPolicy, schemaVersion: "model-endpoint-policy/v2" },
+    {
+      ...endpointPolicy,
+      endpoints: [{ ...endpointPolicy.endpoints[0], untrustedUrl: "https://customer.invalid/model" }],
+    },
+    {
+      ...endpointPolicy,
+      endpoints: [{ ...endpointPolicy.endpoints[0], id: "https://customer.invalid/model" }],
+    },
+    {
+      ...endpointPolicy,
+      endpoints: [{
+        ...endpointPolicy.endpoints[0],
+        capabilities: { ...endpointPolicy.endpoints[0].capabilities, protocol: "provider-specific/v1" },
+      }],
+    },
+    {
+      ...endpointPolicy,
+      endpoints: [{
+        ...endpointPolicy.endpoints[0],
+        routeIds: endpointPolicy.endpoints[0].routeIds.filter((id) => id !== "fixture-build-higher"),
+      }],
+    },
+    {
+      ...endpointPolicy,
+      endpoints: [{
+        ...endpointPolicy.endpoints[0],
+        capabilities: { ...endpointPolicy.endpoints[0].capabilities, stages: ["test"] },
+      }],
+    },
+  ];
+
+  for (const policy of invalidPolicies) {
+    const transport = new DeterministicTransport([]);
+    assert.throws(() => new StructuredModelAgentProvider(
+      transport,
+      budgets,
+      validCredentials(),
+      routingPolicy,
+      policy as ModelEndpointPolicy,
+    ));
+    assert.equal(transport.invocations.length, 0);
+  }
+  assert.deepEqual(validateModelEndpointPolicy(endpointPolicy, routingPolicy), endpointPolicy);
+});
+
 test("rejects response usage that does not match the selected model route", async () => {
   const transport = new DeterministicTransport([{
     ...testResponse,
     usage: { ...usage, model: "unrouted-model" },
   }]);
-  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy);
+  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy, endpointPolicy);
 
   await assert.rejects(provider.generateTests(context), (error) => {
     assert.ok(error instanceof StructuredModelRequestFailure);
@@ -344,7 +417,7 @@ test("fails closed before transport for unavailable, mis-scoped, and invalid-lif
           return item.credential(request.stage, request.scope);
         },
       },
-    }, routingPolicy);
+    }, routingPolicy, endpointPolicy);
 
     await assert.rejects(provider.generateTests(context), (error) => {
       assert.ok(error instanceof StructuredModelRequestFailure, item.name);
@@ -372,6 +445,7 @@ test("prevents one credential secret from crossing the test and builder stage bo
     budgets,
     validCredentials({ test: "shared-stage-secret", build: "shared-stage-secret" }),
     routingPolicy,
+    endpointPolicy,
   );
 
   await provider.generateTests(context);
@@ -401,7 +475,7 @@ function credential(overrides: {
 }
 
 test("fails closed on malformed responses and response-declared path escapes", async () => {
-  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets, validCredentials(), routingPolicy);
+  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets, validCredentials(), routingPolicy, endpointPolicy);
   await assert.rejects(malformed.generateTests(context), /contain exactly/);
 
   const escapedTest = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -411,7 +485,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["app/Domain/MoneyAllocator.php"],
     tests: [{ path: "app/Domain/MoneyAllocator.php", purpose: "Invalid claim.", invariants: [] }],
     usage,
-  }]), budgets, validCredentials(), routingPolicy);
+  }]), budgets, validCredentials(), routingPolicy, endpointPolicy);
   await assert.rejects(escapedTest.generateTests(context), /outside its path permissions/);
 
   const protectedBuild = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -421,7 +495,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
     implementationNotes: [],
     usage,
-  }]), budgets, validCredentials(), routingPolicy);
+  }]), budgets, validCredentials(), routingPolicy, endpointPolicy);
   await assert.rejects(protectedBuild.build({
     ...context,
     spec: { ...context.spec, allowedFiles: ["app/**", "tests/**"] },
@@ -436,7 +510,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 0.1, reservationUsd: 0.2 },
       build: { limitUsd: 0.1, reservationUsd: 0.1 },
     },
-  }, validCredentials(), routingPolicy);
+  }, validCredentials(), routingPolicy, endpointPolicy);
   await assert.rejects(stageExceeded.generateTests(context), /exceeds its stage limit/);
   assert.equal(transport.invocations.length, 0);
 
@@ -446,7 +520,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 1, reservationUsd: 1 },
       build: { limitUsd: 1, reservationUsd: 1 },
     },
-  }, validCredentials(), routingPolicy);
+  }, validCredentials(), routingPolicy, endpointPolicy);
   const narrowSpec = { ...context, spec: { ...context.spec, constraints: { ...context.spec.constraints, maxCostUsd: 0.5 } } };
   await assert.rejects(specificationExceeded.generateTests(narrowSpec), /remaining specification budget/);
   assert.equal(transport.invocations.length, 0);
@@ -471,7 +545,7 @@ test("accounts actual test usage and prevents an unaffordable builder request", 
       test: { limitUsd: 0.005, reservationUsd: 0.005 },
       build: { limitUsd: 0.004, reservationUsd: 0.003 },
     },
-  }, validCredentials(), routingPolicy, new InMemoryModelCostBudgetState());
+  }, validCredentials(), routingPolicy, endpointPolicy, new InMemoryModelCostBudgetState());
 
   const testResult = await provider.generateTests(context);
   assert.equal(testResult.budgetDecision?.actualCostUsd, 0.004);
@@ -492,7 +566,7 @@ test("rejects reported usage above the reserved transport budget", async () => {
     }],
     usage: { ...usage, estimatedCostUsd: 0.005 },
   }]);
-  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy);
+  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials(), routingPolicy, endpointPolicy);
   await assert.rejects(provider.generateTests(context), /exceeds its reserved budget/);
   assert.equal(transport.invocations.length, 1);
 });
@@ -508,6 +582,7 @@ test("retries only classified transient failures with deterministic timing and p
     { ...budgets, dailyLimitUsd: 0.02 },
     validCredentials(),
     routingPolicy,
+    endpointPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 3, delaysMs: [25, 50] },
     { async wait(delayMs) { delays.push(delayMs); } },
@@ -571,6 +646,7 @@ test("does not retry permanent, malformed-response, policy, or budget failures",
       budgets,
       validCredentials(),
       routingPolicy,
+      endpointPolicy,
       new InMemoryModelCostBudgetState(),
       { maxAttempts: 2, delaysMs: [0] },
       { async wait() { throw new Error("Unexpected retry timing."); } },
@@ -591,6 +667,7 @@ test("bounds retry configuration and stops after the configured transient attemp
     budgets,
     validCredentials(),
     routingPolicy,
+    endpointPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 6, delaysMs: [0, 0, 0, 0, 0] },
   ), /maxAttempts/);
@@ -605,6 +682,7 @@ test("bounds retry configuration and stops after the configured transient attemp
     { ...budgets, dailyLimitUsd: 0.02 },
     validCredentials(),
     routingPolicy,
+    endpointPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },
@@ -628,6 +706,7 @@ test("fails closed before a retry transport call when conservative usage exhaust
     { ...budgets, dailyLimitUsd: 0.007 },
     validCredentials(),
     routingPolicy,
+    endpointPolicy,
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },

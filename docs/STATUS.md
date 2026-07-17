@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded model routing based on task complexity.
-- Current checkpoint commit: `feat: route models by task complexity`.
+- Last completed milestone: private customer endpoint compatibility at the structured transport boundary.
+- Current checkpoint commit: `feat: bind structured transports to private endpoints`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays through every injected provider boundary, and versioned lower/higher model routing from bounded structured task complexity; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays through every injected provider boundary, versioned lower/higher model routing from bounded structured task complexity, and exact endpoint-neutral private-endpoint capabilities plus invocation metadata; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Keep the structured provider interface compatible with private customer endpoints.
+Add a production HTTPS structured endpoint transport behind trusted opaque endpoint resolution.
 
 ## Acceptance criteria for the next task
 
-- Define endpoint-neutral transport capabilities and invocation metadata without moving provider-specific behavior into the core stage contracts.
-- Prove that both routed stages can target a deterministic private-endpoint transport while retaining the same structured request/response, route, credential, retry, and budget boundaries.
-- Keep endpoint identifiers and capabilities explicit and bounded; fail closed before transport on incomplete, unsupported, extended, or route-incompatible endpoint configuration.
-- Ensure endpoint authentication remains ephemeral transport context and cannot enter requests, usage, routing decisions, rationale, attempts, or errors.
-- Add deterministic executable success and failure examples without network access, a live model API, or permanent credentials.
+- Resolve opaque endpoint IDs only through injected trusted runner configuration; do not place endpoint URLs in core requests, routing decisions, or persisted artifacts.
+- Send the validated structured request, selected route, maximum cost, and ephemeral credential through a bounded HTTPS transport contract.
+- Bound request/response sizes and timeouts, classify connection, HTTP, and malformed-response failures explicitly, and fail closed on unsupported protocols or endpoint resolution.
+- Keep authentication headers and endpoint locators out of requests, usage, rationale, attempts, and sanitized errors.
+- Add deterministic injected-HTTP success and failure examples without network access, a live model API, or permanent credentials.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -41,7 +41,8 @@ Keep the structured provider interface compatible with private customer endpoint
 - Structured model attempts use a bounded five-class failure model; only explicitly transient transport failures retry through injected timing, every attempt has a fresh reservation, unknown usage consumes the reservation conservatively, and sanitized versioned attempt metadata is stored with trusted usage.
 - Every structured transport attempt acquires an injected `model-stage-credential/v1` credential scoped to its exact test/build stage and repository/specification run; credentials valid for more than fifteen minutes, unavailable, expired, future-issued, malformed, mis-scoped, or reused across stages fail before transport, while raw secrets remain outside requests and artifacts.
 - A `task-complexity-decision/v1` scores only validated task scope and collection counts, selects explicit lower/higher test and build routes from `model-routing-policy/v1`, and is retained in trusted `agent-usage/v4`; malformed, unsupported, duplicate, ambiguous, or response-mismatched routes fail closed without inspecting task prose, source, host paths, credentials, or rationale.
-- Committed `structured-provider-replay/v2` fixtures pin the route policy and selected complexity decision together with the established credential, retry, validation, and cost boundaries.
+- An exact `model-endpoint-policy/v1` assigns every route once to an opaque endpoint ID with explicit structured-protocol, stage, ephemeral-authentication, and maximum-cost capabilities; incomplete, unsupported, extended, duplicate, uncovered, or route-incompatible policies fail before reservation, credential acquisition, or transport.
+- Committed `structured-provider-replay/v3` fixtures bind both routed stages to a deterministic private endpoint while pinning route and endpoint policies together with the established credential, retry, validation, and cost boundaries.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -51,7 +52,7 @@ Keep the structured provider interface compatible with private customer endpoint
 ## Known placeholders
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
-- The local CLI delegates to configured commands; the structured provider accepts bounded ephemeral credentials, but a production endpoint transport and production credential exchange are not implemented yet.
+- The local CLI delegates to configured commands; the structured provider accepts bounded ephemeral credentials and private-endpoint invocation metadata, but a production endpoint transport and production credential exchange are not implemented yet.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
@@ -62,17 +63,17 @@ Keep the structured provider interface compatible with private customer endpoint
 
 ## Last verification
 
-Verified on 2026-07-17 for the task-complexity model routing slice:
+Verified on 2026-07-17 for the private customer endpoint compatibility slice:
 
-- Focused structured provider and replay tests: 16 tests passed.
-- `npm test`: 168 tests passed.
+- Focused structured provider and replay tests: 17 tests passed.
+- `npm test`: 169 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .` passed.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- Lower- and higher-complexity tasks selected deterministic stage-specific routes, both structured stages replayed committed versioned route decisions through the real provider boundaries, and the builder replay retained deterministic retry timing, fresh stage credentials, conservative failure accounting, and sanitized attempt metadata.
+- Both structured stages targeted the same deterministic private endpoint through explicit bounded capabilities while retaining route selection, exact stage contracts, fresh credentials, retry behavior, conservative budget accounting, and sanitized artifacts; invalid endpoint policies failed before transport.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

@@ -51,6 +51,12 @@ import {
   type ModelRoutingPolicy,
   type TaskComplexityDecision,
 } from "./model-routing.js";
+import {
+  endpointForRoute,
+  validateModelEndpointPolicy,
+  type ModelEndpointInvocation,
+  type ModelEndpointPolicy,
+} from "./model-endpoint.js";
 
 export { ModelTransportFailure, StructuredModelRequestFailure } from "./model-request-retry.js";
 export type {
@@ -70,6 +76,7 @@ export interface ModelTransportInvocation {
   readonly maximumCostUsd: number;
   readonly credential: string;
   readonly route: ModelRoute;
+  readonly endpoint: ModelEndpointInvocation;
 }
 
 export interface ModelTransport {
@@ -81,6 +88,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
   private readonly retryPolicy: ModelRetryPolicy;
   private readonly credentials: Required<ModelStageCredentialPolicy>;
   private readonly routingPolicy: ModelRoutingPolicy;
+  private readonly endpointPolicy: ModelEndpointPolicy;
   private readonly credentialStages = new Map<string, ModelAgentStage>();
 
   constructor(
@@ -88,12 +96,14 @@ export class StructuredModelAgentProvider implements AgentProvider {
     budgets: ModelCostBudgets,
     credentialPolicy: ModelStageCredentialPolicy,
     routingPolicy: ModelRoutingPolicy,
+    endpointPolicy: ModelEndpointPolicy,
     private readonly budgetState: ModelCostBudgetState = new InMemoryModelCostBudgetState(),
     retryPolicy: ModelRetryPolicy = noModelRetries,
     private readonly retryTiming: ModelRetryTiming = systemModelRetryTiming,
   ) {
     this.budgets = validateModelCostBudgets(budgets);
     this.routingPolicy = validateModelRoutingPolicy(routingPolicy);
+    this.endpointPolicy = validateModelEndpointPolicy(endpointPolicy, this.routingPolicy);
     this.retryPolicy = validateModelRetryPolicy(retryPolicy);
     this.credentials = {
       source: credentialPolicy.source,
@@ -184,7 +194,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
   private async invoke<T extends { readonly usage: AgentUsage }>(
     context: AgentContext,
     parser: (value: unknown) => T,
-    invocation: Omit<ModelTransportInvocation, "maximumCostUsd" | "credential" | "route">,
+    invocation: Omit<ModelTransportInvocation, "maximumCostUsd" | "credential" | "route" | "endpoint">,
     validatePolicy: (response: T) => void,
   ): Promise<T & {
     readonly budgetDecision: ReturnType<ModelCostBudgetState["settle"]>;
@@ -192,6 +202,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
     readonly routingDecision: TaskComplexityDecision;
   }> {
     const routingDecision = selectModelRoute(invocation.request, this.routingPolicy);
+    const endpoint = endpointForRoute(this.endpointPolicy, routingDecision.route, invocation.stage);
     const attempts: ModelRequestAttempt[] = [];
     for (let attempt = 1; attempt <= this.retryPolicy.maxAttempts; attempt++) {
       let reservation: ModelCostReservation;
@@ -220,6 +231,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
           maximumCostUsd: reservation.request.reservationUsd,
           credential,
           route: routingDecision.route,
+          endpoint,
         });
       } catch (error) {
         const classification = transportFailureClassification(error);
