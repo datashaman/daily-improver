@@ -208,6 +208,8 @@ function coverageCandidate(finding: PhpCoverageFinding): ImprovementCandidate {
     impact: 0.7,
     effort: 0.45,
     risk: 0.16,
+    subsystemRisk: 0.18,
+    testability: 0.95,
     evidence: [`${finding.tool} Clover statement coverage: ${finding.coveragePercent}%`],
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,

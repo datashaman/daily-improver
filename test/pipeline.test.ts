@@ -41,6 +41,9 @@ test("pipeline fails closed when no candidate has reproducible evidence", async 
     impact: 1,
     effort: 0,
     risk: 0,
+    subsystemRisk: 0,
+    testability: 1,
+    estimatedDiffLines: 10,
     evidence: ["unqualified observation"],
     suggestedFiles: ["src/Service.ts"],
   };

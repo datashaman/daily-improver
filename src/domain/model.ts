@@ -62,10 +62,12 @@ export interface ImprovementCandidate {
   readonly impact: number;
   readonly effort: number;
   readonly risk: number;
+  readonly subsystemRisk: number;
+  readonly testability: number;
   readonly evidence: readonly string[];
   readonly suggestedFiles: readonly string[];
   readonly target?: string;
-  readonly estimatedDiffLines?: number;
+  readonly estimatedDiffLines: number;
   readonly propertyInvariants?: readonly string[];
   readonly reproducibility?: CandidateReproducibility;
   readonly deduplication?: CandidateDeduplication;

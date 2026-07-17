@@ -386,6 +386,8 @@ function deprecationCandidate(finding: DeprecatedApiFinding): ImprovementCandida
     impact: 0.78,
     effort: 0.25,
     risk: 0.18,
+    subsystemRisk: 0.22,
+    testability: 0.85,
     evidence: [
       `${finding.ecosystem} deprecated API at ${finding.file}:${finding.line}`,
       `rule ${finding.rule} (${finding.ruleProvenance})`,

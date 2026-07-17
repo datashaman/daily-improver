@@ -250,12 +250,15 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
       impact: 1,
       effort: 0.45,
       risk: 0.5,
+      subsystemRisk: 0.65,
+      testability: 0.6,
       evidence: [
         `package ${finding.packageName}; advisory ${finding.advisoryId}`,
         `affected versions ${finding.affectedVersions ?? "not reported"}; severity ${finding.severity ?? "not reported"}`,
       ],
       suggestedFiles: ["composer.json", "composer.lock"],
       target: finding.packageName,
+      estimatedDiffLines: 120,
       reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
     };
   }
@@ -271,9 +274,12 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
       impact: 0.75,
       effort: 0.65,
       risk: 0.55,
+      subsystemRisk: 0.6,
+      testability: 0.5,
       evidence: [`package ${finding.packageName}; replacement ${finding.replacement ?? "not reported"}`],
       suggestedFiles: ["composer.json", "composer.lock"],
       target: finding.packageName,
+      estimatedDiffLines: 160,
       reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
     };
   }
@@ -286,9 +292,12 @@ function composerAuditCandidate(finding: ComposerAuditFinding): ImprovementCandi
     impact: 0.85,
     effort: 0.4,
     risk: 0.4,
+    subsystemRisk: 0.45,
+    testability: 0.65,
     evidence: [`package ${finding.packageName}; policy ${finding.policyName}; entry ${finding.policyEntryId ?? "not reported"}`],
     suggestedFiles: ["composer.json", "composer.lock"],
     target: finding.packageName,
+    estimatedDiffLines: 80,
     reproducibility: reproducibleEvidence(0.99, ["composer.audit executed collector"]),
   };
 }

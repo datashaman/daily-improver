@@ -233,6 +233,8 @@ function validationErrorCandidate(item: ValidationErrorFinding): ImprovementCand
     impact: validation ? 0.9 : 0.82,
     effort: 0.35,
     risk: 0.24,
+    subsystemRisk: 0.3,
+    testability: 0.9,
     evidence: [`${item.rule} at ${item.file}:${item.line}`, `rule set ${item.ruleProvenance}`],
     suggestedFiles: [item.file, "tests"],
     target: item.file,

@@ -236,6 +236,8 @@ function duplicateCandidate(finding: PhpDuplicateCodeFinding): ImprovementCandid
     impact: 0.55,
     effort: 0.58,
     risk: 0.3,
+    subsystemRisk: 0.35,
+    testability: 0.7,
     evidence: [
       `PHPCPD exact-match similarity: ${finding.similarityPercent}%`,
       `${finding.lines} lines and ${finding.tokens} tokens across ${finding.occurrenceCount} regions`,

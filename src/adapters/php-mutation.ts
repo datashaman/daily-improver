@@ -299,6 +299,8 @@ function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
     impact: 0.96,
     effort: 0.35,
     risk: 0.18,
+    subsystemRisk: 0.2,
+    testability: 0.95,
     evidence: [
       `Infection ${finding.status} mutation at ${finding.file}:${finding.line}`,
       finding.mutator,

@@ -12,10 +12,10 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
-- Phase 1B category-specific scoring weights are implemented for every language-neutral candidate kind.
+- Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- The exact next task is scoring candidate evidence strength and testability alongside the existing bounded factors.
+- The exact next task is defining the first versioned structured model-agent request and response contracts.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -107,7 +107,7 @@ Exit gate: `daily-improver analyse` produces credible ranked candidates on a rea
 Goal: make selection predictable, bounded, and explainable.
 
 - [x] Add category-specific scoring weights.
-- [ ] Include evidence strength, confidence, likely impact, estimated effort, estimated diff, subsystem risk, and testability.
+- [x] Include evidence strength, confidence, likely impact, estimated effort, estimated diff, subsystem risk, and testability.
 - [ ] Score cosmetic-only changes near zero.
 - [ ] Apply repository priority configuration.
 - [ ] Enforce exactly one candidate per run.
@@ -458,10 +458,10 @@ The recent and next commit-sized milestones are:
 
 1. [x] `feat: reject candidates without reproducible evidence`
 2. [x] `feat: add category-specific scoring weights`
-3. [ ] `feat: score candidate evidence and testability`
+3. [x] `feat: score candidate evidence and testability`
 4. [ ] `feat: add structured model agent provider`
 
-The immediate next task is Phase 1B: include evidence strength, estimated diff, subsystem risk, and testability in deterministic scoring.
+The immediate next task is Phase 1C: define versioned structured test-agent and builder request and response contracts as the foundation of the structured model agent provider.
 
 ## Initial operating limits
 

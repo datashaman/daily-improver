@@ -31,8 +31,11 @@ export class GenericAdapter implements RepositoryAdapter {
         impact: 0.55,
         effort: 0.2,
         risk: 0.05,
+        subsystemRisk: 0.05,
+        testability: 0.8,
         evidence: ["No language-specific repository adapter matched."],
         suggestedFiles: ["README.md"],
+        estimatedDiffLines: 25,
         reproducibility: reproducibleEvidence(0.75, ["Generic repository signal inspection"]),
       },
     ];

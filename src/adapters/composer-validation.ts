@@ -54,11 +54,14 @@ function composerValidationCandidate(result: EvidenceResult): ImprovementCandida
     impact: failure ? 0.9 : 0.55,
     effort: 0.25,
     risk: 0.2,
+    subsystemRisk: 0.15,
+    testability: 0.9,
     evidence: [
       `${result.commandIdentity} returned ${result.status} with exit code ${result.exitCode ?? "none"}`,
       `stdout ${result.stdoutHash}; stderr ${result.stderrHash}`,
     ],
     suggestedFiles: ["composer.json", "composer.lock"],
+    estimatedDiffLines: 30,
     reproducibility: reproducibleEvidence(0.99, [result.commandIdentity, result.provenance.toolVersion ?? "unknown Composer version"]),
   };
 }

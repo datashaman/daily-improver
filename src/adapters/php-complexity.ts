@@ -213,6 +213,8 @@ function complexityCandidate(finding: PhpComplexityFinding): ImprovementCandidat
     impact: 0.58,
     effort: 0.62,
     risk: 0.32,
+    subsystemRisk: 0.38,
+    testability: 0.75,
     evidence: [
       `PhpMetrics cyclomatic complexity: ${finding.cyclomaticComplexity}`,
       `Maintainability index: ${finding.maintainabilityIndex ?? "not reported"}`,

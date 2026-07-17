@@ -7,38 +7,70 @@ interface ScoringWeights {
   readonly confidence: number;
   readonly effort: number;
   readonly risk: number;
+  readonly evidenceStrength: number;
+  readonly estimatedDiff: number;
+  readonly subsystemRisk: number;
+  readonly testability: number;
 }
 
 const categoryScoringWeights = {
-  "test-protection": { impact: 0.4, confidence: 0.3, effort: 0.15, risk: 0.15 },
-  "static-analysis": { impact: 0.3, confidence: 0.4, effort: 0.2, risk: 0.1 },
-  "mutation-testing": { impact: 0.3, confidence: 0.35, effort: 0.25, risk: 0.1 },
-  "property-testing": { impact: 0.35, confidence: 0.35, effort: 0.2, risk: 0.1 },
-  "dependency-vulnerability": { impact: 0.45, confidence: 0.25, effort: 0.1, risk: 0.2 },
-  performance: { impact: 0.4, confidence: 0.3, effort: 0.2, risk: 0.1 },
-  maintainability: { impact: 0.35, confidence: 0.3, effort: 0.2, risk: 0.15 },
-  documentation: { impact: 0.25, confidence: 0.4, effort: 0.2, risk: 0.15 },
+  "test-protection": { impact: 0.28, confidence: 0.21, effort: 0.1, risk: 0.08, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.1 },
+  "static-analysis": { impact: 0.21, confidence: 0.28, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
+  "mutation-testing": { impact: 0.21, confidence: 0.245, effort: 0.175, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
+  "property-testing": { impact: 0.245, confidence: 0.245, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
+  "dependency-vulnerability": { impact: 0.315, confidence: 0.175, effort: 0.07, risk: 0.12, evidenceStrength: 0.14, estimatedDiff: 0.04, subsystemRisk: 0.08, testability: 0.06 },
+  performance: { impact: 0.28, confidence: 0.21, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.07, testability: 0.08 },
+  maintainability: { impact: 0.245, confidence: 0.21, effort: 0.14, risk: 0.09, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.07, testability: 0.07 },
+  documentation: { impact: 0.175, confidence: 0.28, effort: 0.14, risk: 0.09, evidenceStrength: 0.12, estimatedDiff: 0.06, subsystemRisk: 0.06, testability: 0.07 },
 } satisfies Readonly<Record<CandidateKind, ScoringWeights>>;
+
+const maximumEstimatedDiffLines = 250;
 
 export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
 ): readonly RankedCandidate[] {
-  return deduplicateCandidates(rejectCandidatesWithoutReproducibleEvidence(candidates))
+  return deduplicateCandidates(
+    rejectCandidatesWithoutReproducibleEvidence(candidates).filter(hasBoundedScoringFactors),
+  )
     .map((candidate) => scoreCandidate(candidate))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 }
 
 function scoreCandidate(candidate: ImprovementCandidate): RankedCandidate {
   const weights = categoryScoringWeights[candidate.kind];
+  const evidenceStrength = candidate.reproducibility?.strength ?? 0;
+  const estimatedDiff = candidate.estimatedDiffLines / maximumEstimatedDiffLines;
   return {
     ...candidate,
     score: round(
       candidate.impact * weights.impact +
         candidate.confidence * weights.confidence -
         candidate.effort * weights.effort -
-        candidate.risk * weights.risk,
+        candidate.risk * weights.risk +
+        evidenceStrength * weights.evidenceStrength -
+        estimatedDiff * weights.estimatedDiff -
+        candidate.subsystemRisk * weights.subsystemRisk +
+        candidate.testability * weights.testability,
     ),
   };
+}
+
+function hasBoundedScoringFactors(candidate: ImprovementCandidate): boolean {
+  return [
+    candidate.impact,
+    candidate.confidence,
+    candidate.effort,
+    candidate.risk,
+    candidate.subsystemRisk,
+    candidate.testability,
+  ].every(isUnitInterval)
+    && Number.isInteger(candidate.estimatedDiffLines)
+    && candidate.estimatedDiffLines > 0
+    && candidate.estimatedDiffLines <= maximumEstimatedDiffLines;
+}
+
+function isUnitInterval(value: number): boolean {
+  return Number.isFinite(value) && value >= 0 && value <= 1;
 }
 
 function round(value: number): number {

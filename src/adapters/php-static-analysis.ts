@@ -212,6 +212,8 @@ function staticAnalysisCandidate(finding: PhpStaticAnalysisFinding): Improvement
     impact: 0.72,
     effort: 0.3,
     risk: 0.15,
+    subsystemRisk: 0.18,
+    testability: 0.9,
     evidence: [
       `${finding.tool} finding at ${finding.file}:${finding.line ?? "unknown"}`,
       `rule ${finding.rule ?? "not reported"}`,

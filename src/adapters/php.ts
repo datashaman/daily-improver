@@ -150,16 +150,16 @@ export class PhpAdapter implements RepositoryAdapter {
       }),
     ];
     if (!profile.capabilities.has("test")) {
-      candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, ["composer.json has no detected test runner"], ["composer.json", "tests"]));
+      candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, 0.2, 0.8, 120, ["composer.json has no detected test runner"], ["composer.json", "tests"]));
     }
     if (!profile.capabilities.has("static-analysis")) {
-      candidates.push(candidate("php-static-analysis", "static-analysis", "Introduce incremental static analysis", "Static analysis catches type and contract defects before an agent-generated patch can merge.", 0.92, 0.85, 0.4, 0.15, ["No PHPStan or Psalm capability detected"], ["composer.json", "phpstan.neon"]));
+      candidates.push(candidate("php-static-analysis", "static-analysis", "Introduce incremental static analysis", "Static analysis catches type and contract defects before an agent-generated patch can merge.", 0.92, 0.85, 0.4, 0.15, 0.2, 0.85, 100, ["No PHPStan or Psalm capability detected"], ["composer.json", "phpstan.neon"]));
     }
     if (!profile.capabilities.has("mutation-testing")) {
-      candidates.push(candidate("php-mutation-testing", "mutation-testing", "Add mutation testing for critical code", "Mutation testing measures whether the existing suite can detect meaningful behavioral changes.", 0.82, 0.72, 0.65, 0.2, ["No Infection capability detected"], ["composer.json", "infection.json5"]));
+      candidates.push(candidate("php-mutation-testing", "mutation-testing", "Add mutation testing for critical code", "Mutation testing measures whether the existing suite can detect meaningful behavioral changes.", 0.82, 0.72, 0.65, 0.2, 0.25, 0.8, 120, ["No Infection capability detected"], ["composer.json", "infection.json5"]));
     }
     if (profile.capabilities.has("test")) {
-      candidates.push(candidate("php-property-tests", "property-testing", "Add a property test around a stable domain invariant", "Property tests strengthen protection around behavior with a broad input space.", 0.68, 0.75, 0.5, 0.25, ["A PHP test runner is available"], ["tests/Property"]));
+      candidates.push(candidate("php-property-tests", "property-testing", "Add a property test around a stable domain invariant", "Property tests strengthen protection around behavior with a broad input space.", 0.68, 0.75, 0.5, 0.25, 0.2, 0.95, 80, ["A PHP test runner is available"], ["tests/Property"]));
     }
     return candidates;
   }
@@ -173,7 +173,7 @@ export class PhpAdapter implements RepositoryAdapter {
   }
 }
 
-function candidate(id: string, kind: ImprovementCandidate["kind"], title: string, rationale: string, confidence: number, impact: number, effort: number, risk: number, evidence: string[], suggestedFiles: string[]): ImprovementCandidate {
+function candidate(id: string, kind: ImprovementCandidate["kind"], title: string, rationale: string, confidence: number, impact: number, effort: number, risk: number, subsystemRisk: number, testability: number, estimatedDiffLines: number, evidence: string[], suggestedFiles: string[]): ImprovementCandidate {
   return {
     id,
     kind,
@@ -183,6 +183,9 @@ function candidate(id: string, kind: ImprovementCandidate["kind"], title: string
     impact,
     effort,
     risk,
+    subsystemRisk,
+    testability,
+    estimatedDiffLines,
     evidence,
     suggestedFiles,
     reproducibility: reproducibleEvidence(0.9, ["PHP manifest capability inspection"]),
