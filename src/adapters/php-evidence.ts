@@ -17,10 +17,13 @@ interface InfectionReport {
   readonly mutations?: readonly MutationRecord[];
 }
 
-export async function collectPhpEvidence(root: string): Promise<readonly ImprovementCandidate[]> {
+export async function collectPhpEvidence(
+  root: string,
+  includePreparedCoverage = true,
+): Promise<readonly ImprovementCandidate[]> {
   const [mutations, coverage, complexity, todos] = await Promise.all([
     mutationCandidates(root),
-    coverageCandidates(root),
+    includePreparedCoverage ? coverageCandidates(root) : Promise.resolve([]),
     complexityCandidates(root),
     todoCandidates(root),
   ]);

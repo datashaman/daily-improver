@@ -10,6 +10,7 @@ import { collectPhpEvidence } from "./php-evidence.js";
 import { collectComposerValidationEvidence } from "./composer-validation.js";
 import { collectComposerAuditEvidence } from "./composer-audit.js";
 import { collectPhpStaticAnalysisEvidence } from "./php-static-analysis.js";
+import { collectPhpCoverageEvidence } from "./php-coverage.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 
 interface ComposerManifest {
@@ -33,7 +34,7 @@ export class PhpAdapter implements RepositoryAdapter {
     const composer = await readJson<ComposerManifest>(root, "composer.json");
     const packages = { ...composer.require, ...composer["require-dev"] };
     const frameworks = detectFrameworks(packages);
-    const capabilities = await detectCapabilities(root, packages, composer.scripts ?? {});
+    const capabilities = detectCapabilities(packages, composer.scripts ?? {});
     return {
       root,
       adapter: this.id,
@@ -51,11 +52,16 @@ export class PhpAdapter implements RepositoryAdapter {
     const staticAnalysis = staticAnalysisCapability
       ? await collectPhpStaticAnalysisEvidence(profile.root, staticAnalysisCapability, this.evidenceRunner)
       : undefined;
+    const coverageCapability = profile.capabilities.get("coverage");
+    const coverage = coverageCapability
+      ? await collectPhpCoverageEvidence(profile.root, coverageCapability, this.evidenceRunner)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
       ...(staticAnalysis?.candidates ?? []),
-      ...await collectPhpEvidence(profile.root),
+      ...(coverage?.candidates ?? []),
+      ...await collectPhpEvidence(profile.root, coverageCapability === undefined),
     ];
     if (!profile.capabilities.has("test")) {
       candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, ["composer.json has no detected test runner"], ["composer.json", "tests"]));
@@ -92,11 +98,16 @@ function detectFrameworks(packages: PackageMap): string[] {
   return frameworks;
 }
 
-async function detectCapabilities(root: string, packages: PackageMap, scripts: NonNullable<ComposerManifest["scripts"]>): Promise<ReadonlyMap<CapabilityKind, CommandCapability>> {
+function detectCapabilities(packages: PackageMap, scripts: NonNullable<ComposerManifest["scripts"]>): ReadonlyMap<CapabilityKind, CommandCapability> {
   const capabilities = new Map<CapabilityKind, CommandCapability>();
   capabilities.set("install", command("install", ["composer", "install"], "convention"));
-  if (packages["pestphp/pest"]) capabilities.set("test", command("test", ["vendor/bin/pest"], "manifest", "pest"));
-  else if (packages["phpunit/phpunit"]) capabilities.set("test", command("test", ["vendor/bin/phpunit"], "manifest", "phpunit"));
+  if (packages["pestphp/pest"]) {
+    capabilities.set("test", command("test", ["vendor/bin/pest"], "manifest", "pest"));
+    capabilities.set("coverage", command("coverage", ["vendor/bin/pest"], "manifest", "pest"));
+  } else if (packages["phpunit/phpunit"]) {
+    capabilities.set("test", command("test", ["vendor/bin/phpunit"], "manifest", "phpunit"));
+    capabilities.set("coverage", command("coverage", ["vendor/bin/phpunit"], "manifest", "phpunit"));
+  }
   else if (scripts.test) capabilities.set("test", command("test", ["composer", "test"], "manifest"));
   if (packages["laravel/pint"]) capabilities.set("lint", command("lint", ["vendor/bin/pint", "--test"], "manifest", "pint"));
   else if (packages["friendsofphp/php-cs-fixer"]) capabilities.set("lint", command("lint", ["vendor/bin/php-cs-fixer", "check"], "manifest", "php-cs-fixer"));
@@ -104,7 +115,6 @@ async function detectCapabilities(root: string, packages: PackageMap, scripts: N
   else if (packages["vimeo/psalm"]) capabilities.set("static-analysis", command("static-analysis", ["vendor/bin/psalm"], "manifest", "psalm"));
   if (packages["infection/infection"]) capabilities.set("mutation-testing", command("mutation-testing", ["vendor/bin/infection", "--no-interaction"], "manifest", "infection"));
   if (packages["giorgiosironi/eris"]) capabilities.set("property-testing", command("property-testing", ["vendor/bin/phpunit", "tests/Property"], "manifest", "eris"));
-  if (await exists(root, "phpunit.xml")) capabilities.set("coverage", command("coverage", ["vendor/bin/phpunit", "--coverage-text"], "configuration"));
   return capabilities;
 }
 

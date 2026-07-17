@@ -44,7 +44,8 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
   assert.deepEqual(profile.frameworks, ["laravel"]);
   assert.deepEqual(profile.capabilities.get("test")?.command, ["vendor/bin/pest"]);
   assert.equal(profile.capabilities.get("static-analysis")?.framework, "phpstan");
-  assert.equal(profile.capabilities.get("coverage")?.source, "configuration");
+  assert.equal(profile.capabilities.get("coverage")?.source, "manifest");
+  assert.equal(profile.capabilities.get("coverage")?.framework, "pest");
 });
 
 test("ranks missing test protection as the first PHP baseline candidate", async () => {
@@ -102,4 +103,51 @@ test("executes static analysis selected from the detected manifest capability", 
     "--no-interaction",
   ]);
   assert.equal(commands.some((command) => command.command.includes("repository-owned-analysis-script")), false);
+});
+
+test("executes coverage selected from the detected manifest capability", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    "require-dev": { "phpunit/phpunit": "^12" },
+    scripts: { test: "repository-owned-coverage-script" },
+  }));
+  const commands: EvidenceCommand[] = [];
+  const runner: EvidenceRunner = {
+    async run(command: EvidenceCommand): Promise<EvidenceRun> {
+      commands.push(command);
+      if (command.identity === "phpunit.coverage") {
+        const outputPath = command.command[command.command.indexOf("--coverage-clover") + 1];
+        assert.ok(outputPath);
+        await writeFile(outputPath, "<coverage><project></project></coverage>");
+      }
+      const stdout = command.identity === "composer.audit"
+        ? JSON.stringify({ advisories: [], abandoned: [] })
+        : "";
+      const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
+      return {
+        result: {
+          commandIdentity: command.identity,
+          command: command.command,
+          status,
+          durationMs: 1,
+          exitCode: 0,
+          stdoutHash: "sha256:output",
+          stderrHash: "sha256:empty",
+          stdoutBytes: Buffer.byteLength(stdout),
+          stderrBytes: 0,
+          outputLimitBytes: command.maxOutputBytes,
+          outputTruncated: false,
+        },
+        output: { stdout, stderr: "" },
+      };
+    },
+  };
+
+  const adapter = new PhpAdapter(runner);
+  await adapter.discoverCandidates(await adapter.profile(root));
+
+  const coverageCommand = commands.find((command) => command.identity === "phpunit.coverage");
+  assert.equal(coverageCommand?.command[0], "vendor/bin/phpunit");
+  assert.equal(coverageCommand?.command.includes("repository-owned-coverage-script"), false);
 });

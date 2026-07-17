@@ -59,10 +59,14 @@ The full test suite should remain well under two minutes and must support concur
 Before handing work back:
 
 1. Run the narrowest relevant test while iterating.
-2. Run `npm run checkpoint` before declaring a milestone complete.
-3. Build the container when CLI runtime or production dependencies change.
-4. Run `git diff --check`.
-5. Inspect `git status` and preserve unrelated user changes.
+2. Update `PLAN.md`, user-facing documentation, and `docs/STATUS.md` as part of the same logical slice.
+3. Commit the complete slice once; the repository owner has granted standing authorization for these end-of-slice commits.
+4. Run `npm run checkpoint` from the resulting clean tree before declaring the slice complete.
+5. Build the container when CLI runtime or production dependencies change.
+6. Run `git diff --check`.
+7. Inspect `git status` and preserve unrelated user changes.
+
+Use one commit per completed slice. Do not create a separate checkpoint or handoff commit: the implementation, tests, durable plan updates, and current status belong in the slice commit. Because a commit cannot embed its own final hash, identify the last completed slice in `docs/STATUS.md` by its subject as the current checkpoint commit rather than recording a hash. Do not leave a completed slice uncommitted unless verification is failing, the slice is incomplete, unrelated user changes prevent a safe commit, or the user explicitly asks not to commit. If a post-commit checkpoint fails, fix the failure in a follow-up commit and rerun the checkpoint.
 
 ## Implementation rules
 
@@ -87,13 +91,13 @@ At the end of a meaningful milestone or before recommending a context clear:
 1. Finish or deliberately revert the active edit.
 2. Ensure required tests pass.
 3. Update `docs/STATUS.md` with:
-   - last completed milestone and commit;
+   - last completed milestone and checkpoint commit subject;
    - exact next task;
    - current acceptance criteria;
    - known blockers or unresolved decisions;
    - last verification results.
 4. Update completed checkboxes in `PLAN.md` only when evidence supports them.
-5. Commit the checkpoint when the user authorizes a commit.
+5. Include these checkpoint updates in the single end-of-slice commit under the repository owner's standing authorization.
 6. Confirm the working tree is clean.
 
 An agent should proactively tell the user that a clear is safe when all of these are true:

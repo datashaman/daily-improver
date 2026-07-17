@@ -42,6 +42,7 @@ export type EvidenceResultStatus =
   | "unavailable-tool"
   | "configuration-failure"
   | "missing-packages"
+  | "missing-coverage-support"
   | "timeout"
   | "infrastructure-failure";
 
