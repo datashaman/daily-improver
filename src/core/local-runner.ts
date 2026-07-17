@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { cp, mkdir, rm } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../agents/agent-provider.js";
 import { loadConfig } from "../config.js";
@@ -25,6 +25,13 @@ import {
   requireBlackBoxTest,
   type TestImplementationInspection,
 } from "../domain/test-implementation-inspection.js";
+import {
+  commandOutcome,
+  decideGeneratedTestLifecycle,
+  NewlyFlakyGeneratedTestError,
+  readGeneratedTestLifecycleReport,
+  type TestCommandOutcome,
+} from "../domain/generated-test-lifecycle.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -81,6 +88,7 @@ export class LocalImprovementRunner {
           testConventions: [
             "Add focused regression or property tests using the repository test harness.",
             "Use only dependencies and loading mechanisms demonstrably available to the detected test command; the test must fail because of the selected defect, not missing tooling or autoloading.",
+            "During every test command, write exact generated-test-lifecycle-report/v1 JSON to DAILY_IMPROVER_TEST_LIFECYCLE_PATH using DAILY_IMPROVER_TEST_LIFECYCLE_NONCE. Report every generated test path as executed, skipped, or disabled with its assertion count and a SHA-256 identity of its effective tolerance contract.",
             ...(spec.propertyTestTarget ? [
               `Exercise the selected target ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one approved property invariant for every input.`,
               "During the test command, write property-test-execution-proof/v1 JSON to DAILY_IMPROVER_PROPERTY_PROOF_PATH using DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE. Include the generated test path, selected target, exact approved invariant, unique SHA-256 input digests, and execution/check/failure counts.",
@@ -99,18 +107,32 @@ export class LocalImprovementRunner {
       const propertyExecutionNonce = randomBytes(16).toString("hex");
       await mkdir(join(isolated.path, ".daily-improver"), { recursive: true });
       await rm(propertyProofRuntimePath, { force: true });
-      const baseline = await this.runner.run(test.command, isolated.path, undefined, spec.propertyTestTarget ? {
+      const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
+      if (changedTests.length === 0) throw new Error("The test agent did not add or change a generated test.");
+      const testSha256 = await hashFiles(isolated.path, changedTests);
+      const baselineAttempts = await runLifecycleAttempts(this.runner, isolated.path, test.command, changedTests, "baseline", spec.propertyTestTarget ? {
         DAILY_IMPROVER_PROPERTY_PROOF_PATH: propertyProofRuntimePath,
         DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE: propertyExecutionNonce,
         DAILY_IMPROVER_PROPERTY_TARGET: spec.propertyTestTarget,
         DAILY_IMPROVER_PROPERTY_INVARIANTS: JSON.stringify(spec.propertyInvariants),
       } : {});
+      const baseline = baselineAttempts.results[0]!;
       const baselineClassification = adapter.classifyFailure?.(`${baseline.stdout}\n${baseline.stderr}`) ?? "unclassified";
+      const baselineLifecycle = decideGeneratedTestLifecycle({
+        phase: "baseline",
+        command: test.command,
+        testSha256,
+        attempts: baselineAttempts.outcomes,
+        expectedExit: baselineMustFail(improvementIntent) ? "nonzero" : "zero",
+      });
       const baselineProof = proveBaseline(improvementIntent, baseline.exitCode, baselineClassification);
+      for (const result of baselineAttempts.results.slice(1)) {
+        proveBaseline(improvementIntent, result.exitCode, adapter.classifyFailure?.(`${result.stdout}\n${result.stderr}`) ?? "unclassified");
+      }
+      await writeArtifact(isolated.path, "generated-test-baseline-lifecycle.json", baselineLifecycle);
       let propertyProof: PropertyTestExecutionProof | undefined;
       let knownMutationProof: KnownMutationExecutionProof | undefined;
       let implementationInspection: TestImplementationInspection | undefined;
-      const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
       if (spec.propertyTestTarget) {
         propertyProof = await readPropertyTestExecutionProof(propertyProofRuntimePath, {
           executionNonce: propertyExecutionNonce,
@@ -156,11 +178,17 @@ export class LocalImprovementRunner {
       }
       await rm(propertyProofRuntimePath, { force: true });
       await writeArtifact(isolated.path, "test-plan.json", {
-        schemaVersion: "test-plan/v5",
+        schemaVersion: "test-plan/v6",
         improvementIntent,
         baseline: baselineProof,
         command: test.command,
         propertyInvariants: spec.propertyInvariants,
+        generatedTestLifecycle: {
+          schemaVersion: baselineLifecycle.schemaVersion,
+          artifact: "generated-test-baseline-lifecycle.json",
+          attempts: baselineLifecycle.attempts.length,
+          testPaths: Object.keys(baselineLifecycle.testSha256),
+        },
         ...(propertyProof ? {
           propertyTestExecutionProof: {
             schemaVersion: propertyProof.schemaVersion,
@@ -205,6 +233,16 @@ export class LocalImprovementRunner {
       const trustedBuilderArtifacts = await persistAgentExecution(isolated.path, "build", builderExecution);
       await this.runner.run(["git", "add", "-N", "."], isolated.path);
       const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey, trustedBuilderArtifacts);
+      const verificationAttempts = await runLifecycleAttempts(this.runner, isolated.path, test.command, changedTests, "verification");
+      const verificationLifecycle = decideGeneratedTestLifecycle({
+        phase: "verification",
+        command: test.command,
+        testSha256: await hashFiles(isolated.path, changedTests),
+        attempts: verificationAttempts.outcomes,
+        expectedExit: "zero",
+        baseline: baselineLifecycle,
+      });
+      await writeArtifact(isolated.path, "generated-test-verification-lifecycle.json", verificationLifecycle);
       const publication = await this.stages.publicationRequest(isolated.path);
       await this.runner.run(["git", "add", "."], isolated.path);
       const commit = await this.runner.run(["git", "commit", "-m", `fix: ${spec.title}`], isolated.path);
@@ -217,6 +255,11 @@ export class LocalImprovementRunner {
         verificationPassed: verification.passed,
         publication,
       };
+    } catch (error) {
+      if (error instanceof NewlyFlakyGeneratedTestError) {
+        await this.stages.quarantine(repository, analysis.candidates[0]?.id ?? "unknown", error.phase, error.reason);
+      }
+      throw error;
     } finally {
       await isolated.cleanup();
     }
@@ -225,6 +268,40 @@ export class LocalImprovementRunner {
   private async stagesAdapter(root: string) {
     return await this.stages.resolveAdapter(root);
   }
+}
+
+async function runLifecycleAttempts(
+  runner: CommandRunner,
+  root: string,
+  command: readonly string[],
+  testPaths: readonly string[],
+  phase: "baseline" | "verification",
+  firstAttemptEnvironment: Readonly<Record<string, string>> = {},
+): Promise<{ readonly results: readonly Awaited<ReturnType<CommandRunner["run"]>>[]; readonly outcomes: readonly TestCommandOutcome[] }> {
+  const reportPath = join(root, ".daily-improver", "generated-test-lifecycle-report.json");
+  const results = [];
+  const outcomes: TestCommandOutcome[] = [];
+  for (let index = 0; index < 3; index++) {
+    const nonce = randomBytes(16).toString("hex");
+    await rm(reportPath, { force: true });
+    const result = await runner.run(command, root, undefined, {
+      ...(index === 0 ? firstAttemptEnvironment : {}),
+      DAILY_IMPROVER_TEST_LIFECYCLE_PATH: reportPath,
+      DAILY_IMPROVER_TEST_LIFECYCLE_NONCE: nonce,
+      DAILY_IMPROVER_TEST_LIFECYCLE_PHASE: phase,
+      DAILY_IMPROVER_GENERATED_TEST_PATHS: JSON.stringify(testPaths),
+    });
+    const report = await readGeneratedTestLifecycleReport(reportPath, nonce, testPaths);
+    results.push(result);
+    outcomes.push(commandOutcome(index + 1, result, report));
+  }
+  await rm(reportPath, { force: true });
+  return { results, outcomes };
+}
+
+async function hashFiles(root: string, paths: readonly string[]): Promise<Readonly<Record<string, string>>> {
+  const entries = await Promise.all([...paths].sort().map(async (path) => [path, createHash("sha256").update(await readFile(join(root, path))).digest("hex")] as const));
+  return Object.fromEntries(entries);
 }
 
 async function changedTestPaths(

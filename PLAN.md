@@ -165,13 +165,13 @@ Goal: prove that generated tests are meaningful and cannot be weakened by the bu
 - [x] Require property tests to exercise the selected target and invariant.
 - [x] Require the relevant test to fail under a known mutation where applicable.
 - [x] Detect tests that merely restate implementation details.
-- [ ] Detect deleted, skipped, weakened, or newly flaky tests.
-- [ ] Detect reduced assertion counts and broadened tolerances.
-- [ ] Record test command, baseline output, duration, and hashes.
+- [x] Detect deleted, skipped, weakened, or newly flaky tests.
+- [x] Detect reduced assertion counts and broadened tolerances.
+- [x] Record bounded test commands, outcomes, durations, and output hashes without raw output.
 - [ ] Add Pest-specific quality inspection.
 - [ ] Add PHPUnit-specific quality inspection.
 - [ ] Add Eris-specific property-test inspection.
-- [ ] Quarantine flaky candidates instead of generating a PR.
+- [x] Quarantine flaky candidates instead of generating a PR.
 
 Exit gate: generated tests demonstrate an observable difference between defective and corrected behavior.
 
@@ -493,7 +493,7 @@ The recent and next commit-sized milestones are:
 22. [x] `feat: require known mutation test proof`
 23. [x] `feat: reject implementation-restating tests`
 
-The immediate next task is Phase 1D: detect deleted, skipped, weakened, or newly flaky generated tests. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: add Pest-specific generated-test quality inspection. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

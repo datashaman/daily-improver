@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -30,6 +30,21 @@ for ($total = 0; $total <= 50; $total++) {
             $failures[] = "Allocation did not preserve total {$total} across {$parts} parts.";
         }
     }
+}
+
+$lifecyclePath = getenv('DAILY_IMPROVER_TEST_LIFECYCLE_PATH');
+$lifecycleNonce = getenv('DAILY_IMPROVER_TEST_LIFECYCLE_NONCE');
+if (is_string($lifecyclePath) && is_string($lifecycleNonce)) {
+    file_put_contents($lifecyclePath, json_encode([
+        'schemaVersion' => 'generated-test-lifecycle-report/v1',
+        'executionNonce' => $lifecycleNonce,
+        'tests' => [[
+            'path' => 'tests/Property/MoneyAllocatorInvariantTest.php',
+            'status' => 'executed',
+            'assertionCount' => count($inputDigests),
+            'toleranceSha256' => hash('sha256', 'exact-integer-equality'),
+        ]],
+    ], JSON_THROW_ON_ERROR));
 }
 
 $proofPath = getenv('DAILY_IMPROVER_PROPERTY_PROOF_PATH');
@@ -126,6 +141,29 @@ class SourceInspectingAgent extends ProvingAgent {
       "\nfile_get_contents(__DIR__ . '/../../app/Domain/MoneyAllocator.php');\n",
       "utf8",
     );
+    return execution;
+  }
+
+  override async build(context: AgentContext): Promise<BuilderExecution> {
+    this.buildCalled = true;
+    return await super.build(context);
+  }
+}
+
+class FlakyTestAgent extends ProvingAgent {
+  buildCalled = false;
+
+  override async generateTests(context: AgentContext): Promise<TestAgentExecution> {
+    const execution = await super.generateTests(context);
+    const path = join(context.repository, "tests", "Property", "MoneyAllocatorInvariantTest.php");
+    const source = await readFile(path, "utf8");
+    await writeFile(path, source.replace(
+      "if ($failures !== []) {",
+      `$counterPath = dirname(__DIR__, 2) . '/.daily-improver/flaky-counter';
+$attempt = is_file($counterPath) ? ((int) file_get_contents($counterPath)) + 1 : 1;
+file_put_contents($counterPath, (string) $attempt);
+if ($failures !== [] && $attempt % 2 === 1) {`,
+    ));
     return execution;
   }
 
@@ -249,7 +287,8 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
   const testPlan = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-plan.json`], repository));
-  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v5"/);
+  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v6"/);
+  assert.match(testPlan.stdout, /"attempts": 3/);
   assert.match(testPlan.stdout, /"baselineProof": "defect-regression"/);
   assert.match(testPlan.stdout, /"outcome": "failed-as-expected"/);
   assert.match(testPlan.stdout, /"generatedInputCount": 510/);
@@ -269,6 +308,11 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.doesNotMatch(implementationInspection.stdout, /array_sum|intdiv|Allocation did not preserve/);
   const testManifest = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-manifest.json`], repository));
   assert.match(testManifest.stdout, /test-implementation-inspection\.json/);
+  assert.match(testManifest.stdout, /generated-test-baseline-lifecycle\.json/);
+  const verificationLifecycle = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/generated-test-verification-lifecycle.json`], repository));
+  assert.match(verificationLifecycle.stdout, /"schemaVersion": "generated-test-lifecycle-decision\/v1"/);
+  assert.match(verificationLifecycle.stdout, /"phase": "verification"/);
+  assert.doesNotMatch(verificationLifecycle.stdout, /All tests passed|Allocation did not preserve/);
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);
@@ -321,6 +365,33 @@ test("rejects implementation-restating generated tests before the builder", asyn
     "ephemeral-test-key",
   ).run(repository), /production-source-inspection/);
   assert.equal(agent.buildCalled, false);
+  delete process.env.DAILY_IMPROVER_RUN_DATE;
+});
+
+test("quarantines a newly flaky baseline before invoking the builder", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-flaky-"));
+  const repository = join(sandbox, "repository");
+  await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
+  const shell = new CommandRunner();
+  await expectSuccess(shell.run(["git", "init", "-b", "main"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.email", "improver@example.test"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
+  await expectSuccess(shell.run(["git", "add", "."], repository));
+  await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
+  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
+  const app = createApplication(join(sandbox, "state"), {
+    current: async (observedAt) => ({ schemaVersion: "open-pull-request-state/v1", repositoryId: "b".repeat(64), observedAt, openPullRequests: 0 }),
+  }, {
+    current: async (observedAt) => ({ schemaVersion: "unresolved-finding-state/v1", repositoryId: "f".repeat(64), observedAt, findingIds: [] }),
+  });
+  const agent = new FlakyTestAgent();
+  await assert.rejects(new LocalImprovementRunner(app.stages, agent, join(sandbox, "worktrees"), "ephemeral-test-key").run(repository), /newly flaky.*command-outcome-varied/);
+  assert.equal(agent.buildCalled, false);
+  const quarantine = await readFile(join(repository, ".ai", "runs", "2026-07-17", "candidate-quarantine.json"), "utf8");
+  assert.match(quarantine, /"outcome": "quarantined"/);
+  assert.doesNotMatch(quarantine, /All tests passed|Allocation did not preserve/);
+  const dailyDecision = await readFile(join(repository, ".ai", "runs", "2026-07-17", "daily-improvement-decision.json"), "utf8");
+  assert.match(dailyDecision, /"outcome": "released"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 

@@ -164,6 +164,23 @@ export class PipelineStages {
     return request;
   }
 
+  async quarantine(root: string, candidateId: string, phase: "baseline" | "verification", reason: string): Promise<void> {
+    if (!candidateId || candidateId.length > 160 || !/^[A-Za-z0-9._:-]+$/u.test(candidateId)) throw new Error("Quarantine candidate identity is malformed.");
+    if (reason !== "command-outcome-varied" && reason !== "execution-metrics-varied") throw new Error("Quarantine reason is unsupported.");
+    const decision = await readArtifact<DailyImprovementDecision>(root, "daily-improvement-decision.json");
+    const decidedAt = this.clock.now().toISOString();
+    const released = await this.requiredDailyImprovements().release(decision, decidedAt);
+    await writeArtifact(root, "daily-improvement-decision.json", released);
+    await writeArtifact(root, "candidate-quarantine.json", {
+      schemaVersion: "candidate-quarantine/v1",
+      candidateId,
+      phase,
+      reason,
+      outcome: "quarantined",
+      decidedAt,
+    });
+  }
+
   private requiredDailyImprovements(): DailyImprovementStore {
     if (!this.dailyImprovements) throw new Error("Daily improvement state is required for specification and publication stages.");
     return this.dailyImprovements;
@@ -185,7 +202,7 @@ function baselineSummary(testPlan: {
   readonly improvementIntent?: { readonly intent?: string };
   readonly baseline?: { readonly outcome?: string };
 } | undefined): string {
-  if (testPlan?.schemaVersion !== "test-plan/v3" && testPlan?.schemaVersion !== "test-plan/v4" && testPlan?.schemaVersion !== "test-plan/v5") return "";
+  if (testPlan?.schemaVersion !== "test-plan/v3" && testPlan?.schemaVersion !== "test-plan/v4" && testPlan?.schemaVersion !== "test-plan/v5" && testPlan?.schemaVersion !== "test-plan/v6") return "";
   if (testPlan.baseline?.outcome === "failed-as-expected" && testPlan.improvementIntent?.intent === "defect") {
     return "- Defect regression test failed behaviorally against the baseline and passed after the change.\n";
   }

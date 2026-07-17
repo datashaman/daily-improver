@@ -44,6 +44,7 @@ export async function createTestManifest(root: string, key: string): Promise<Tes
     ".ai/runs/**/open-pull-request-limit-decision.json",
     ".ai/runs/**/spec.json",
     ".ai/runs/**/test-plan.json",
+    ".ai/runs/**/generated-test-baseline-lifecycle.json",
     ".ai/runs/**/property-test-execution-proof.json",
     ".ai/runs/**/known-mutation-execution-proof.json",
     ".ai/runs/**/test-implementation-inspection.json",
@@ -64,7 +65,9 @@ export async function verifyTestManifest(root: string, manifest: TestManifest, k
   const actual = Buffer.from(manifest.signature, "hex");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
   for (const [path, hash] of Object.entries(manifest.files)) {
-    const content = await readFile(join(root, path));
+    let content: Buffer;
+    try { content = await readFile(join(root, path)); }
+    catch { return false; }
     if (createHash("sha256").update(content).digest("hex") !== hash) return false;
   }
   return true;
