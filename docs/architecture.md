@@ -31,3 +31,9 @@ GitHub OIDC is exchanged for short-lived, stage-scoped control-plane credentials
 `RepositoryAdapter` detects an ecosystem, constructs capabilities, discovers evidence-backed candidates, and classifies failures. Framework adapters will decorate language profiles. Core ranking, policy, specifications, history, isolation, verification, and publishing stay language-neutral.
 
 The next adapters should be TypeScript and Python, but only after the PHP/Laravel loop consistently yields mergeable PRs.
+
+## Local proving loop
+
+`daily-improver run` is the Phase 1 vertical slice. It reads evidence, selects exactly one candidate, creates an isolated Git worktree and daily branch, delegates tests and implementation through separate `AgentProvider` calls, requires the new regression test to fail against the baseline, seals tests/specification artifacts, runs independent verification, commits the verified result, and emits the draft-PR request.
+
+Verification combines repository commands with structural gates: protected-test hashes, file allowlists, diff limits, protected paths, property-test non-triviality, static-analysis suppression detection, broad exception-swallowing detection, and public API addition detection. These heuristics supplement ecosystem tools; they do not replace PHPStan, PHPUnit/Pest, or Infection.

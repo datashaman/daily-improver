@@ -17,13 +17,14 @@ export class DiffGuard {
     if (result.exitCode !== 0) throw new Error(`Unable to inspect diff: ${result.stderr.trim()}`);
     const entries = result.stdout.trim() ? result.stdout.trim().split("\n").map(parseNumstat) : [];
     const files = entries.map((entry) => entry.file);
-    const changedLines = entries.reduce((sum, entry) => sum + entry.added + entry.deleted, 0);
+    const boundedEntries = entries.filter((entry) => !entry.file.startsWith(".ai/runs/"));
+    const changedLines = boundedEntries.reduce((sum, entry) => sum + entry.added + entry.deleted, 0);
     const violations: string[] = [];
     for (const file of files) {
       if (protectedPaths.some((pattern) => minimatch(file, pattern)) && !trustedPaths.has(file)) violations.push(`Untrusted change to protected path: ${file}`);
       if (!trustedPaths.has(file) && !spec.allowedFiles.some((pattern) => matchesAllowlist(file, pattern))) violations.push(`File is outside spec allowlist: ${file}`);
     }
-    if (files.length > spec.constraints.maxFiles) violations.push(`Changed ${files.length} files; maximum is ${spec.constraints.maxFiles}.`);
+    if (boundedEntries.length > spec.constraints.maxFiles) violations.push(`Changed ${boundedEntries.length} product files; maximum is ${spec.constraints.maxFiles}.`);
     if (changedLines > spec.constraints.maxChangedLines) violations.push(`Changed ${changedLines} lines; maximum is ${spec.constraints.maxChangedLines}.`);
     return { allowed: violations.length === 0, files, changedLines, violations };
   }

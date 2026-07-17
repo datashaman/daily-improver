@@ -1,5 +1,5 @@
 import { createHmac, createHash, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { glob } from "node:fs/promises";
 import type { ImprovementSpec, RankedCandidate } from "../domain/model.js";
@@ -33,6 +33,7 @@ export async function readArtifact<T>(root: string, name: string): Promise<T> {
 export async function createTestManifest(root: string, key: string): Promise<TestManifest> {
   const files: Record<string, string> = {};
   for await (const path of glob(["tests/**/*", "test/**/*", ".ai/runs/**/candidate.json", ".ai/runs/**/spec.json", ".ai/runs/**/test-plan.json"], { cwd: root, exclude: ["**/node_modules/**"] })) {
+    if (!(await stat(join(root, path))).isFile()) continue;
     const content = await readFile(join(root, path));
     files[path] = createHash("sha256").update(content).digest("hex");
   }

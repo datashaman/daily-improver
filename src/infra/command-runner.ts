@@ -9,12 +9,17 @@ export interface CommandResult {
 }
 
 export class CommandRunner {
-  async run(command: readonly string[], cwd: string, timeoutMs = 10 * 60_000): Promise<CommandResult> {
+  async run(
+    command: readonly string[],
+    cwd: string,
+    timeoutMs = 10 * 60_000,
+    environment: Readonly<Record<string, string>> = {},
+  ): Promise<CommandResult> {
     const [program, ...args] = command;
     if (!program) throw new Error("Cannot execute an empty command.");
     const started = performance.now();
     return await new Promise((resolve, reject) => {
-      const child = spawn(program, args, { cwd, env: process.env, shell: false });
+      const child = spawn(program, args, { cwd, env: { ...process.env, ...environment }, shell: false });
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (chunk: Buffer) => (stdout += chunk.toString()));

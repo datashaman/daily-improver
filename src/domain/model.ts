@@ -46,6 +46,9 @@ export interface ImprovementCandidate {
   readonly risk: number;
   readonly evidence: readonly string[];
   readonly suggestedFiles: readonly string[];
+  readonly target?: string;
+  readonly estimatedDiffLines?: number;
+  readonly propertyInvariants?: readonly string[];
 }
 
 export interface RankedCandidate extends ImprovementCandidate {

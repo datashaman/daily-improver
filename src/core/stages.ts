@@ -1,9 +1,11 @@
 import { loadConfig } from "../config.js";
 import type { ImprovementSpec } from "../domain/model.js";
+import { relative } from "node:path";
 import { CommandRunner } from "../infra/command-runner.js";
 import { AdapterRegistry } from "./adapter-registry.js";
-import { createTestManifest, readArtifact, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
+import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
 import { DiffGuard } from "./diff-guard.js";
+import { SourceSafetyInspector } from "./source-safety.js";
 import { rankCandidates } from "./ranking.js";
 import { createSpec } from "./specification.js";
 
@@ -12,6 +14,10 @@ export class PipelineStages {
     private readonly registry: AdapterRegistry,
     private readonly runner = new CommandRunner(),
   ) {}
+
+  async resolveAdapter(root: string) {
+    return await this.registry.resolve(root);
+  }
 
   async analyse(root: string): Promise<AnalysisArtifact> {
     const adapter = await this.registry.resolve(root);
@@ -58,23 +64,26 @@ export class PipelineStages {
     return { command, exitCode: result.exitCode };
   }
 
-  async verify(root: string, base = process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main") {
-    const key = requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
+  async verify(root: string, base = process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main", manifestKey?: string) {
+    const key = manifestKey ?? requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
     const manifest = await readArtifact<TestManifest>(root, "test-manifest.json");
     if (!(await verifyTestManifest(root, manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
-    const diff = await new DiffGuard(this.runner).inspect(root, base, spec, config.protected_paths, new Set(Object.keys(manifest.files)));
+    const trustedPaths = new Set(Object.keys(manifest.files));
+    trustedPaths.add(relative(root, `${runDirectory(root)}/test-manifest.json`));
+    const diff = await new DiffGuard(this.runner).inspect(root, base, spec, config.protected_paths, trustedPaths);
+    const sourceSafety = await new SourceSafetyInspector(this.runner).inspect(root, base, Object.keys(manifest.files));
     const checks = [];
     for (const command of config.verification.commands) {
       const result = await this.runner.run(["/bin/sh", "-lc", command], root);
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
     }
-    const passed = diff.allowed && checks.every((check) => check.exitCode === 0);
-    const report = { passed, base, diff, checks, verifiedAt: new Date().toISOString() };
+    const passed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
+    const report = { passed, base, diff, sourceSafety, checks, verifiedAt: new Date().toISOString() };
     await writeArtifact(root, "verification.json", report);
-    if (!passed) throw new Error(`Verification failed: ${[...diff.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
+    if (!passed) throw new Error(`Verification failed: ${[...diff.violations, ...sourceSafety.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
     return report;
   }
 
@@ -82,16 +91,22 @@ export class PipelineStages {
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
     const verification = await readArtifact<{ passed: boolean; checks: readonly { command: string; exitCode: number }[] }>(root, "verification.json");
+    const testPlan = await optionalArtifact<{ baseline?: string; propertyInvariants?: readonly string[] }>(root, "test-plan.json");
     if (!verification.passed) throw new Error("Cannot publish an unverified improvement.");
     const request = {
       title: spec.title,
-      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
+      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${testPlan?.baseline === "failed-as-expected" ? "- Regression/property test failed against main and passed after the change.\n- The targeted surviving behavior is now detected.\n" : ""}${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
       draft: config.pull_request.draft,
       labels: config.pull_request.labels,
     };
     await writeArtifact(root, "publication-request.json", request);
     return request;
   }
+}
+
+async function optionalArtifact<T>(root: string, name: string): Promise<T | undefined> {
+  try { return await readArtifact<T>(root, name); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
 }
 
 function requiredSecret(name: string): string {

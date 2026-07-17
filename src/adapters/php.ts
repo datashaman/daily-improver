@@ -6,6 +6,7 @@ import type {
   RepositoryProfile,
 } from "../domain/model.js";
 import { exists, readJson } from "./shared.js";
+import { collectPhpEvidence } from "./php-evidence.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -38,7 +39,7 @@ export class PhpAdapter implements RepositoryAdapter {
   }
 
   async discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]> {
-    const candidates: ImprovementCandidate[] = [];
+    const candidates: ImprovementCandidate[] = [...await collectPhpEvidence(profile.root)];
     if (!profile.capabilities.has("test")) {
       candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, ["composer.json has no detected test runner"], ["composer.json", "tests"]));
     }

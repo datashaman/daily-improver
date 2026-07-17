@@ -19,9 +19,9 @@ export function createSpec(
       "Existing tests remain green and new behavior is protected by tests.",
       "Every available verification capability required by this spec passes.",
     ],
-    propertyInvariants: candidate.kind === "property-testing"
+    propertyInvariants: candidate.propertyInvariants ?? (candidate.kind === "property-testing"
       ? ["The selected domain invariant holds across a broad generated input space."]
-      : [],
+      : []),
     exclusions: ["Dependency upgrades", "Database migrations", "Public API changes", "CI configuration changes"],
     verification: verification.filter((kind) => profile.capabilities.has(kind)),
     constraints: limits,

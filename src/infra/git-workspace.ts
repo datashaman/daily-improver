@@ -14,9 +14,9 @@ export class GitWorkspaceManager {
     private readonly runner = new CommandRunner(),
   ) {}
 
-  async create(repository: string, runId: string): Promise<IsolatedWorkspace> {
+  async create(repository: string, runId: string, branchName?: string): Promise<IsolatedWorkspace> {
     const safeId = runId.replace(/[^a-zA-Z0-9-]/g, "-");
-    const branch = `daily-improver/${safeId}`;
+    const branch = branchName ?? `daily-improver/${safeId}`;
     const path = join(this.baseDirectory, `${basename(repository)}-${safeId}`);
     await mkdir(this.baseDirectory, { recursive: true });
     const result = await this.runner.run(["git", "worktree", "add", "-b", branch, path, "HEAD"], repository);

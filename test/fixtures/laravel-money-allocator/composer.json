@@ -1,0 +1,11 @@
+{
+  "name": "daily-improver/money-allocator-fixture",
+  "description": "Laravel-shaped fixture with an intentional allocation defect.",
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^12.0"
+  },
+  "scripts": {
+    "test": "php tests/run.php"
+  }
+}
