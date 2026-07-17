@@ -116,6 +116,16 @@ test("ranks missing test protection as the first PHP baseline candidate", async 
   assert.equal(candidates[0]?.id, "php-test-baseline");
 });
 
+test("collects versioned Laravel validation and error-handling findings as adapter candidates", async () => {
+  const root = join(process.cwd(), "test", "fixtures", "php-validation-errors");
+  const adapter = new PhpAdapter(successfulEvidenceRunner);
+  const candidates = await adapter.discoverCandidates(await adapter.profile(root));
+
+  assert.equal(candidates.some((candidate) => candidate.id.startsWith("missing-validation:") && candidate.target?.endsWith("AccountController.php")), true);
+  assert.equal(candidates.filter((candidate) => candidate.id.startsWith("error-handling:")).length, 2);
+  assert.equal(JSON.stringify(candidates).includes("gateway->lookup"), false);
+});
+
 test("executes static analysis selected from the detected manifest capability", async () => {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
   await writeFile(join(root, "composer.json"), JSON.stringify({

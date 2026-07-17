@@ -16,6 +16,7 @@ import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchema
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
 import { collectPhpDuplicateCodeEvidence, phpDuplicateCodeCommand, phpDuplicateCodeSchemaVersion, phpDuplicateCodeSourceRoots } from "./php-duplicate-code.js";
+import { collectPhpValidationErrorEvidence } from "./php-validation-error-handling.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
@@ -126,6 +127,9 @@ export class PhpAdapter implements RepositoryAdapter {
         ),
       )
       : undefined;
+    const validationErrorHandling = profile.frameworks.includes("laravel")
+      ? await collectPhpValidationErrorEvidence(profile.root)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
@@ -137,6 +141,7 @@ export class PhpAdapter implements RepositoryAdapter {
       ...(phpDeprecations?.candidates ?? []),
       ...(laravelDeprecations?.candidates ?? []),
       ...(performance?.candidates ?? []),
+      ...(validationErrorHandling?.candidates ?? []),
       ...await collectPhpEvidence(profile.root, {
         includePreparedCoverage: coverageCapability === undefined,
         includePreparedMutation: mutationCapability === undefined,
