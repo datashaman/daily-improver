@@ -97,3 +97,18 @@ pull_request: { draft: true, labels: [] }
 
   await assert.rejects(loadConfig(root), /duplicate_code_tool must be auto, phpcpd, or off/);
 });
+
+test("rejects an unbounded open pull request limit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-config-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [] }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 1001, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+
+  await assert.rejects(loadConfig(root), /max_open_prs must be at most 1000/);
+});

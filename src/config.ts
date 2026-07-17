@@ -95,7 +95,7 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
     limits: {
       max_changed_files: positive(limits.max_changed_files, "limits.max_changed_files"),
       max_diff_lines: positive(limits.max_diff_lines, "limits.max_diff_lines"),
-      max_open_prs: positive(limits.max_open_prs, "limits.max_open_prs"),
+      max_open_prs: boundedPositive(limits.max_open_prs, "limits.max_open_prs", defaultConfig.limits.max_open_prs, 1_000),
       max_cost_usd: typeof limits.max_cost_usd === "number" ? limits.max_cost_usd : defaultConfig.limits.max_cost_usd,
     },
     protected_paths: strings(value.protected_paths, "protected_paths"),

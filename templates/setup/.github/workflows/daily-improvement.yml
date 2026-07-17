@@ -18,10 +18,16 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      - name: Read repository-bound open Daily Improver PR state
+        run: daily-improver-auth open-pull-requests > "$RUNNER_TEMP/open-pr-state.json"
       - name: Analyse and select exactly one candidate
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" analyse /repo
-          docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" specify /repo
+          docker run --rm \
+            -e DAILY_IMPROVER_OPEN_PR_STATE_PATH=/trusted/open-pr-state.json \
+            -e DAILY_IMPROVER_REPOSITORY_SCOPE=github:${{ github.repository_id }} \
+            -v "$RUNNER_TEMP/open-pr-state.json:/trusted/open-pr-state.json:ro" \
+            -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" specify /repo
       - uses: actions/upload-artifact@v4
         with:
           name: approved-spec

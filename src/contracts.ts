@@ -4,6 +4,7 @@ import type {
   DailyImprovementDecision,
   ImprovementRun,
   ImprovementSpec,
+  OpenPullRequestState,
   PolicyDecision,
   RepositoryProfile,
 } from "./domain/model.js";
@@ -25,6 +26,10 @@ export interface DailyImprovementStore {
   claim(repository: string, utcDate: string, decidedAt: string): Promise<DailyImprovementDecision>;
   complete(decision: DailyImprovementDecision, decidedAt: string): Promise<DailyImprovementDecision>;
   release(decision: DailyImprovementDecision, decidedAt: string): Promise<DailyImprovementDecision>;
+}
+
+export interface OpenPullRequestStateSource {
+  current(decidedAt: string): Promise<OpenPullRequestState>;
 }
 
 export interface Policy {

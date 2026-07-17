@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createApplication } from "../src/app.js";
-import type { DailyImprovementStore, RepositoryAdapter, RunStore } from "../src/contracts.js";
+import type { DailyImprovementStore, OpenPullRequestStateSource, RepositoryAdapter, RunStore } from "../src/contracts.js";
 import { AdapterRegistry } from "../src/core/adapter-registry.js";
 import { readArtifact, type AnalysisArtifact } from "../src/core/artifacts.js";
 import { ImprovementPipeline } from "../src/core/pipeline.js";
 import { PipelineStages } from "../src/core/stages.js";
 import { reproducibleEvidence } from "../src/domain/candidate-reproducibility.js";
-import type { ImprovementCandidate, ImprovementRun, RepositoryProfile } from "../src/domain/model.js";
+import type { ImprovementCandidate, ImprovementRun, OpenPullRequestLimitDecision, RepositoryProfile } from "../src/domain/model.js";
 
 const acceptingDailyImprovements: DailyImprovementStore = {
   claim: async (_repository, utcDate, decidedAt) => ({
@@ -31,17 +31,57 @@ const unexpectedDailyImprovementClaim: DailyImprovementStore = {
   release: async () => { throw new Error("Unexpected daily improvement release."); },
 };
 
+const acceptingOpenPullRequests: OpenPullRequestStateSource = {
+  current: async (decidedAt) => ({
+    schemaVersion: "open-pull-request-state/v1",
+    repositoryId: "b".repeat(64),
+    observedAt: decidedAt,
+    openPullRequests: 0,
+  }),
+};
+
+const unexpectedOpenPullRequestRead: OpenPullRequestStateSource = {
+  current: async () => { throw new Error("A rejected candidate must not consume open pull request state."); },
+};
+
 test("pipeline creates and persists an approved language-specific plan", async () => {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-repo-"));
   const state = await mkdtemp(join(tmpdir(), "daily-improver-state-"));
   await writeFile(join(root, "composer.json"), JSON.stringify({
     require: { php: "^8.3" }, "require-dev": { "phpunit/phpunit": "^12" },
   }));
-  const app = createApplication(state);
+  const app = createApplication(state, acceptingOpenPullRequests);
   const run = await app.pipeline.plan(root);
   assert.equal(run.adapter, "php");
   assert.equal(run.status, "planned");
+  assert.equal(run.openPullRequestLimitDecision?.outcome, "allowed");
   assert.equal((await app.store.list(root)).length, 1);
+});
+
+test("pipeline rejects at the open pull request limit before claiming or specifying", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-open-pr-limit-"));
+  const state = await mkdtemp(join(tmpdir(), "daily-improver-open-pr-limit-state-"));
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" }, "require-dev": { "phpunit/phpunit": "^12" },
+  }));
+  const atLimit: OpenPullRequestStateSource = {
+    current: async (decidedAt) => ({
+      schemaVersion: "open-pull-request-state/v1",
+      repositoryId: "c".repeat(64),
+      observedAt: decidedAt,
+      openPullRequests: 3,
+    }),
+  };
+  const app = createApplication(state, atLimit);
+  app.dailyImprovements.claim = async () => { throw new Error("The open PR limit must block before the daily claim."); };
+
+  const run = await app.pipeline.plan(root);
+
+  assert.equal(run.status, "rejected");
+  assert.equal(run.openPullRequestLimitDecision?.outcome, "blocked");
+  assert.equal(run.openPullRequestLimitDecision?.openPullRequests, 3);
+  assert.equal(run.spec, undefined);
+  assert.equal(run.dailyImprovementDecision, undefined);
 });
 
 test("pipeline fails closed without creating a second specification on the same UTC repository day", async () => {
@@ -50,7 +90,7 @@ test("pipeline fails closed without creating a second specification on the same 
   await writeFile(join(root, "composer.json"), JSON.stringify({
     require: { php: "^8.3" }, "require-dev": { "phpunit/phpunit": "^12" },
   }));
-  const app = createApplication(state);
+  const app = createApplication(state, acceptingOpenPullRequests);
 
   const first = await app.pipeline.plan(root);
   const repeated = await app.pipeline.plan(root);
@@ -67,7 +107,7 @@ test("pipeline rejects work that exceeds its cost budget", async () => {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-repo-"));
   const state = await mkdtemp(join(tmpdir(), "daily-improver-state-"));
   await writeFile(join(root, "composer.json"), JSON.stringify({ require: { php: "^8.3" } }));
-  const run = await createApplication(state).pipeline.plan(root, { maxCostUsd: 2, estimatedCostUsd: 3 });
+  const run = await createApplication(state, acceptingOpenPullRequests).pipeline.plan(root, { maxCostUsd: 2, estimatedCostUsd: 3 });
   assert.equal(run.status, "rejected");
   assert.equal(run.policyDecisions.find((decision) => decision.policy === "cost-budget")?.allowed, false);
   assert.equal(run.dailyImprovementDecision?.outcome, "released");
@@ -110,7 +150,7 @@ test("pipeline selects exactly one candidate from a deterministic ranking", asyn
     list: async () => saved,
   };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements).plan(profile.root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests).plan(profile.root);
 
   assert.equal(run.candidate?.id, "selected");
   assert.equal(saved.length, 1);
@@ -146,7 +186,7 @@ pull_request: { draft: true, labels: [] }
   const saved: ImprovementRun[] = [];
   const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements).plan(root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests).plan(root);
 
   assert.equal(run.candidate?.id, "docs");
 });
@@ -168,7 +208,7 @@ test("pipeline persists a human task instead of planning oversized-only work", a
   const saved: ImprovementRun[] = [];
   const store: RunStore = { save: async (run) => { saved.push(run); }, list: async () => saved };
 
-  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim).plan(profile.root);
+  const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead).plan(profile.root);
 
   assert.equal(run.status, "rejected");
   assert.equal(run.candidate, undefined);
@@ -203,6 +243,45 @@ test("analyse emits the versioned human task in its persisted artifact", async (
   assert.equal(persisted.humanTaskRecommendation?.schemaVersion, "human-task-recommendation/v1");
   assert.equal(persisted.candidateExclusions[0]?.reason, "oversized-scope");
   assert.doesNotMatch(JSON.stringify(persisted.humanTaskRecommendation), /raw evidence|raw rationale|src\/Service/iu);
+});
+
+test("specify persists the blocked open pull request decision without claiming the repository day", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-open-pr-stage-"));
+  const candidate: ImprovementCandidate = {
+    id: "bounded-stage", kind: "maintainability", title: "Bounded stage candidate",
+    rationale: "A bounded stage candidate.", confidence: 0.9, impact: 0.9,
+    effort: 0.2, risk: 0.2, subsystemRisk: 0.2, testability: 0.8, estimatedDiffLines: 20,
+    evidence: ["bounded stage evidence"], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.9, ["fixture collector"]),
+  };
+  const profile: RepositoryProfile = {
+    root, adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [candidate],
+  };
+  const atLimit: OpenPullRequestStateSource = {
+    current: async (decidedAt) => ({
+      schemaVersion: "open-pull-request-state/v1",
+      repositoryId: "d".repeat(64),
+      observedAt: decidedAt,
+      openPullRequests: 3,
+    }),
+  };
+  const stages = new PipelineStages(new AdapterRegistry([adapter]), unexpectedDailyImprovementClaim, atLimit);
+  await stages.analyse(root);
+
+  await assert.rejects(stages.specify(root), /meet or exceed the repository limit/);
+  const decision = await readArtifact<OpenPullRequestLimitDecision>(root, "open-pull-request-limit-decision.json");
+  assert.deepEqual(decision, {
+    schemaVersion: "open-pull-request-limit-decision/v1",
+    repositoryId: "d".repeat(64),
+    observedAt: decision.observedAt,
+    openPullRequests: 3,
+    maxOpenPullRequests: 3,
+    outcome: "blocked",
+    decidedAt: decision.decidedAt,
+  });
 });
 
 test("pipeline persists a machine-readable rejection when no candidate has reproducible evidence", async () => {
@@ -240,7 +319,7 @@ test("pipeline persists a machine-readable rejection when no candidate has repro
     save: async (run) => { saved.push(run); },
     list: async () => saved,
   };
-  const pipeline = new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim);
+  const pipeline = new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, unexpectedDailyImprovementClaim, unexpectedOpenPullRequestRead);
 
   const run = await pipeline.plan(profile.root);
 

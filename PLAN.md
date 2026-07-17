@@ -18,7 +18,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- One active or completed improvement is now enforced per canonical repository per UTC day; the exact next task is respecting `max_open_prs`.
+- One active or completed improvement is enforced per canonical repository per UTC day, and fresh repository-bound open-PR state now enforces `max_open_prs`; the exact next task is preventing repeated selection of the same unresolved finding.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -117,7 +117,7 @@ Goal: make selection predictable, bounded, and explainable.
 - [x] Detect candidates too large for autonomous work and emit a human-task recommendation.
 - [x] Add exclusion reasons to rejected candidates.
 - [x] Enforce one improvement PR per repository per day.
-- [ ] Respect `max_open_prs`.
+- [x] Respect `max_open_prs`.
 - [ ] Prevent repeated selection of the same unresolved finding.
 - [x] Make ties deterministic.
 - [ ] Include a machine-readable score explanation.
@@ -469,8 +469,9 @@ The recent and next commit-sized milestones are:
 8. [x] `feat: isolate structured model stage credentials`
 9. [x] `feat: record candidate exclusion reasons`
 10. [x] `feat: enforce one daily repository improvement`
+11. [x] `feat: enforce open improvement PR limit`
 
-The immediate next task is Phase 1B: respect the repository-owned `max_open_prs` limit.
+The immediate next task is Phase 1B: prevent repeated selection of the same unresolved finding.
 
 ## Initial operating limits
 

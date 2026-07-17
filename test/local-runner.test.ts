@@ -7,6 +7,7 @@ import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution 
 import { createApplication } from "../src/app.js";
 import { LocalImprovementRunner } from "../src/core/local-runner.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
+import type { OpenPullRequestStateSource } from "../src/contracts.js";
 
 class ProvingAgent implements AgentProvider {
   async generateTests(context: AgentContext): Promise<TestAgentExecution> {
@@ -136,7 +137,15 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
 
   process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
-  const app = createApplication(join(sandbox, "state"));
+  const openPullRequests: OpenPullRequestStateSource = {
+    current: async (decidedAt) => ({
+      schemaVersion: "open-pull-request-state/v1",
+      repositoryId: "b".repeat(64),
+      observedAt: decidedAt,
+      openPullRequests: 0,
+    }),
+  };
+  const app = createApplication(join(sandbox, "state"), openPullRequests);
   const result = await new LocalImprovementRunner(
     app.stages,
     new ProvingAgent(),
@@ -162,6 +171,9 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);
+  const openPrDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/open-pull-request-limit-decision.json`], repository));
+  assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
+  assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 

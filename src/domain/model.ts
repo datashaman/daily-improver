@@ -155,6 +155,23 @@ export interface DailyImprovementDecision {
   readonly decidedAt: string;
 }
 
+export interface OpenPullRequestState {
+  readonly schemaVersion: "open-pull-request-state/v1";
+  readonly repositoryId: string;
+  readonly observedAt: string;
+  readonly openPullRequests: number;
+}
+
+export interface OpenPullRequestLimitDecision {
+  readonly schemaVersion: "open-pull-request-limit-decision/v1";
+  readonly repositoryId: string;
+  readonly observedAt: string;
+  readonly openPullRequests: number;
+  readonly maxOpenPullRequests: number;
+  readonly outcome: "allowed" | "blocked";
+  readonly decidedAt: string;
+}
+
 export interface ImprovementRun {
   readonly id: string;
   readonly repository: string;
@@ -165,6 +182,7 @@ export interface ImprovementRun {
   readonly candidate?: RankedCandidate;
   readonly candidateExclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
+  readonly openPullRequestLimitDecision?: OpenPullRequestLimitDecision;
   readonly dailyImprovementDecision?: DailyImprovementDecision;
   readonly spec?: ImprovementSpec;
   readonly policyDecisions: readonly PolicyDecision[];

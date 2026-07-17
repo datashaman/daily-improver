@@ -1,7 +1,7 @@
 import { loadConfig } from "../config.js";
 import type { DailyImprovementDecision, ImprovementSpec } from "../domain/model.js";
 import { relative } from "node:path";
-import type { Clock, DailyImprovementStore } from "../contracts.js";
+import type { Clock, DailyImprovementStore, OpenPullRequestStateSource } from "../contracts.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
@@ -9,11 +9,13 @@ import { DiffGuard } from "./diff-guard.js";
 import { SourceSafetyInspector } from "./source-safety.js";
 import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
+import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
 
 export class PipelineStages {
   constructor(
     private readonly registry: AdapterRegistry,
     private readonly dailyImprovements?: DailyImprovementStore,
+    private readonly openPullRequests?: OpenPullRequestStateSource,
     private readonly runner = new CommandRunner(),
     private readonly clock: Clock = { now: () => new Date() },
   ) {}
@@ -53,6 +55,16 @@ export class PipelineStages {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
     const config = await loadConfig(root);
+    const decidedAt = this.clock.now().toISOString();
+    const openPullRequestLimitDecision = decideOpenPullRequestLimit(
+      await this.requiredOpenPullRequests().current(decidedAt),
+      config.limits.max_open_prs,
+      decidedAt,
+    );
+    await writeArtifact(root, "open-pull-request-limit-decision.json", openPullRequestLimitDecision);
+    if (openPullRequestLimitDecision.outcome === "blocked") {
+      throw new Error(`Open Daily Improver pull requests (${openPullRequestLimitDecision.openPullRequests}) meet or exceed the repository limit (${openPullRequestLimitDecision.maxOpenPullRequests}).`);
+    }
     const dailyImprovements = this.requiredDailyImprovements();
     const now = this.clock.now().toISOString();
     const decision = await dailyImprovements.claim(root, now.slice(0, 10), now);
@@ -140,6 +152,11 @@ export class PipelineStages {
   private requiredDailyImprovements(): DailyImprovementStore {
     if (!this.dailyImprovements) throw new Error("Daily improvement state is required for specification and publication stages.");
     return this.dailyImprovements;
+  }
+
+  private requiredOpenPullRequests(): OpenPullRequestStateSource {
+    if (!this.openPullRequests) throw new Error("Open pull request state is required for specification.");
+    return this.openPullRequests;
   }
 }
 

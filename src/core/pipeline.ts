@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config.js";
-import type { Clock, DailyImprovementStore, Policy, PolicyContext, RunStore } from "../contracts.js";
+import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, Policy, PolicyContext, RunStore } from "../contracts.js";
 import type { ImprovementRun } from "../domain/model.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { evaluatePolicies } from "./policies.js";
 import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
+import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
 
 export interface PlanOptions {
   readonly maxFiles?: number;
@@ -22,6 +23,7 @@ export class ImprovementPipeline {
     private readonly policies: readonly Policy[],
     private readonly store: RunStore,
     private readonly dailyImprovements: DailyImprovementStore,
+    private readonly openPullRequests: OpenPullRequestStateSource,
     private readonly clock: Clock = { now: () => new Date() },
   ) {}
 
@@ -59,6 +61,32 @@ export class ImprovementPipeline {
       return run;
     }
 
+    const openPullRequestDecidedAt = this.clock.now().toISOString();
+    const openPullRequestLimitDecision = decideOpenPullRequestLimit(
+      await this.openPullRequests.current(openPullRequestDecidedAt),
+      config.limits.max_open_prs,
+      openPullRequestDecidedAt,
+    );
+    if (openPullRequestLimitDecision.outcome === "blocked") {
+      const run: ImprovementRun = {
+        id: randomUUID(),
+        repository: root,
+        startedAt,
+        finishedAt: this.clock.now().toISOString(),
+        status: "rejected",
+        adapter: adapter.id,
+        candidate,
+        candidateExclusions: selection.exclusions,
+        ...(selection.humanTaskRecommendation === undefined
+          ? {}
+          : { humanTaskRecommendation: selection.humanTaskRecommendation }),
+        openPullRequestLimitDecision,
+        policyDecisions: [],
+      };
+      await this.store.save(run);
+      return run;
+    }
+
     const claimed = await this.dailyImprovements.claim(root, startedAt.slice(0, 10), this.clock.now().toISOString());
     if (claimed.outcome !== "claimed") {
       const run: ImprovementRun = {
@@ -73,6 +101,7 @@ export class ImprovementPipeline {
         ...(selection.humanTaskRecommendation === undefined
           ? {}
           : { humanTaskRecommendation: selection.humanTaskRecommendation }),
+        openPullRequestLimitDecision,
         dailyImprovementDecision: claimed,
         policyDecisions: [],
       };
@@ -108,6 +137,7 @@ export class ImprovementPipeline {
       ...(selection.humanTaskRecommendation === undefined
         ? {}
         : { humanTaskRecommendation: selection.humanTaskRecommendation }),
+      openPullRequestLimitDecision,
       dailyImprovementDecision,
       spec,
       policyDecisions,

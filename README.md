@@ -35,10 +35,23 @@ Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.
 
 Before creating a specification, Daily Improver atomically claims the canonical repository identity for its UTC day in local state. An active plan or completed publication request blocks another specification and publication for that repository until the next UTC date; a different repository remains independent. Candidate rejection and oversized human-task routing do not consume the daily claim, and a policy-rejected plan releases it. The versioned `daily-improvement-decision/v1` artifact records the claim and its completed publication transition without retaining the repository path.
 
+Specification also requires `DAILY_IMPROVER_OPEN_PR_STATE_PATH` to point to a trusted `open-pull-request-state/v1` JSON artifact supplied by the control-plane/GitHub boundary, and `DAILY_IMPROVER_REPOSITORY_SCOPE` to carry the matching trusted external repository scope (for example `github:123456789`):
+
+```json
+{
+  "schemaVersion": "open-pull-request-state/v1",
+  "repositoryId": "<sha256-of-trusted-repository-scope>",
+  "observedAt": "2026-07-17T05:00:00.000Z",
+  "openPullRequests": 2
+}
+```
+
+The artifact must be no more than fifteen minutes old, repository-bound, exact-schema, and contain an integer count from 0 through 10,000. It should live outside the repository and be mounted read-only for the CLI. The source accepts a 1–256 character bounded repository scope, hashes it, and requires it to match `repositoryId`, so identical `/repo` container mounts cannot collapse repository identities. Missing scope or state, malformed or non-regular input, oversized, stale, future-dated, negative, fractional, unbounded, or cross-repository state fails closed. When the count meets or exceeds repository-owned `limits.max_open_prs` (itself bounded from 1 through 1,000), planning stops before the daily claim and specification. The resulting `open-pull-request-limit-decision/v1` records only the bounded state and decision. The injected state source performs no network access; `analyse` and oversized/candidate-only rejection do not read it.
+
 ## Pipeline
 
 1. `analyse` observes tool output and repository signals, rejects candidates without reproducible bounded evidence, deduplicates semantic overlaps, ranks the survivors, and selects exactly one bounded candidate. Every candidate removed before autonomous selection receives one deterministic `candidate-exclusion/v1` record. A credible candidate beyond repository file or line limits is excluded from autonomous work and may produce one `human-task-recommendation/v1` summary.
-2. `specify` first acquires the repository/day claim, then converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
+2. `specify` first enforces the fresh repository-bound open-PR limit, then acquires the repository/day claim and converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
 3. `test` seals generated regression, characterization, and property tests in an HMAC manifest.
 4. `build` invokes an isolated builder provider using only the approved inputs.
 5. `verify` checks test integrity, protected paths, allowlists, diff limits, and repository verification commands from a fresh checkout.
