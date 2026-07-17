@@ -11,6 +11,7 @@ test("loads the repository-owned versioned product configuration", async () => {
   await writeFile(join(root, ".ai", "improver.yml"), `version: 1
 schedule: { timezone: Africa/Johannesburg, time: "05:00" }
 selection: { priorities: [correctness] }
+analysis: { php: { complexity_tool: phpmetrics } }
 limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
 protected_paths: [tests/Property/**]
 verification: { commands: [vendor/bin/phpunit], mutation_testing: targeted }
@@ -20,4 +21,5 @@ pull_request: { draft: true, labels: [ai-improvement] }
   assert.equal(config.schedule.timezone, "Africa/Johannesburg");
   assert.equal(config.limits.max_diff_lines, 250);
   assert.deepEqual(config.verification.commands, ["vendor/bin/phpunit"]);
+  assert.equal(config.analysis.php.complexity_tool, "phpmetrics");
 });

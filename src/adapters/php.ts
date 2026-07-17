@@ -12,7 +12,9 @@ import { collectComposerAuditEvidence } from "./composer-audit.js";
 import { collectPhpStaticAnalysisEvidence } from "./php-static-analysis.js";
 import { collectPhpCoverageEvidence } from "./php-coverage.js";
 import { collectPhpMutationEvidence } from "./php-mutation.js";
+import { collectPhpComplexityEvidence } from "./php-complexity.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
+import { loadConfig, type ImproverConfig } from "../config.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -33,9 +35,10 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async profile(root: string): Promise<RepositoryProfile> {
     const composer = await readJson<ComposerManifest>(root, "composer.json");
+    const config = await loadConfig(root);
     const packages = { ...composer.require, ...composer["require-dev"] };
     const frameworks = detectFrameworks(packages);
-    const capabilities = detectCapabilities(packages, composer.scripts ?? {});
+    const capabilities = detectCapabilities(packages, composer.scripts ?? {}, config.analysis.php.complexity_tool);
     return {
       root,
       adapter: this.id,
@@ -61,15 +64,21 @@ export class PhpAdapter implements RepositoryAdapter {
     const mutation = mutationCapability
       ? await collectPhpMutationEvidence(profile.root, mutationCapability, this.evidenceRunner)
       : undefined;
+    const complexityCapability = profile.capabilities.get("complexity");
+    const complexity = complexityCapability
+      ? await collectPhpComplexityEvidence(profile.root, complexityCapability, this.evidenceRunner)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
       ...(staticAnalysis?.candidates ?? []),
       ...(coverage?.candidates ?? []),
       ...(mutation?.candidates ?? []),
+      ...(complexity?.candidates ?? []),
       ...await collectPhpEvidence(profile.root, {
         includePreparedCoverage: coverageCapability === undefined,
         includePreparedMutation: mutationCapability === undefined,
+        includePreparedComplexity: complexityCapability === undefined,
       }),
     ];
     if (!profile.capabilities.has("test")) {
@@ -107,7 +116,11 @@ function detectFrameworks(packages: PackageMap): string[] {
   return frameworks;
 }
 
-function detectCapabilities(packages: PackageMap, scripts: NonNullable<ComposerManifest["scripts"]>): ReadonlyMap<CapabilityKind, CommandCapability> {
+function detectCapabilities(
+  packages: PackageMap,
+  scripts: NonNullable<ComposerManifest["scripts"]>,
+  configuredComplexityTool: ImproverConfig["analysis"]["php"]["complexity_tool"],
+): ReadonlyMap<CapabilityKind, CommandCapability> {
   const capabilities = new Map<CapabilityKind, CommandCapability>();
   capabilities.set("install", command("install", ["composer", "install"], "convention"));
   if (packages["pestphp/pest"]) {
@@ -123,6 +136,11 @@ function detectCapabilities(packages: PackageMap, scripts: NonNullable<ComposerM
   if (packages["phpstan/phpstan"] || packages["larastan/larastan"] || packages["nunomaduro/larastan"]) capabilities.set("static-analysis", command("static-analysis", ["vendor/bin/phpstan", "analyse"], "manifest", "phpstan"));
   else if (packages["vimeo/psalm"]) capabilities.set("static-analysis", command("static-analysis", ["vendor/bin/psalm"], "manifest", "psalm"));
   if (packages["infection/infection"]) capabilities.set("mutation-testing", command("mutation-testing", ["vendor/bin/infection", "--no-interaction"], "manifest", "infection"));
+  if (configuredComplexityTool === "phpmetrics") {
+    capabilities.set("complexity", command("complexity", ["vendor/bin/phpmetrics"], "configuration", "phpmetrics"));
+  } else if (configuredComplexityTool === "auto" && packages["phpmetrics/phpmetrics"]) {
+    capabilities.set("complexity", command("complexity", ["vendor/bin/phpmetrics"], "manifest", "phpmetrics"));
+  }
   if (packages["giorgiosironi/eris"]) capabilities.set("property-testing", command("property-testing", ["vendor/bin/phpunit", "tests/Property"], "manifest", "eris"));
   return capabilities;
 }

@@ -22,14 +22,16 @@ export async function collectPhpEvidence(
   options: {
     readonly includePreparedCoverage?: boolean;
     readonly includePreparedMutation?: boolean;
+    readonly includePreparedComplexity?: boolean;
   } = {},
 ): Promise<readonly ImprovementCandidate[]> {
   const includePreparedCoverage = options.includePreparedCoverage ?? true;
   const includePreparedMutation = options.includePreparedMutation ?? true;
+  const includePreparedComplexity = options.includePreparedComplexity ?? true;
   const [mutations, coverage, complexity, todos] = await Promise.all([
     includePreparedMutation ? mutationCandidates(root) : Promise.resolve([]),
     includePreparedCoverage ? coverageCandidates(root) : Promise.resolve([]),
-    complexityCandidates(root),
+    includePreparedComplexity ? complexityCandidates(root) : Promise.resolve([]),
     todoCandidates(root),
   ]);
   return [...mutations, ...coverage, ...complexity, ...todos];

@@ -36,6 +36,7 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
       "larastan/larastan": "^3",
       "laravel/pint": "^1",
       "infection/infection": "^0.30",
+      "phpmetrics/phpmetrics": "^3",
     },
   }));
   await writeFile(join(root, "phpunit.xml"), "<phpunit />");
@@ -47,6 +48,32 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
   assert.equal(profile.capabilities.get("coverage")?.source, "manifest");
   assert.equal(profile.capabilities.get("coverage")?.framework, "pest");
   assert.equal(profile.capabilities.get("mutation-testing")?.framework, "infection");
+  assert.equal(profile.capabilities.get("complexity")?.framework, "phpmetrics");
+  assert.equal(profile.capabilities.get("complexity")?.source, "manifest");
+});
+
+test("detects explicitly configured PhpMetrics without trusting a repository script", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    scripts: { complexity: "repository-owned-complexity-script" },
+  }));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [maintainability] }
+analysis: { php: { complexity_tool: phpmetrics } }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 5 }
+protected_paths: [tests/**]
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [ai-improvement] }
+`);
+
+  const capability = (await new PhpAdapter(successfulEvidenceRunner).profile(root)).capabilities.get("complexity");
+
+  assert.equal(capability?.source, "configuration");
+  assert.equal(capability?.framework, "phpmetrics");
+  assert.deepEqual(capability?.command, ["vendor/bin/phpmetrics"]);
 });
 
 test("ranks missing test protection as the first PHP baseline candidate", async () => {
@@ -208,4 +235,56 @@ test("executes targeted Infection selected from the detected manifest capability
   assert.equal(mutationCommand?.command[0], "vendor/bin/infection");
   assert.equal(mutationCommand?.command.includes("--filter=app/Domain,src"), true);
   assert.equal(mutationCommand?.command.includes("repository-owned-mutation-script"), false);
+});
+
+test("executes PhpMetrics selected from the detected manifest capability", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, "src", "Service.php"), "<?php\nfinal class Service {}\n");
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    "require-dev": { "phpmetrics/phpmetrics": "^3" },
+    scripts: { complexity: "repository-owned-complexity-script" },
+  }));
+  const commands: EvidenceCommand[] = [];
+  const runner: EvidenceRunner = {
+    async run(command: EvidenceCommand): Promise<EvidenceRun> {
+      commands.push(command);
+      if (command.identity === "phpmetrics.complexity") {
+        const reportArgument = command.command.find((argument) => argument.startsWith("--report-json="));
+        assert.ok(reportArgument);
+        await writeFile(reportArgument.slice("--report-json=".length), JSON.stringify({
+          Service: { name: "Service", ccn: 2, ccnMethodMax: 2, mi: 95 },
+        }));
+      }
+      const stdout = command.identity === "composer.audit"
+        ? JSON.stringify({ advisories: [], abandoned: [] })
+        : "";
+      const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
+      return {
+        result: {
+          commandIdentity: command.identity,
+          command: command.command,
+          status,
+          durationMs: 1,
+          exitCode: 0,
+          stdoutHash: "sha256:output",
+          stderrHash: "sha256:empty",
+          stdoutBytes: Buffer.byteLength(stdout),
+          stderrBytes: 0,
+          outputLimitBytes: command.maxOutputBytes,
+          outputTruncated: false,
+        },
+        output: { stdout, stderr: "" },
+      };
+    },
+  };
+
+  const adapter = new PhpAdapter(runner);
+  await adapter.discoverCandidates(await adapter.profile(root));
+
+  const complexityCommand = commands.find((command) => command.identity === "phpmetrics.complexity");
+  assert.equal(complexityCommand?.command[0], "vendor/bin/phpmetrics");
+  assert.equal(complexityCommand?.command.includes("repository-owned-complexity-script"), false);
+  assert.equal(complexityCommand?.command.at(-1), "app/Domain,src");
 });

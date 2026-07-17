@@ -9,6 +9,9 @@ selection:
     - mutation-survivors
     - maintainability
     - performance
+analysis:
+  php:
+    complexity_tool: auto
 limits:
   max_changed_files: 5
   max_diff_lines: 250

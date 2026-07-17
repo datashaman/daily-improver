@@ -6,6 +6,9 @@ export interface ImproverConfig {
   readonly version: 1;
   readonly schedule: { readonly timezone: string; readonly time: string };
   readonly selection: { readonly priorities: readonly string[] };
+  readonly analysis: {
+    readonly php: { readonly complexity_tool: "auto" | "phpmetrics" | "off" };
+  };
   readonly limits: {
     readonly max_changed_files: number;
     readonly max_diff_lines: number;
@@ -24,6 +27,7 @@ export const defaultConfig: ImproverConfig = {
   version: 1,
   schedule: { timezone: "UTC", time: "05:00" },
   selection: { priorities: ["correctness", "static-analysis", "maintainability"] },
+  analysis: { php: { complexity_tool: "auto" } },
   limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 5 },
   protected_paths: [".github/**", "infrastructure/**", "database/migrations/**", "tests/Property/**"],
   verification: { commands: [], mutation_testing: "targeted" },
@@ -42,12 +46,19 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
   const schedule = record(value.schedule, "schedule");
   const limits = record(value.limits, "limits");
   const selection = record(value.selection, "selection");
+  const analysis = value.analysis === undefined ? undefined : record(value.analysis, "analysis");
+  const phpAnalysis = analysis?.php === undefined ? undefined : record(analysis.php, "analysis.php");
   const verification = record(value.verification, "verification");
   const pullRequest = record(value.pull_request, "pull_request");
   return {
     version: 1,
     schedule: { timezone: string(schedule.timezone, "schedule.timezone"), time: time(schedule.time) },
     selection: { priorities: strings(selection.priorities, "selection.priorities") },
+    analysis: {
+      php: {
+        complexity_tool: complexityTool(phpAnalysis?.complexity_tool),
+      },
+    },
     limits: {
       max_changed_files: positive(limits.max_changed_files, "limits.max_changed_files"),
       max_diff_lines: positive(limits.max_diff_lines, "limits.max_diff_lines"),
@@ -70,3 +81,4 @@ function strings(value: unknown, name: string): string[] { if (!Array.isArray(va
 function positive(value: unknown, name: string): number { if (!Number.isInteger(value) || (value as number) < 1) throw new Error(`${name} must be a positive integer`); return value as number; }
 function time(value: unknown): string { const result = string(value, "schedule.time"); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result)) throw new Error("schedule.time must be HH:MM"); return result; }
 function mutationMode(value: unknown): "off" | "targeted" | "full" { if (value !== "off" && value !== "targeted" && value !== "full") throw new Error("verification.mutation_testing must be off, targeted, or full"); return value; }
+function complexityTool(value: unknown): "auto" | "phpmetrics" | "off" { if (value === undefined) return "auto"; if (value !== "auto" && value !== "phpmetrics" && value !== "off") throw new Error("analysis.php.complexity_tool must be auto, phpmetrics, or off"); return value; }

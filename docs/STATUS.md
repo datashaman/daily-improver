@@ -4,30 +4,30 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: trusted targeted Infection execution and bounded mutation normalization.
-- Current checkpoint commit: `feat: execute and normalize php mutation analysis`.
+- Last completed milestone: trusted configured PhpMetrics execution and bounded complexity normalization.
+- Current checkpoint commit: `feat: execute and normalize php complexity analysis`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, and mutation-analysis slices are implemented, verified, and committed.
+- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, and complexity-analysis slices are implemented and verified.
 
 ## Exact next task
 
-Invoke a configured PHP complexity tool through the evidence-runner contract and normalize complexity evidence.
+Record tool-version and relevant-configuration provenance for every executed PHP evidence collector.
 
 ## Acceptance criteria for the next task
 
-- Detect one supported complexity tool from manifest or explicit Daily Improver configuration without invoking repository scripts.
-- Request machine-readable per-file or per-symbol complexity output through a trusted bounded command.
-- High-complexity findings, malformed output, configuration failure, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
-- Findings and execution metadata do not persist raw command output or unbounded reports.
-- Unit tests cover clean output, high-complexity findings, malformed output/configuration failure, missing executable, timeout, and truncation.
+- Extend the versioned persistable evidence metadata with a bounded tool version and relevant configuration hash.
+- Collect provenance without invoking repository scripts or allowing repository configuration to replace trusted evidence commands.
+- Hash only the configuration files that can affect each collector and distinguish absent configuration from unreadable or oversized inputs.
+- Unavailable version commands, malformed versions, and configuration-hash failures fail closed without persisting raw output.
+- Unit tests cover version capture, configuration changes, absent configuration, unavailable tools, malformed output, and bounded hashing.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
 
 - The CLI detects PHP and Laravel repositories.
-- The observer reads normalized Infection, PHPStan, Clover, complexity, and TODO evidence.
+- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, and PhpMetrics evidence, with prepared-artifact fallbacks where applicable.
 - Candidate selection chooses one bounded improvement.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
@@ -37,7 +37,7 @@ Invoke a configured PHP complexity tool through the evidence-runner contract and
 
 ## Known placeholders
 
-- Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage, and Infection are automatically executed; complexity and the remaining PHP evidence tools still depend on prepared artifacts.
+- Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage, Infection, and PhpMetrics are automatically executed when detected or configured; remaining PHP evidence types still depend on prepared artifacts or are not implemented.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -49,10 +49,10 @@ Invoke a configured PHP complexity tool through the evidence-runner contract and
 
 ## Last verification
 
-Verified on 2026-07-17 for the targeted Infection slice:
+Verified on 2026-07-17 for the configured PhpMetrics slice:
 
-- Focused mutation, adapter-integration, and end-to-end tests: 13 tests passed.
-- `npm test`: 48 tests passed.
+- Focused complexity, adapter-integration, configuration, and end-to-end tests: 15 tests passed.
+- `npm test`: 56 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -64,7 +64,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the mutation slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
+This checkpoint is safe to clear: the complexity slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
 
 ## Updating this file
 

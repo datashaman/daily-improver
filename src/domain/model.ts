@@ -5,6 +5,7 @@ export const capabilityKinds = [
   "static-analysis",
   "mutation-testing",
   "coverage",
+  "complexity",
   "property-testing",
   "format",
 ] as const;
