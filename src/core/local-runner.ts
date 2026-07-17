@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../agents/agent-provider.js";
+import type { AdapterGeneratedTestQualityInspection } from "../contracts.js";
 import { loadConfig } from "../config.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { GitWorkspaceManager } from "../infra/git-workspace.js";
@@ -89,6 +90,9 @@ export class LocalImprovementRunner {
             "Add focused regression or property tests using the repository test harness.",
             "Use only dependencies and loading mechanisms demonstrably available to the detected test command; the test must fail because of the selected defect, not missing tooling or autoloading.",
             "During every test command, write exact generated-test-lifecycle-report/v1 JSON to DAILY_IMPROVER_TEST_LIFECYCLE_PATH using DAILY_IMPROVER_TEST_LIFECYCLE_NONCE. Report every generated test path as executed, skipped, or disabled with its assertion count and a SHA-256 identity of its effective tolerance contract.",
+            ...(test.framework === "pest" ? [
+              "Use ordinary Pest test()/it() discovery without only(), skip(), or todo(); every declared test must contain an explicit expectation/assertion, and inline data providers must expose at least one bounded static case.",
+            ] : []),
             ...(spec.propertyTestTarget ? [
               `Exercise the selected target ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one approved property invariant for every input.`,
               "During the test command, write property-test-execution-proof/v1 JSON to DAILY_IMPROVER_PROPERTY_PROOF_PATH using DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE. Include the generated test path, selected target, exact approved invariant, unique SHA-256 input digests, and execution/check/failure counts.",
@@ -133,6 +137,7 @@ export class LocalImprovementRunner {
       let propertyProof: PropertyTestExecutionProof | undefined;
       let knownMutationProof: KnownMutationExecutionProof | undefined;
       let implementationInspection: TestImplementationInspection | undefined;
+      let adapterQualityInspection: AdapterGeneratedTestQualityInspection | undefined;
       if (spec.propertyTestTarget) {
         propertyProof = await readPropertyTestExecutionProof(propertyProofRuntimePath, {
           executionNonce: propertyExecutionNonce,
@@ -176,9 +181,22 @@ export class LocalImprovementRunner {
         await writeArtifact(isolated.path, "test-implementation-inspection.json", implementationInspection);
         requireBlackBoxTest(implementationInspection);
       }
+      if (adapter.inspectGeneratedTestQuality) {
+        adapterQualityInspection = await adapter.inspectGeneratedTestQuality({
+          root: isolated.path,
+          framework: test.framework,
+          selectedTestPath: propertyProof?.testPath ?? changedTests[0]!,
+          observedTestPaths: changedTests,
+          baselineLifecycle,
+        });
+        if (adapterQualityInspection) {
+          if (adapterQualityInspection.outcome !== "accepted") throw new Error("Adapter generated-test quality inspection rejected the generated test.");
+          await writeArtifact(isolated.path, "adapter-generated-test-quality.json", adapterQualityInspection);
+        }
+      }
       await rm(propertyProofRuntimePath, { force: true });
       await writeArtifact(isolated.path, "test-plan.json", {
-        schemaVersion: "test-plan/v6",
+        schemaVersion: "test-plan/v7",
         improvementIntent,
         baseline: baselineProof,
         command: test.command,
@@ -216,6 +234,16 @@ export class LocalImprovementRunner {
             target: implementationInspection.target,
             criterion: implementationInspection.criterion,
             outcome: implementationInspection.outcome,
+          },
+        } : {}),
+        ...(adapterQualityInspection ? {
+          adapterQualityInspection: {
+            schemaVersion: adapterQualityInspection.schemaVersion,
+            artifact: "adapter-generated-test-quality.json",
+            adapter: adapterQualityInspection.adapter,
+            framework: adapterQualityInspection.framework,
+            selectedTestPath: adapterQualityInspection.selectedTestPath,
+            outcome: adapterQualityInspection.outcome,
           },
         } : {}),
       });
@@ -317,7 +345,8 @@ async function changedTestPaths(
       const wildcardIndex = allowed.search(/[?*\[]/);
       const prefix = (wildcardIndex === -1 ? allowed : allowed.slice(0, wildcardIndex)).replace(/\/$/, "");
       return path === allowed || path === prefix || path.startsWith(`${prefix}/`);
-    }));
+    }))
+    .sort();
 }
 
 export function defectBaselineFailureIsCredible(classification: string): boolean {

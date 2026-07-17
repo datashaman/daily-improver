@@ -287,7 +287,7 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
   const testPlan = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-plan.json`], repository));
-  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v6"/);
+  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v7"/);
   assert.match(testPlan.stdout, /"attempts": 3/);
   assert.match(testPlan.stdout, /"baselineProof": "defect-regression"/);
   assert.match(testPlan.stdout, /"outcome": "failed-as-expected"/);

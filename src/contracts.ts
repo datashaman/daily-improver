@@ -9,6 +9,23 @@ import type {
   PolicyDecision,
   RepositoryProfile,
 } from "./domain/model.js";
+import type { GeneratedTestLifecycleDecision } from "./domain/generated-test-lifecycle.js";
+
+export interface GeneratedTestQualityInspectionRequest {
+  readonly root: string;
+  readonly framework: string | undefined;
+  readonly selectedTestPath: string;
+  readonly observedTestPaths: readonly string[];
+  readonly baselineLifecycle: GeneratedTestLifecycleDecision;
+}
+
+export interface AdapterGeneratedTestQualityInspection {
+  readonly schemaVersion: string;
+  readonly adapter: string;
+  readonly framework: string;
+  readonly selectedTestPath: string;
+  readonly outcome: "accepted" | "rejected";
+}
 
 export interface RepositoryAdapter {
   readonly id: string;
@@ -16,6 +33,7 @@ export interface RepositoryAdapter {
   profile(root: string): Promise<RepositoryProfile>;
   discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]>;
   classifyFailure?(output: string): string;
+  inspectGeneratedTestQuality?(request: GeneratedTestQualityInspectionRequest): Promise<AdapterGeneratedTestQualityInspection | undefined>;
 }
 
 export interface RunStore {

@@ -48,6 +48,7 @@ export async function createTestManifest(root: string, key: string): Promise<Tes
     ".ai/runs/**/property-test-execution-proof.json",
     ".ai/runs/**/known-mutation-execution-proof.json",
     ".ai/runs/**/test-implementation-inspection.json",
+    ".ai/runs/**/adapter-generated-test-quality.json",
     ".ai/runs/**/test-agent-usage.json",
     ".ai/runs/**/test-agent-rationale.json",
   ], { cwd: root, exclude: ["**/node_modules/**"] })) {

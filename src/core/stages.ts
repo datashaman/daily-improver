@@ -202,7 +202,7 @@ function baselineSummary(testPlan: {
   readonly improvementIntent?: { readonly intent?: string };
   readonly baseline?: { readonly outcome?: string };
 } | undefined): string {
-  if (testPlan?.schemaVersion !== "test-plan/v3" && testPlan?.schemaVersion !== "test-plan/v4" && testPlan?.schemaVersion !== "test-plan/v5" && testPlan?.schemaVersion !== "test-plan/v6") return "";
+  if (testPlan?.schemaVersion !== "test-plan/v3" && testPlan?.schemaVersion !== "test-plan/v4" && testPlan?.schemaVersion !== "test-plan/v5" && testPlan?.schemaVersion !== "test-plan/v6" && testPlan?.schemaVersion !== "test-plan/v7") return "";
   if (testPlan.baseline?.outcome === "failed-as-expected" && testPlan.improvementIntent?.intent === "defect") {
     return "- Defect regression test failed behaviorally against the baseline and passed after the change.\n";
   }

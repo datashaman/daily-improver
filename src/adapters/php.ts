@@ -1,4 +1,4 @@
-import type { EvidenceRunner, RepositoryAdapter } from "../contracts.js";
+import type { EvidenceRunner, GeneratedTestQualityInspectionRequest, RepositoryAdapter } from "../contracts.js";
 import type {
   CapabilityKind,
   CommandCapability,
@@ -21,6 +21,11 @@ import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
 import { reproducibleEvidence } from "../domain/candidate-reproducibility.js";
+import {
+  inspectPestGeneratedTestQuality,
+  requireAcceptedPestGeneratedTestQuality,
+  type PestGeneratedTestQualityInspection,
+} from "./pest-generated-test-quality.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -170,6 +175,13 @@ export class PhpAdapter implements RepositoryAdapter {
     if (/out of memory|allowed memory/i.test(output)) return "resource-limit";
     if (/class .* not found|autoload/i.test(output)) return "dependency-or-autoload";
     return "unknown";
+  }
+
+  async inspectGeneratedTestQuality(request: GeneratedTestQualityInspectionRequest): Promise<PestGeneratedTestQualityInspection | undefined> {
+    if (request.framework !== "pest") return undefined;
+    const inspection = await inspectPestGeneratedTestQuality(request);
+    requireAcceptedPestGeneratedTestQuality(inspection);
+    return inspection;
   }
 }
 
