@@ -15,6 +15,7 @@ import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersio
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
+import { collectPhpDuplicateCodeEvidence, phpDuplicateCodeCommand, phpDuplicateCodeSchemaVersion, phpDuplicateCodeSourceRoots } from "./php-duplicate-code.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
@@ -44,7 +45,12 @@ export class PhpAdapter implements RepositoryAdapter {
     const config = await loadConfig(root);
     const packages = { ...composer.require, ...composer["require-dev"] };
     const frameworks = detectFrameworks(packages);
-    const capabilities = detectCapabilities(packages, composer.scripts ?? {}, config.analysis.php.complexity_tool);
+    const capabilities = detectCapabilities(
+      packages,
+      composer.scripts ?? {},
+      config.analysis.php.complexity_tool,
+      config.analysis.php.duplicate_code_tool,
+    );
     return {
       root,
       adapter: this.id,
@@ -91,6 +97,14 @@ export class PhpAdapter implements RepositoryAdapter {
         () => collectPhpComplexityEvidence(profile.root, complexityCapability, this.evidenceRunner),
       )
       : undefined;
+    const duplicateCodeCapability = profile.capabilities.get("duplicate-code");
+    const duplicateCode = duplicateCodeCapability
+      ? await this.evidenceCache.collect(
+        profile.root,
+        await duplicateCodeCachePolicy(profile.root),
+        () => collectPhpDuplicateCodeEvidence(profile.root, duplicateCodeCapability, this.evidenceRunner),
+      )
+      : undefined;
     const deprecationCapability = profile.capabilities.get("deprecation-analysis");
     const phpDeprecations = deprecationCapability
       ? await collectPhpDeprecatedApiEvidence(profile.root, deprecationCapability, this.evidenceRunner)
@@ -119,6 +133,7 @@ export class PhpAdapter implements RepositoryAdapter {
       ...(coverage?.candidates ?? []),
       ...(mutation?.candidates ?? []),
       ...(complexity?.candidates ?? []),
+      ...(duplicateCode?.candidates ?? []),
       ...(phpDeprecations?.candidates ?? []),
       ...(laravelDeprecations?.candidates ?? []),
       ...(performance?.candidates ?? []),
@@ -167,6 +182,7 @@ function detectCapabilities(
   packages: PackageMap,
   scripts: NonNullable<ComposerManifest["scripts"]>,
   configuredComplexityTool: ImproverConfig["analysis"]["php"]["complexity_tool"],
+  configuredDuplicateCodeTool: ImproverConfig["analysis"]["php"]["duplicate_code_tool"],
 ): ReadonlyMap<CapabilityKind, CommandCapability> {
   const capabilities = new Map<CapabilityKind, CommandCapability>();
   capabilities.set("install", command("install", ["composer", "install"], "convention"));
@@ -188,6 +204,11 @@ function detectCapabilities(
     capabilities.set("complexity", command("complexity", ["vendor/bin/phpmetrics"], "configuration", "phpmetrics"));
   } else if (configuredComplexityTool === "auto" && packages["phpmetrics/phpmetrics"]) {
     capabilities.set("complexity", command("complexity", ["vendor/bin/phpmetrics"], "manifest", "phpmetrics"));
+  }
+  if (configuredDuplicateCodeTool === "phpcpd") {
+    capabilities.set("duplicate-code", command("duplicate-code", ["vendor/bin/phpcpd"], "configuration", "phpcpd"));
+  } else if (configuredDuplicateCodeTool === "auto" && packages["sebastian/phpcpd"]) {
+    capabilities.set("duplicate-code", command("duplicate-code", ["vendor/bin/phpcpd"], "manifest", "phpcpd"));
   }
   if (packages["giorgiosironi/eris"]) capabilities.set("property-testing", command("property-testing", ["vendor/bin/phpunit", "tests/Property"], "manifest", "eris"));
   return capabilities;
@@ -267,6 +288,19 @@ const complexityCachePolicy: PhpEvidenceCachePolicy = {
   configurationPaths: [".ai/improver.yml"],
   sourcePatterns: ["composer.json", "composer.lock", "app/Domain/**/*.php", "src/**/*.php"],
 };
+
+async function duplicateCodeCachePolicy(root: string): Promise<PhpEvidenceCachePolicy> {
+  const sourceRoots = await phpDuplicateCodeSourceRoots(root);
+  return {
+    collector: "duplicate-code-phpcpd",
+    policyVersion: "php-duplicate-code-policy/v1",
+    evidenceSchemaVersion: phpDuplicateCodeSchemaVersion,
+    command: phpDuplicateCodeCommand("$TRUSTED_PHPCPD_REPORT_PATH", sourceRoots.length > 0 ? sourceRoots : ["app", "src"]),
+    versionCommand: ["vendor/bin/phpcpd", "--version"],
+    configurationPaths: [".ai/improver.yml"],
+    sourcePatterns: ["composer.json", "composer.lock", "app/**/*.php", "src/**/*.php"],
+  };
+}
 
 async function firstExistingIndex(root: string, paths: readonly string[]): Promise<number> {
   for (const [index, path] of paths.entries()) {

@@ -41,6 +41,7 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
       "infection/infection": "^0.30",
       "phpmetrics/phpmetrics": "^3",
       "phpcompatibility/php-compatibility": "^10",
+      "sebastian/phpcpd": "^6",
     },
   }));
   await writeFile(join(root, "phpunit.xml"), "<phpunit />");
@@ -55,6 +56,8 @@ test("detects a Laravel project and maps tools to capabilities", async () => {
   assert.equal(profile.capabilities.get("complexity")?.framework, "phpmetrics");
   assert.equal(profile.capabilities.get("complexity")?.source, "manifest");
   assert.equal(profile.capabilities.get("deprecation-analysis")?.framework, "phpcompatibility");
+  assert.equal(profile.capabilities.get("duplicate-code")?.framework, "phpcpd");
+  assert.equal(profile.capabilities.get("duplicate-code")?.source, "manifest");
 });
 
 test("detects explicitly configured PhpMetrics without trusting a repository script", async () => {
@@ -79,6 +82,30 @@ pull_request: { draft: true, labels: [ai-improvement] }
   assert.equal(capability?.source, "configuration");
   assert.equal(capability?.framework, "phpmetrics");
   assert.deepEqual(capability?.command, ["vendor/bin/phpmetrics"]);
+});
+
+test("detects explicitly configured PHPCPD without trusting a repository script", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    scripts: { duplicates: "repository-owned-duplicate-script" },
+  }));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [maintainability] }
+analysis: { php: { duplicate_code_tool: phpcpd } }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 5 }
+protected_paths: [tests/**]
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [ai-improvement] }
+`);
+
+  const capability = (await new PhpAdapter(successfulEvidenceRunner).profile(root)).capabilities.get("duplicate-code");
+
+  assert.equal(capability?.source, "configuration");
+  assert.equal(capability?.framework, "phpcpd");
+  assert.deepEqual(capability?.command, ["vendor/bin/phpcpd"]);
 });
 
 test("ranks missing test protection as the first PHP baseline candidate", async () => {
@@ -353,4 +380,59 @@ test("executes PhpMetrics selected from the detected manifest capability", async
   assert.equal(complexityCommand?.command[0], "vendor/bin/phpmetrics");
   assert.equal(complexityCommand?.command.includes("repository-owned-complexity-script"), false);
   assert.equal(complexityCommand?.command.at(-1), "app/Domain,src");
+});
+
+test("executes and caches PHPCPD findings selected from the manifest capability", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await mkdir(join(root, "app", "Services"), { recursive: true });
+  await mkdir(join(root, "src", "Allocation"), { recursive: true });
+  await writeFile(join(root, "app", "Services", "First.php"), "<?php\nfinal class First {}\n");
+  await writeFile(join(root, "src", "Allocation", "Second.php"), "<?php\nfinal class Second {}\n");
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    "require-dev": { "sebastian/phpcpd": "^6" },
+    scripts: { duplicates: "repository-owned-duplicate-script" },
+  }));
+  const commands: EvidenceCommand[] = [];
+  const runner: EvidenceRunner = {
+    async run(command: EvidenceCommand): Promise<EvidenceRun> {
+      commands.push(command);
+      if (command.identity === "phpcpd.duplicate-code") {
+        const reportPath = command.command[command.command.indexOf("--log-pmd") + 1];
+        assert.ok(reportPath);
+        await writeFile(reportPath, `<pmd-cpd><duplication lines="6" tokens="30"><file path="${root}/app/Services/First.php" line="2"/><file path="${root}/src/Allocation/Second.php" line="2"/><codefragment>secret source</codefragment></duplication></pmd-cpd>`);
+      }
+      const stdout = command.identity === "composer.audit" ? JSON.stringify({ advisories: [], abandoned: [] }) : "";
+      const exitCode = command.identity === "phpcpd.duplicate-code" ? 1 : 0;
+      return {
+        result: {
+          ...evidenceStubMetadata(command),
+          commandIdentity: command.identity,
+          command: command.command,
+          status: command.classify({ exitCode, stdout, stderr: "", outputTruncated: false }),
+          durationMs: 1,
+          exitCode,
+          stdoutHash: "sha256:output",
+          stderrHash: "sha256:empty",
+          stdoutBytes: Buffer.byteLength(stdout),
+          stderrBytes: 0,
+          outputLimitBytes: command.maxOutputBytes,
+          outputTruncated: false,
+        },
+        output: { stdout, stderr: "" },
+      };
+    },
+  };
+  const adapter = new PhpAdapter(runner, new PhpEvidenceCache({ resolveToolVersion: async () => "6.0.3" }));
+
+  const first = await adapter.discoverCandidates(await adapter.profile(root));
+  const second = await adapter.discoverCandidates(await adapter.profile(root));
+
+  const duplicateCommands = commands.filter((command) => command.identity === "phpcpd.duplicate-code");
+  assert.equal(duplicateCommands.length, 1);
+  assert.equal(duplicateCommands[0]?.command[0], "vendor/bin/phpcpd");
+  assert.equal(duplicateCommands[0]?.command.includes("repository-owned-duplicate-script"), false);
+  assert.equal(first.some((candidate) => candidate.id.startsWith("duplicate-code:") && candidate.target === "app/Services/First.php"), true);
+  assert.equal(second.some((candidate) => candidate.id.startsWith("duplicate-code:")), true);
+  assert.equal(JSON.stringify(first).includes("secret source"), false);
 });

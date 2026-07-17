@@ -9,6 +9,7 @@ export interface ImproverConfig {
   readonly analysis: {
     readonly php: {
       readonly complexity_tool: "auto" | "phpmetrics" | "off";
+      readonly duplicate_code_tool: "auto" | "phpcpd" | "off";
       readonly slow_test_threshold_ms: number;
       readonly slow_query: {
         readonly mechanism: "off" | "laravel-listener";
@@ -37,6 +38,7 @@ export const defaultConfig: ImproverConfig = {
   analysis: {
     php: {
       complexity_tool: "auto",
+      duplicate_code_tool: "auto",
       slow_test_threshold_ms: 500,
       slow_query: { mechanism: "off", threshold_ms: 100 },
     },
@@ -71,6 +73,7 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
     analysis: {
       php: {
         complexity_tool: complexityTool(phpAnalysis?.complexity_tool),
+        duplicate_code_tool: duplicateCodeTool(phpAnalysis?.duplicate_code_tool),
         slow_test_threshold_ms: boundedPositive(
           phpAnalysis?.slow_test_threshold_ms,
           "analysis.php.slow_test_threshold_ms",
@@ -111,5 +114,6 @@ function positive(value: unknown, name: string): number { if (!Number.isInteger(
 function time(value: unknown): string { const result = string(value, "schedule.time"); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result)) throw new Error("schedule.time must be HH:MM"); return result; }
 function mutationMode(value: unknown): "off" | "targeted" | "full" { if (value !== "off" && value !== "targeted" && value !== "full") throw new Error("verification.mutation_testing must be off, targeted, or full"); return value; }
 function complexityTool(value: unknown): "auto" | "phpmetrics" | "off" { if (value === undefined) return "auto"; if (value !== "auto" && value !== "phpmetrics" && value !== "off") throw new Error("analysis.php.complexity_tool must be auto, phpmetrics, or off"); return value; }
+function duplicateCodeTool(value: unknown): "auto" | "phpcpd" | "off" { if (value === undefined) return "auto"; if (value !== "auto" && value !== "phpcpd" && value !== "off") throw new Error("analysis.php.duplicate_code_tool must be auto, phpcpd, or off"); return value; }
 function slowQueryMechanism(value: unknown): "off" | "laravel-listener" { if (value === undefined) return "off"; if (value !== "off" && value !== "laravel-listener") throw new Error("analysis.php.slow_query.mechanism must be off or laravel-listener"); return value; }
 function boundedPositive(value: unknown, name: string, fallback: number, maximum: number): number { if (value === undefined) return fallback; const result = positive(value, name); if (result > maximum) throw new Error(`${name} must be at most ${maximum}`); return result; }

@@ -11,10 +11,10 @@ Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
-- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics, version-aware PHP/Laravel deprecation, and opt-in Laravel slow-query slices are implemented.
+- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, and opt-in Laravel slow-query slices are implemented.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- The exact next task is collecting duplicate-code evidence.
+- The exact next task is collecting missing-validation and error-handling evidence.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -95,7 +95,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Add collectors for deprecated PHP/Laravel APIs.
 - [x] Add dependency-vulnerability findings.
 - [x] Add slow-test and slow-query findings.
-- [ ] Add duplicate-code findings.
+- [x] Add duplicate-code findings.
 - [ ] Add missing-validation and error-handling findings.
 - [ ] Deduplicate overlapping findings against the same subsystem.
 - [ ] Reject candidates without reproducible evidence.
@@ -456,13 +456,13 @@ Exit gate: one bounded improvement safely targets one component in a mixed monor
 
 The next five commit-sized milestones are:
 
-1. `feat: collect duplicate PHP code evidence`
-2. `feat: collect validation and error-handling evidence`
-3. `feat: deduplicate overlapping findings`
-4. `feat: reject candidates without reproducible evidence`
-5. `feat: add structured model agent provider`
+1. `feat: collect validation and error-handling evidence`
+2. `feat: deduplicate overlapping findings`
+3. `feat: reject candidates without reproducible evidence`
+4. `feat: add structured model agent provider`
+5. `feat: add category-specific scoring weights`
 
-The immediate next task is Phase 1A: collect bounded, reproducible duplicate-code evidence without executing repository-owned scripts.
+The immediate next task is Phase 1A: collect bounded, reproducible missing-validation and error-handling evidence.
 
 ## Initial operating limits
 

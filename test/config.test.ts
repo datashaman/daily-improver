@@ -14,6 +14,7 @@ selection: { priorities: [correctness] }
 analysis:
   php:
     complexity_tool: phpmetrics
+    duplicate_code_tool: phpcpd
     slow_test_threshold_ms: 750
     slow_query: { mechanism: laravel-listener, threshold_ms: 125 }
 limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
@@ -26,6 +27,7 @@ pull_request: { draft: true, labels: [ai-improvement] }
   assert.equal(config.limits.max_diff_lines, 250);
   assert.deepEqual(config.verification.commands, ["vendor/bin/phpunit"]);
   assert.equal(config.analysis.php.complexity_tool, "phpmetrics");
+  assert.equal(config.analysis.php.duplicate_code_tool, "phpcpd");
   assert.equal(config.analysis.php.slow_test_threshold_ms, 750);
   assert.deepEqual(config.analysis.php.slow_query, { mechanism: "laravel-listener", threshold_ms: 125 });
 });
@@ -60,4 +62,20 @@ pull_request: { draft: true, labels: [] }
 `);
 
   await assert.rejects(loadConfig(root), /slow_query.mechanism must be off or laravel-listener/);
+});
+
+test("rejects unsupported duplicate-code tool configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-config-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [] }
+analysis: { php: { duplicate_code_tool: repository-script } }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+
+  await assert.rejects(loadConfig(root), /duplicate_code_tool must be auto, phpcpd, or off/);
 });

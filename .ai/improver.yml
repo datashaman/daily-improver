@@ -12,6 +12,7 @@ selection:
 analysis:
   php:
     complexity_tool: auto
+    duplicate_code_tool: auto
     slow_test_threshold_ms: 500
     slow_query:
       mechanism: off
