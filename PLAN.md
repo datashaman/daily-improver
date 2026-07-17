@@ -18,7 +18,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- One active or completed improvement is enforced per canonical repository per UTC day, fresh repository-bound open-PR state enforces `max_open_prs`, and fresh unresolved-finding state suppresses repeated work; the exact next task is adding deterministic provider replay fixtures.
+- One active or completed improvement is enforced per canonical repository per UTC day, fresh repository-bound open-PR state enforces `max_open_prs`, and fresh unresolved-finding state suppresses repeated work.
+- Committed deterministic provider replays now cover both structured stages, including successful validation and a sanitized transient retry; the exact next task is model routing based on task complexity.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -138,7 +139,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Reject malformed or incomplete responses.
 - [x] Store model rationale separately from trusted evidence.
 - [x] Use separate short-lived credentials for test and builder agents.
-- [ ] Add deterministic provider replay fixtures.
+- [x] Add deterministic provider replay fixtures.
 - [ ] Add model routing based on task complexity.
 - [ ] Keep the provider interface compatible with private customer endpoints.
 
@@ -473,7 +474,7 @@ The recent and next commit-sized milestones are:
 12. [x] `feat: prevent repeated unresolved findings`
 13. [x] `feat: explain candidate scores`
 
-The immediate next task is Phase 1C: add deterministic provider replay fixtures.
+The immediate next task is Phase 1C: add model routing based on task complexity.
 
 ## Initial operating limits
 

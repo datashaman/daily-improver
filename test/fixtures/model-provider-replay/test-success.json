@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "structured-provider-replay/v1",
+  "stage": "test",
+  "clockNowMs": 1784236800000,
+  "budgets": {
+    "dailyLimitUsd": 0.02,
+    "stages": {
+      "test": { "limitUsd": 0.006, "reservationUsd": 0.004 },
+      "build": { "limitUsd": 0.006, "reservationUsd": 0.004 }
+    }
+  },
+  "retryPolicy": { "maxAttempts": 1, "delaysMs": [] },
+  "request": {
+    "schemaVersion": "test-agent-request/v1",
+    "stage": "test",
+    "task": {
+      "id": "spec-money-allocation",
+      "title": "Preserve allocation totals",
+      "objective": "Ensure integer allocations preserve the requested total.",
+      "currentBehaviour": "Remainders are discarded.",
+      "proposedImprovement": "Distribute the remainder deterministically.",
+      "behavioursToPreserve": ["Reject invalid part counts."],
+      "acceptanceCriteria": ["Every allocation sums to the requested total."],
+      "propertyInvariants": ["sum(allocation) equals total"],
+      "exclusions": ["Public API changes"],
+      "evidence": ["An escaped mutation removes remainder distribution."],
+      "limits": { "maxFiles": 2, "maxChangedLines": 80, "maxCostUsd": 1.5 }
+    },
+    "repository": { "language": "php", "frameworks": ["laravel"] },
+    "allowedTestPaths": ["tests/Property/**"],
+    "commands": [{ "purpose": "test", "argv": ["php", "tests/run.php"] }],
+    "conventions": ["Use the repository test harness."]
+  },
+  "events": [
+    {
+      "kind": "response",
+      "value": {
+        "schemaVersion": "test-agent-response/v1",
+        "status": "completed",
+        "summary": "Added an allocation property test.",
+        "changedFiles": ["tests/Property/MoneyAllocatorInvariantTest.php"],
+        "tests": [
+          {
+            "path": "tests/Property/MoneyAllocatorInvariantTest.php",
+            "purpose": "Prove totals are preserved.",
+            "invariants": ["sum(allocation) equals total"]
+          }
+        ],
+        "usage": {
+          "provider": "deterministic-fixture",
+          "model": "fixture-model-v1",
+          "inputTokens": 240,
+          "outputTokens": 90,
+          "latencyMs": 18,
+          "estimatedCostUsd": 0.002
+        }
+      }
+    }
+  ],
+  "expected": {
+    "trusted": {
+      "usage": {
+        "provider": "deterministic-fixture",
+        "model": "fixture-model-v1",
+        "inputTokens": 240,
+        "outputTokens": 90,
+        "latencyMs": 18,
+        "estimatedCostUsd": 0.002
+      },
+      "budgetDecision": {
+        "schemaVersion": "model-cost-budget-decision/v2",
+        "status": "approved",
+        "accounting": "validated-usage",
+        "stage": "test",
+        "stageLimitUsd": 0.006,
+        "dailyLimitUsd": 0.02,
+        "specificationLimitUsd": 1.5,
+        "reservedCostUsd": 0.004,
+        "actualCostUsd": 0.002,
+        "dailyCommittedBeforeUsd": 0,
+        "dailyCommittedAfterUsd": 0.002,
+        "specificationCommittedBeforeUsd": 0,
+        "specificationCommittedAfterUsd": 0.002
+      },
+      "requestAttempts": {
+        "schemaVersion": "model-request-attempts/v1",
+        "maxAttempts": 1,
+        "attempts": [
+          {
+            "attempt": 1,
+            "classification": "completed",
+            "budgetDecision": {
+              "schemaVersion": "model-cost-budget-decision/v2",
+              "status": "approved",
+              "accounting": "validated-usage",
+              "stage": "test",
+              "stageLimitUsd": 0.006,
+              "dailyLimitUsd": 0.02,
+              "specificationLimitUsd": 1.5,
+              "reservedCostUsd": 0.004,
+              "actualCostUsd": 0.002,
+              "dailyCommittedBeforeUsd": 0,
+              "dailyCommittedAfterUsd": 0.002,
+              "specificationCommittedBeforeUsd": 0,
+              "specificationCommittedAfterUsd": 0.002
+            }
+          }
+        ]
+      }
+    },
+    "untrustedRationale": {
+      "summary": "Added an allocation property test.",
+      "changedFiles": ["tests/Property/MoneyAllocatorInvariantTest.php"],
+      "tests": [
+        {
+          "path": "tests/Property/MoneyAllocatorInvariantTest.php",
+          "purpose": "Prove totals are preserved.",
+          "invariants": ["sum(allocation) equals total"]
+        }
+      ]
+    },
+    "retryDelaysMs": [],
+    "maximumCostsUsd": [0.004],
+    "credentialAcquisitions": 1
+  }
+}

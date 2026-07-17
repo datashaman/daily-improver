@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded machine-readable candidate score explanations.
-- Current checkpoint commit: `feat: explain candidate scores`.
+- Last completed milestone: deterministic structured provider replay fixtures.
+- Current checkpoint commit: `test: add structured provider replay fixtures`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, and distinct short-lived test/builder credentials; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, a structured model provider behind an injected transport, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, and committed deterministic test/build replays through every injected provider boundary; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add deterministic provider replay fixtures.
+Add model routing based on task complexity.
 
 ## Acceptance criteria for the next task
 
-- Add committed, deterministic request/response replay fixtures for both structured test-agent and builder stages.
-- Replay through the injected transport, credential source, clock/timing, and cost ledger without a live model API or permanent credential.
-- Assert stable versioned requests, validated responses, usage, attempt metadata, budget decisions, and separation of untrusted rationale.
-- Cover a successful stage and an explicitly classified transient retry/failure path without retaining transport error text.
-- Keep fixtures bounded, repository-independent, and safe for concurrent test execution.
+- Define a bounded, versioned, language-neutral task-complexity decision from approved structured request fields.
+- Select deterministic test-agent and builder model routes for representative lower- and higher-complexity tasks without inspecting host paths, credentials, model rationale, or repository source.
+- Keep route identifiers and configuration explicit and bounded, and fail closed on incomplete, unsupported, or ambiguous routing inputs.
+- Preserve the existing stage-scoped credential, retry, response validation, and stage/daily/specification budget gates for every route.
+- Add executable deterministic examples for each supported route and failure mode without a live model API or permanent credential.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -40,6 +40,7 @@ Add deterministic provider replay fixtures.
 - Structured model requests reserve explicit test or builder cost before transport against stage, daily, and unchanged specification limits; actual validated usage is settled deterministically, unavailable builder budget fails before invocation, and versioned budget decisions are stored with trusted usage.
 - Structured model attempts use a bounded five-class failure model; only explicitly transient transport failures retry through injected timing, every attempt has a fresh reservation, unknown usage consumes the reservation conservatively, and sanitized versioned attempt metadata is stored with trusted usage.
 - Every structured transport attempt acquires an injected `model-stage-credential/v1` credential scoped to its exact test/build stage and repository/specification run; credentials valid for more than fifteen minutes, unavailable, expired, future-issued, malformed, mis-scoped, or reused across stages fail before transport, while raw secrets remain outside requests and artifacts.
+- Committed `structured-provider-replay/v1` fixtures pin successful test-agent and transient-retry builder requests and responses, replay injected credentials, clock, timing, and cost accounting without repository access or a live API, and prove transport failure text does not enter provider results.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -60,17 +61,17 @@ Add deterministic provider replay fixtures.
 
 ## Last verification
 
-Verified on 2026-07-17 for the machine-readable score explanation slice:
+Verified on 2026-07-17 for the deterministic provider replay slice:
 
-- Focused score-explanation, ranking, scope, and pipeline tests: 33 tests passed.
-- `npm test`: 163 tests passed.
+- Focused structured provider replay tests: 2 tests passed.
+- `npm test`: 165 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
-- `docker build -t daily-improver:local .` passed for the changed CLI runtime.
+- Container build was not required because CLI runtime and production dependencies did not change.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- All checked foundation, Phase 1A, Phase 1B, and completed Phase 1C items in `PLAN.md` were reviewed against current code, executable tests, and slice history; the audit found and fixed the standalone analysis artifact retaining more than one selected candidate.
+- Both structured stages replayed committed versioned requests and responses through the real provider boundaries; the builder replay included deterministic retry timing, fresh stage credentials, conservative failure accounting, and sanitized attempt metadata.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
