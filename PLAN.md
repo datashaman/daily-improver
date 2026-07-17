@@ -15,7 +15,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- The exact next task is defining the first versioned structured model-agent request and response contracts.
+- Versioned, bounded test-agent and builder request/response contracts now define the structured model boundary.
+- The exact next task is implementing the first model-backed provider against those contracts.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -125,8 +126,8 @@ Exit gate: repeated analysis against unchanged code produces the same candidate 
 
 Goal: replace generic shell delegation with a versioned agent protocol.
 
-- [ ] Define versioned test-agent request and response schemas.
-- [ ] Define versioned builder request and response schemas.
+- [x] Define versioned test-agent request and response schemas.
+- [x] Define versioned builder request and response schemas.
 - [ ] Send only the approved spec, allowlist, necessary context, commands, and conventions.
 - [ ] Add the first model-backed provider.
 - [ ] Track model, token usage, latency, and estimated cost.
@@ -459,9 +460,10 @@ The recent and next commit-sized milestones are:
 1. [x] `feat: reject candidates without reproducible evidence`
 2. [x] `feat: add category-specific scoring weights`
 3. [x] `feat: score candidate evidence and testability`
-4. [ ] `feat: add structured model agent provider`
+4. [x] `feat: define structured agent contracts`
+5. [ ] `feat: add structured model agent provider`
 
-The immediate next task is Phase 1C: define versioned structured test-agent and builder request and response contracts as the foundation of the structured model agent provider.
+The immediate next task is Phase 1C: implement the first model-backed provider using the versioned structured test-agent and builder contracts.
 
 ## Initial operating limits
 

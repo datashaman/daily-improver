@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded candidate evidence-strength and testability scoring.
-- Current checkpoint commit: `feat: score candidate evidence and testability`.
+- Last completed milestone: versioned structured test-agent and builder contracts.
+- Current checkpoint commit: `feat: define structured agent contracts`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
-- Current phase: Phase 1B — Deterministic candidate selection.
-- Current state: Phase 1A is complete. The Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, duplicate-code analysis, deprecation-analysis, performance-analysis, validation/error-handling analysis, shared provenance, evidence-cache, candidate-deduplication, reproducible-evidence, category-specific scoring, and bounded scoring-factor slices are implemented and verified.
+- Current phase: Phase 1C — Structured model agent providers.
+- Current state: Phase 1A is complete. Phase 1B has deterministic reproducibility, deduplication, category weights, and bounded scoring factors; its remaining ranking-policy work stays planned. Phase 1C now has strict versioned request and response contracts for both agent stages while the executable proving provider remains command-backed.
 
 ## Exact next task
 
-Define versioned structured test-agent and builder request and response contracts as the foundation of the structured model agent provider.
+Implement the first model-backed provider using the versioned structured test-agent and builder contracts.
 
 ## Acceptance criteria for the next task
 
-- Define semantic, versioned request and response types for both the test-agent and builder stages.
-- Bound every externally supplied string, collection, path, command, and numeric usage field and reject malformed responses.
-- Preserve the existing command-backed provider behind the agent-provider boundary without introducing a live-model or credential dependency in tests.
-- Add deterministic contract-validation tests for accepted and rejected payloads.
-- Document which approved inputs cross each agent trust boundary.
+- Construct each stage request only from approved specification, repository context, path permissions, commands, and conventions.
+- Invoke a model transport behind `AgentProvider` and validate its structured response before accepting the stage result.
+- Enforce that response-declared changed files remain within the stage-specific path permissions.
+- Keep the command-backed provider available and use an injected deterministic transport in tests; do not require live credentials.
+- Persist bounded provider/model usage and keep untrusted model rationale separate from trusted evidence.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -28,6 +28,7 @@ Define versioned structured test-agent and builder request and response contract
 - The CLI detects PHP and Laravel repositories.
 - The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, explicit Laravel deprecation rules, versioned Laravel validation/error-handling rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
 - Candidate selection rejects absent, non-reproducible, malformed, or unbounded evidence and scoring factors before deduplication, applies exhaustive language-neutral category weights across eight deterministic factors, and then chooses one bounded improvement or fails closed.
+- Test-agent and builder stages have distinct versioned request/response contracts that bound semantic inputs, repository-relative paths, commands, response claims, and provider usage while rejecting unknown fields.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -37,7 +38,7 @@ Define versioned structured test-agent and builder request and response contract
 ## Known placeholders
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
-- The agent provider delegates to configured commands rather than a first-class model API.
+- The runnable agent provider delegates to configured commands; structured model contracts exist, but a first-class model transport is not implemented yet.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
 - `publish` does not push a branch or create a GitHub PR.
@@ -48,10 +49,10 @@ Define versioned structured test-agent and builder request and response contract
 
 ## Last verification
 
-Verified on 2026-07-17 for the evidence-strength-and-testability-scoring slice:
+Verified on 2026-07-17 for the structured-agent-contract slice:
 
-- Focused ranking, reproducibility, and deduplication tests: 14 tests passed.
-- `npm test`: 111 tests passed.
+- Focused structured contract tests: 4 tests passed.
+- `npm test`: 115 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -63,7 +64,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear after the evidence-strength-and-testability-scoring slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear after the structured-agent-contract slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

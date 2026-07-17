@@ -29,6 +29,8 @@ npm run dev -- run /path/to/php-repository
 
 Each agent runs in an isolated worktree. It receives `DAILY_IMPROVER_AGENT_STAGE` and `DAILY_IMPROVER_SPEC_PATH`; the test agent must add regression/property tests, while the builder must implement the spec without touching sealed tests.
 
+The command-backed provider remains the local proving implementation. Model-backed providers will use separate versioned `test-agent-request/v1`, `test-agent-response/v1`, `builder-request/v1`, and `builder-response/v1` contracts. Requests expose only the bounded semantic task, repository language/framework context, explicit commands and conventions, and stage-specific repository-relative path permissions. They never include host repository paths or credentials. Responses fail closed on unknown fields, unsupported versions, unbounded text or collections, unsafe paths, malformed commands, or invalid token, latency, and cost usage.
+
 Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.ai/improver.yml`](.ai/improver.yml). A setup-PR payload lives in [`templates/setup`](templates/setup), including the four-job Actions workflow.
 
 ## Pipeline
