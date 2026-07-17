@@ -146,7 +146,9 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Add a bounded production HTTPS transport behind trusted opaque endpoint resolution.
 - [x] Exchange injected trusted runner identity for short-lived stage credentials through a bounded trusted HTTPS boundary.
 - [x] Add an opt-in customer-runner MoneyAllocator live-proof harness outside the deterministic checkpoint suite.
+- [x] Add a simpler opt-in direct OpenAI Responses provider and MoneyAllocator proof runner for developer validation.
 - [ ] Execute and record the live proof against a configured customer-runner structured endpoint.
+- [ ] Execute the direct OpenAI proof after the API project has usable credit, then record the verified real-model result.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
 
@@ -482,8 +484,9 @@ The recent and next commit-sized milestones are:
 15. [x] `feat: exchange trusted runner identity for model credentials`
 16. [x] `feat: compose trusted runner structured model provider`
 17. [x] `test: add opt-in trusted runner live proof`
+18. [x] `feat: add opt-in OpenAI Responses proof`
 
-The immediate next task is Phase 1C: execute the opt-in MoneyAllocator proof on a customer-controlled runner with fresh stage identity and a configured structured endpoint, then record the successful live result without adding live calls or credentials to the deterministic checkpoint suite.
+The immediate next task is Phase 1C: enable usable credit for the configured OpenAI API project, rerun `npm run test:openai-live`, and record the verified real-model MoneyAllocator result without adding live calls or credentials to the deterministic checkpoint suite. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

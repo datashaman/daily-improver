@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: opt-in customer-runner MoneyAllocator live-proof harness with explicit no-network skip/require gating.
-- Current checkpoint commit: `test: add opt-in trusted runner live proof`.
+- Last completed milestone: opt-in direct OpenAI Responses provider and MoneyAllocator proof runner with bounded source context, structured file outputs, and local write validation.
+- Current checkpoint commit: `feat: add opt-in OpenAI Responses proof`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, bounded trusted-runner identity exchange for exact stage/scope credentials, an explicit production composition boundary for runner-owned inputs, and an opt-in live proof harness excluded from deterministic checkpoints; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, bounded trusted-runner identity exchange for exact stage/scope credentials, an explicit production composition boundary for runner-owned inputs, an opt-in trusted-runner live harness, and a simpler opt-in direct OpenAI Responses proof excluded from deterministic checkpoints; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Execute the opt-in MoneyAllocator proof on a customer-controlled runner with fresh stage identity assertions and a configured runner-side structured endpoint, then record the successful live result without adding credentials or live calls to the deterministic checkpoint suite.
+Enable usable API credit for the OpenAI project backing the ignored local key, rerun `npm run test:openai-live`, and record the independently verified MoneyAllocator result without adding credentials or live calls to the deterministic checkpoint suite.
 
 ## Acceptance criteria for the next task
 
-- Run `npm run test:live-model` with `DAILY_IMPROVER_LIVE_MODE=require`, absolute runner-owned policy/resolution files, an absent dedicated workspace, and freshly acquired distinct test/build identity assertions.
-- Exercise both stages against the configured real endpoint; the endpoint must be bound out-of-band to the dedicated workspace and materialize only response-declared files.
-- Record a passing baseline-defect-test failure, sealed test/specification artifacts, independently verified bounded builder patch, completed cost/attempt records, and sanitized artifacts.
-- Retain no identity assertion, stage credential, endpoint locator, or permanent credential in the repository or recorded run outputs.
+- Confirm the API project has usable credit or a non-exhausted spend limit; ChatGPT subscription billing does not provide API credit.
+- Run `npm run test:openai-live` with the ignored `.daily-improver/openai.env` key and an accessible model.
+- Prove the model-generated defect test fails against baseline, test/specification artifacts are sealed, and the bounded model-generated patch passes independent verification.
+- Retain no API key, host checkout path, raw failed response, or unvalidated model file output in repository artifacts.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -48,6 +48,7 @@ Execute the opt-in MoneyAllocator proof on a customer-controlled runner with fre
 - Credential exchange bounds identity, request, response, and timeout values; unsupported protocols, extended schemas, mismatched claims, status failures, malformed responses, and oversized values fail closed with sanitized explicit classifications. Only transient acquisition failures retry, and failed exchanges settle zero model cost.
 - The local runner creates an isolated daily worktree and branch.
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
+- The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
@@ -57,6 +58,7 @@ Execute the opt-in MoneyAllocator proof on a customer-controlled runner with fre
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
 - The local CLI delegates to configured commands; the live MoneyAllocator harness exists, but it has not yet been executed against a configured customer-runner model endpoint.
+- The direct OpenAI live proof reached the API but stopped before model output with HTTP 429 `insufficient_quota`; the configured API project needs usable credit or a higher spend limit.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
@@ -67,18 +69,17 @@ Execute the opt-in MoneyAllocator proof on a customer-controlled runner with fre
 
 ## Last verification
 
-Verified on 2026-07-17 for the opt-in trusted runner live-proof harness slice:
+Verified on 2026-07-17 for the opt-in direct OpenAI Responses proof slice:
 
-- Focused live configuration gate tests: 3 tests passed.
-- Explicit optional live invocation: 1 test skipped before file or network access because live runner inputs were absent.
-- `npm test`: 186 tests passed; the live endpoint proof remained excluded.
+- Focused direct OpenAI provider tests: 4 tests passed.
+- `npm test`: 190 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .`: not required; CLI runtime and production dependencies did not change.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- Live configuration absence in `require` mode and an omitted invocation mode failed before network access; `skip` mode produced an intentional skip. Full live execution remains pending because this checkout has no customer-runner endpoint or fresh identity assertions.
+- `npm run test:openai-live` reached OpenAI with the securely stored ignored project key, then failed before model output or repository writes with sanitized HTTP 429 `insufficient_quota`. No further live retries are appropriate until API billing or the project spend limit changes.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

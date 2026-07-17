@@ -14,6 +14,7 @@
     "checkpoint": "npm run check && npm run check:unused && npm test && git diff --check && git status --short --branch",
     "test": "npm run build && node --test dist/test/**/*.test.js",
     "test:live-model": "npm run build && node --test dist/test/trusted-runner-money-allocator.live.js",
+    "test:openai-live": "npm run build && DAILY_IMPROVER_OPENAI_LIVE_MODE=require node --env-file-if-exists=.daily-improver/openai.env --test dist/test/openai-money-allocator.live.js",
     "dev": "tsx src/cli.ts",
     "start": "node dist/src/cli.js"
   },
