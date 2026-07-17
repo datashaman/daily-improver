@@ -78,8 +78,8 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 Goal: make `analyse` generate and normalize its own evidence.
 
-- [ ] Add an evidence-runner contract with timeouts and resource limits.
-- [ ] Run `composer validate`.
+- [x] Add an evidence-runner contract with timeouts and resource limits.
+- [x] Run `composer validate`.
 - [ ] Run `composer audit --format=json`.
 - [ ] Run PHPStan or Psalm with machine-readable output.
 - [ ] Run PHPUnit or Pest with Clover coverage.

@@ -4,27 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: deterministic PHP/Laravel autonomous improvement proof.
-- Last completed implementation commit: `68bd913` (`feat: prove autonomous PHP improvement loop`).
+- Last completed milestone: language-neutral bounded evidence runner and trusted Composer validation integration.
+- Last completed implementation commit: `c86c690` (`feat: validate composer evidence with bounded runner`).
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: no implementation work for Phase 1A has started.
+- Current state: the first Phase 1A slice is implemented, verified, and committed.
 
 ## Exact next task
 
-Implement the evidence-runner contract and use it to invoke and normalize the first trusted PHP tool: `composer validate`.
-
-This first slice should establish the reusable execution model before adding PHPStan, coverage, Infection, audit, or complexity commands.
+Invoke `composer audit --format=json` through the evidence-runner contract and normalize dependency-vulnerability findings.
 
 ## Acceptance criteria for the next task
 
-- A language-neutral evidence-runner contract exists outside the PHP adapter.
-- Command execution has an explicit timeout and output-size limit.
-- Results distinguish success, code finding, unavailable tool, configuration failure, timeout, and infrastructure failure.
-- The result records command identity, duration, exit code, and output hashes without persisting unnecessary raw output.
-- The PHP adapter can invoke `composer validate` through the contract.
-- Repository commands cannot silently replace this trusted command.
-- Unit tests cover success, timeout, missing executable, invalid Composer configuration, and output truncation.
+- The command is trusted and direct; repository scripts cannot silently replace it.
+- Composer 2.10 and earlier supported audit JSON shapes and exit semantics are normalized deliberately.
+- Vulnerability, abandoned-package, policy, missing-package, configuration, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
+- Findings contain stable package/advisory identity and bounded evidence without persisting raw command output.
+- Unit tests cover clean audit output, vulnerabilities, malformed JSON/configuration failure, missing Composer, timeout, and truncation.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -41,7 +37,7 @@ This first slice should establish the reusable execution model before adding PHP
 
 ## Known placeholders
 
-- Evidence tools are not automatically executed yet.
+- Only `composer validate` is automatically executed; the other PHP evidence tools still depend on prepared artifacts.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -53,9 +49,9 @@ This first slice should establish the reusable execution model before adding PHP
 
 ## Last verification
 
-Verified on 2026-07-17:
+Verified on 2026-07-17 for the Composer validation slice:
 
-- `npm test`: 11 tests passed.
+- `npm test`: 18 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -66,7 +62,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint becomes safe to clear after the handoff-document changes are committed and the working tree is clean. After that commit, the exact next task is fully represented above and no conversation-only decision is required.
+This checkpoint is safe to clear: the Composer validation slice is committed, the working tree is clean, verification passes, and the exact next task is fully represented above.
 
 ## Updating this file
 

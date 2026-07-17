@@ -42,7 +42,9 @@ Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.
 
 ## PHP evidence
 
-The first adapter consumes machine-readable evidence under `.ai/evidence/`:
+The PHP adapter directly runs the trusted command `composer validate --no-interaction --no-plugins` with a timeout and bounded output capture. Validation errors and warnings become normalized candidates; execution metadata retains command identity, duration, exit code, byte counts, and full-output hashes rather than raw output.
+
+The adapter also consumes machine-readable evidence under `.ai/evidence/`:
 
 - `infection.json`: escaped/not-covered mutations with file, line, mutator, description, and optional invariant.
 - `phpstan.json`: PHPStan JSON output grouped by file.

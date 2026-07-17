@@ -1,4 +1,4 @@
-import type { RepositoryAdapter } from "../contracts.js";
+import type { EvidenceRunner, RepositoryAdapter } from "../contracts.js";
 import type {
   CapabilityKind,
   CommandCapability,
@@ -7,6 +7,8 @@ import type {
 } from "../domain/model.js";
 import { exists, readJson } from "./shared.js";
 import { collectPhpEvidence } from "./php-evidence.js";
+import { collectComposerValidationEvidence } from "./composer-validation.js";
+import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 
 interface ComposerManifest {
   readonly require?: Readonly<Record<string, string>>;
@@ -18,6 +20,8 @@ type PackageMap = Readonly<Record<string, string>>;
 
 export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
+
+  constructor(private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner()) {}
 
   async detect(root: string): Promise<number> {
     return (await exists(root, "composer.json")) ? 100 : 0;
@@ -39,7 +43,11 @@ export class PhpAdapter implements RepositoryAdapter {
   }
 
   async discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]> {
-    const candidates: ImprovementCandidate[] = [...await collectPhpEvidence(profile.root)];
+    const composerValidation = await collectComposerValidationEvidence(profile.root, this.evidenceRunner);
+    const candidates: ImprovementCandidate[] = [
+      ...composerValidation.candidates,
+      ...await collectPhpEvidence(profile.root),
+    ];
     if (!profile.capabilities.has("test")) {
       candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, ["composer.json has no detected test runner"], ["composer.json", "tests"]));
     }
