@@ -17,7 +17,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
-- The exact next task is introducing separate short-lived credentials for test and builder agents.
+- Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
+- The exact next task is adding deterministic provider replay fixtures.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -66,7 +67,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- The local CLI remains command-backed; the structured provider still lacks a production endpoint transport and credential flow.
+- The local CLI remains command-backed; the structured provider still lacks a production endpoint transport and production credential exchange.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
 - `publish` emits a request artifact but does not push or open a PR.
@@ -136,7 +137,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Retry only classified transient failures.
 - [x] Reject malformed or incomplete responses.
 - [x] Store model rationale separately from trusted evidence.
-- [ ] Use separate short-lived credentials for test and builder agents.
+- [x] Use separate short-lived credentials for test and builder agents.
 - [ ] Add deterministic provider replay fixtures.
 - [ ] Add model routing based on task complexity.
 - [ ] Keep the provider interface compatible with private customer endpoints.
@@ -464,8 +465,10 @@ The recent and next commit-sized milestones are:
 4. [x] `feat: define structured agent contracts`
 5. [x] `feat: add structured model agent provider`
 6. [x] `feat: enforce structured model cost budgets`
+7. [x] `feat: retry classified transient model failures`
+8. [x] `feat: isolate structured model stage credentials`
 
-The immediate next task is Phase 1C: retry structured model requests only after classified transient failures.
+The immediate next task is Phase 1C: add deterministic provider replay fixtures.
 
 ## Initial operating limits
 

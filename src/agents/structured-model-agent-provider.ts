@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { minimatch } from "minimatch";
 import type {
   AgentContext,
@@ -36,6 +37,12 @@ import {
   type ModelRetryPolicy,
   type ModelRetryTiming,
 } from "./model-request-retry.js";
+import {
+  maximumModelStageCredentialLifetimeMs,
+  systemModelCredentialClock,
+  validateModelStageCredential,
+  type ModelStageCredentialPolicy,
+} from "./model-stage-credential.js";
 
 export { ModelTransportFailure, StructuredModelRequestFailure } from "./model-request-retry.js";
 export type {
@@ -53,6 +60,7 @@ export interface ModelTransportInvocation {
   readonly request: ModelRequest;
   readonly workingDirectory: string;
   readonly maximumCostUsd: number;
+  readonly credential: string;
 }
 
 export interface ModelTransport {
@@ -62,16 +70,24 @@ export interface ModelTransport {
 export class StructuredModelAgentProvider implements AgentProvider {
   private readonly budgets: ModelCostBudgets;
   private readonly retryPolicy: ModelRetryPolicy;
+  private readonly credentials: Required<ModelStageCredentialPolicy>;
+  private readonly credentialStages = new Map<string, ModelAgentStage>();
 
   constructor(
     private readonly transport: ModelTransport,
     budgets: ModelCostBudgets,
+    credentialPolicy: ModelStageCredentialPolicy,
     private readonly budgetState: ModelCostBudgetState = new InMemoryModelCostBudgetState(),
     retryPolicy: ModelRetryPolicy = noModelRetries,
     private readonly retryTiming: ModelRetryTiming = systemModelRetryTiming,
   ) {
     this.budgets = validateModelCostBudgets(budgets);
     this.retryPolicy = validateModelRetryPolicy(retryPolicy);
+    this.credentials = {
+      source: credentialPolicy.source,
+      clock: credentialPolicy.clock ?? systemModelCredentialClock,
+      maximumLifetimeMs: credentialPolicy.maximumLifetimeMs ?? maximumModelStageCredentialLifetimeMs,
+    };
   }
 
   async generateTests(context: AgentContext): Promise<TestAgentExecution> {
@@ -154,7 +170,7 @@ export class StructuredModelAgentProvider implements AgentProvider {
   private async invoke<T extends { readonly usage: { readonly estimatedCostUsd: number } }>(
     context: AgentContext,
     parser: (value: unknown) => T,
-    invocation: Omit<ModelTransportInvocation, "maximumCostUsd">,
+    invocation: Omit<ModelTransportInvocation, "maximumCostUsd" | "credential">,
     validatePolicy: (response: T) => void,
   ): Promise<T & {
     readonly budgetDecision: ReturnType<ModelCostBudgetState["settle"]>;
@@ -169,11 +185,24 @@ export class StructuredModelAgentProvider implements AgentProvider {
         throw this.failure(invocation.stage, "budget", attempts, message(error, "Model request budget is unavailable."));
       }
 
+      let credential: string;
+      try {
+        credential = await this.acquireCredential(invocation.stage, context);
+      } catch {
+        attempts.push({
+          attempt,
+          classification: "policy",
+          budgetDecision: this.budgetState.settle(reservation, 0),
+        });
+        throw this.failure(invocation.stage, "policy", attempts, "A valid model credential is unavailable for this stage and scope.");
+      }
+
       let rawResponse: unknown;
       try {
         rawResponse = await this.transport.invoke({
           ...invocation,
           maximumCostUsd: reservation.request.reservationUsd,
+          credential,
         });
       } catch (error) {
         const classification = transportFailureClassification(error);
@@ -230,6 +259,23 @@ export class StructuredModelAgentProvider implements AgentProvider {
     throw new Error("Unreachable model retry state.");
   }
 
+  private async acquireCredential(stage: ModelAgentStage, context: AgentContext): Promise<string> {
+    const request = { stage, scope: credentialScope(context) } as const;
+    const credential = validateModelStageCredential(
+      await this.credentials.source.acquire(request),
+      request,
+      this.credentials.clock.nowMs(),
+      this.credentials.maximumLifetimeMs,
+    );
+    const fingerprint = createHash("sha256").update(credential.secret).digest("hex");
+    const priorStage = this.credentialStages.get(fingerprint);
+    if (priorStage !== undefined && priorStage !== stage) {
+      throw new Error("A model credential cannot be reused across stages.");
+    }
+    this.credentialStages.set(fingerprint, stage);
+    return credential.secret;
+  }
+
   private failure(
     stage: ModelAgentStage,
     classification: ModelRequestFailureClassification,
@@ -246,6 +292,10 @@ export class StructuredModelAgentProvider implements AgentProvider {
       attempts: [...attempts],
     };
   }
+}
+
+function credentialScope(context: AgentContext): string {
+  return `sha256:${createHash("sha256").update(context.repository).update("\0").update(context.spec.id).digest("hex")}`;
 }
 
 function task(context: AgentContext) {

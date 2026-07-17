@@ -36,6 +36,8 @@ Structured transports also require explicit test-stage, builder-stage, and aggre
 
 Transport failures use an explicit bounded classification. Only `transient` failures can retry, with at most five attempts and injected deterministic delay timing. `permanent`, `malformed-response`, `policy`, and `budget` classifications stop immediately. The trusted `agent-usage/v3` artifact includes `model-request-attempts/v1` metadata and a `model-cost-budget-decision/v2` decision for every recorded attempt; transport messages never enter this evidence. Model rationale remains separate and untrusted.
 
+Every structured transport attempt also acquires an ephemeral `model-stage-credential/v1` value from an injected source. The credential must match the exact test or builder stage and the current repository/specification scope, already be valid, remain unexpired, and have a lifetime of at most fifteen minutes. Missing, malformed, future-issued, expired, overlong, wrong-stage, or wrong-scope credentials fail as policy violations before transport with zero model cost. The provider keeps only an in-memory hash to prevent the same secret crossing from test to build. The raw secret is passed only in transport context: it is never included in the model request, response, usage/rationale artifact, attempt metadata, or failure message.
+
 GitHub OIDC is exchanged for short-lived, stage-scoped control-plane credentials. The workflow token only needs repository-local permissions appropriate to its job. The setup workflow is introduced through a human-reviewed setup PR; the App does not request workflow-write permission.
 
 ## Extension model

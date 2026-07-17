@@ -9,6 +9,30 @@ import {
   type ModelTransportInvocation,
 } from "../src/agents/structured-model-agent-provider.js";
 import { InMemoryModelCostBudgetState } from "../src/agents/model-cost-budget.js";
+import { modelStageCredentialSchemaVersion } from "../src/agents/model-stage-credential.js";
+
+const credentialNowMs = 1_784_236_800_000;
+
+function validCredentials(secrets = { test: "test-stage-secret", build: "builder-stage-secret" }) {
+  const requests: { readonly stage: "test" | "build"; readonly scope: string }[] = [];
+  return {
+    requests,
+    clock: { nowMs: () => credentialNowMs },
+    source: {
+      async acquire(request: { readonly stage: "test" | "build"; readonly scope: string }) {
+        requests.push(request);
+        return {
+          schemaVersion: modelStageCredentialSchemaVersion,
+          stage: request.stage,
+          scope: request.scope,
+          issuedAtMs: credentialNowMs - 1_000,
+          expiresAtMs: credentialNowMs + 60_000,
+          secret: secrets[request.stage],
+        } as const;
+      },
+    },
+  };
+}
 
 const budgets = {
   dailyLimitUsd: 0.01,
@@ -103,7 +127,8 @@ test("constructs approved stage requests and accepts bounded deterministic model
       usage,
     },
   ]);
-  const provider = new StructuredModelAgentProvider(transport, budgets);
+  const credentials = validCredentials();
+  const provider = new StructuredModelAgentProvider(transport, budgets, credentials);
 
   const testResult = await provider.generateTests(context);
   const buildResult = await provider.build(context);
@@ -114,6 +139,11 @@ test("constructs approved stage requests and accepts bounded deterministic model
   assert.equal(buildResult.budgetDecision?.dailyCommittedBeforeUsd, 0.002);
   assert.equal(buildResult.budgetDecision?.dailyCommittedAfterUsd, 0.004);
   assert.equal(transport.invocations[0]?.maximumCostUsd, 0.004);
+  assert.equal(transport.invocations[0]?.credential, "test-stage-secret");
+  assert.equal(transport.invocations[1]?.credential, "builder-stage-secret");
+  assert.deepEqual(credentials.requests.map(({ stage }) => stage), ["test", "build"]);
+  assert.ok(credentials.requests.every(({ scope }) => /^sha256:[a-f0-9]{64}$/.test(scope)));
+  assert.doesNotMatch(JSON.stringify(credentials.requests), /private\/customer/);
   assert.deepEqual(transport.invocations[0]?.request, {
     schemaVersion: "test-agent-request/v1",
     stage: "test",
@@ -137,10 +167,116 @@ test("constructs approved stage requests and accepts bounded deterministic model
   });
   const serializedRequests = JSON.stringify(transport.invocations.map(({ request }) => request));
   assert.doesNotMatch(serializedRequests, /private\/customer/);
+  assert.doesNotMatch(serializedRequests, /stage-secret/);
+  assert.doesNotMatch(JSON.stringify([testResult, buildResult]), /stage-secret/);
 });
 
+test("fails closed before transport for unavailable, mis-scoped, and invalid-lifetime credentials", async () => {
+  const cases = [
+    {
+      name: "unavailable",
+      credential: (_stage: "test" | "build", _scope: string) => undefined,
+    },
+    {
+      name: "wrong stage",
+      credential: (stage: "test" | "build", scope: string) => credential({ stage: stage === "test" ? "build" : "test", scope }),
+    },
+    {
+      name: "wrong scope",
+      credential: (stage: "test" | "build", scope: string) => credential({ stage, scope: `${scope}-other` }),
+    },
+    {
+      name: "unexpected field",
+      credential: (stage: "test" | "build", scope: string) => ({
+        ...credential({ stage, scope }),
+        leakedMetadata: "must not cross the credential boundary",
+      }),
+    },
+    {
+      name: "expired",
+      credential: (stage: "test" | "build", scope: string) => credential({ stage, scope, expiresAtMs: credentialNowMs }),
+    },
+    {
+      name: "not yet valid",
+      credential: (stage: "test" | "build", scope: string) => credential({ stage, scope, issuedAtMs: credentialNowMs + 1 }),
+    },
+    {
+      name: "not short lived",
+      credential: (stage: "test" | "build", scope: string) => credential({
+        stage,
+        scope,
+        issuedAtMs: credentialNowMs - 1,
+        expiresAtMs: credentialNowMs + (15 * 60 * 1_000),
+      }),
+    },
+  ] as const;
+
+  for (const item of cases) {
+    const transport = new DeterministicTransport([testResponse]);
+    const provider = new StructuredModelAgentProvider(transport, budgets, {
+      clock: { nowMs: () => credentialNowMs },
+      source: {
+        async acquire(request) {
+          return item.credential(request.stage, request.scope);
+        },
+      },
+    });
+
+    await assert.rejects(provider.generateTests(context), (error) => {
+      assert.ok(error instanceof StructuredModelRequestFailure, item.name);
+      assert.equal(error.classification, "policy", item.name);
+      assert.equal(error.requestAttempts.attempts.length, 1, item.name);
+      assert.equal(error.requestAttempts.attempts[0]?.budgetDecision.actualCostUsd, 0, item.name);
+      assert.doesNotMatch(error.message, /credential-secret/, item.name);
+      return true;
+    });
+    assert.equal(transport.invocations.length, 0, item.name);
+  }
+});
+
+test("prevents one credential secret from crossing the test and builder stage boundary", async () => {
+  const transport = new DeterministicTransport([testResponse, {
+    schemaVersion: "builder-response/v1",
+    status: "completed",
+    summary: "Distributed the remainder.",
+    changedFiles: ["app/Domain/MoneyAllocator.php"],
+    implementationNotes: [],
+    usage,
+  }]);
+  const provider = new StructuredModelAgentProvider(
+    transport,
+    budgets,
+    validCredentials({ test: "shared-stage-secret", build: "shared-stage-secret" }),
+  );
+
+  await provider.generateTests(context);
+  await assert.rejects(provider.build(context), (error) => {
+    assert.ok(error instanceof StructuredModelRequestFailure);
+    assert.equal(error.classification, "policy");
+    assert.doesNotMatch(error.message, /shared-stage-secret/);
+    return true;
+  });
+  assert.equal(transport.invocations.length, 1);
+});
+
+function credential(overrides: {
+  readonly stage: "test" | "build";
+  readonly scope: string;
+  readonly issuedAtMs?: number;
+  readonly expiresAtMs?: number;
+}) {
+  return {
+    schemaVersion: modelStageCredentialSchemaVersion,
+    stage: overrides.stage,
+    scope: overrides.scope,
+    issuedAtMs: overrides.issuedAtMs ?? credentialNowMs - 1_000,
+    expiresAtMs: overrides.expiresAtMs ?? credentialNowMs + 60_000,
+    secret: "credential-secret",
+  } as const;
+}
+
 test("fails closed on malformed responses and response-declared path escapes", async () => {
-  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets);
+  const malformed = new StructuredModelAgentProvider(new DeterministicTransport([{ status: "completed" }]), budgets, validCredentials());
   await assert.rejects(malformed.generateTests(context), /contain exactly/);
 
   const escapedTest = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -150,7 +286,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["app/Domain/MoneyAllocator.php"],
     tests: [{ path: "app/Domain/MoneyAllocator.php", purpose: "Invalid claim.", invariants: [] }],
     usage,
-  }]), budgets);
+  }]), budgets, validCredentials());
   await assert.rejects(escapedTest.generateTests(context), /outside its path permissions/);
 
   const protectedBuild = new StructuredModelAgentProvider(new DeterministicTransport([{
@@ -160,7 +296,7 @@ test("fails closed on malformed responses and response-declared path escapes", a
     changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
     implementationNotes: [],
     usage,
-  }]), budgets);
+  }]), budgets, validCredentials());
   await assert.rejects(protectedBuild.build({
     ...context,
     spec: { ...context.spec, allowedFiles: ["app/**", "tests/**"] },
@@ -175,7 +311,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 0.1, reservationUsd: 0.2 },
       build: { limitUsd: 0.1, reservationUsd: 0.1 },
     },
-  });
+  }, validCredentials());
   await assert.rejects(stageExceeded.generateTests(context), /exceeds its stage limit/);
   assert.equal(transport.invocations.length, 0);
 
@@ -185,7 +321,7 @@ test("rejects unavailable stage reservations before transport and preserves the 
       test: { limitUsd: 1, reservationUsd: 1 },
       build: { limitUsd: 1, reservationUsd: 1 },
     },
-  });
+  }, validCredentials());
   const narrowSpec = { ...context, spec: { ...context.spec, constraints: { ...context.spec.constraints, maxCostUsd: 0.5 } } };
   await assert.rejects(specificationExceeded.generateTests(narrowSpec), /remaining specification budget/);
   assert.equal(transport.invocations.length, 0);
@@ -210,7 +346,7 @@ test("accounts actual test usage and prevents an unaffordable builder request", 
       test: { limitUsd: 0.005, reservationUsd: 0.005 },
       build: { limitUsd: 0.004, reservationUsd: 0.003 },
     },
-  }, new InMemoryModelCostBudgetState());
+  }, validCredentials(), new InMemoryModelCostBudgetState());
 
   const testResult = await provider.generateTests(context);
   assert.equal(testResult.budgetDecision?.actualCostUsd, 0.004);
@@ -231,7 +367,7 @@ test("rejects reported usage above the reserved transport budget", async () => {
     }],
     usage: { ...usage, estimatedCostUsd: 0.005 },
   }]);
-  const provider = new StructuredModelAgentProvider(transport, budgets);
+  const provider = new StructuredModelAgentProvider(transport, budgets, validCredentials());
   await assert.rejects(provider.generateTests(context), /exceeds its reserved budget/);
   assert.equal(transport.invocations.length, 1);
 });
@@ -245,6 +381,7 @@ test("retries only classified transient failures with deterministic timing and p
   const provider = new StructuredModelAgentProvider(
     transport,
     { ...budgets, dailyLimitUsd: 0.02 },
+    validCredentials(),
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 3, delaysMs: [25, 50] },
     { async wait(delayMs) { delays.push(delayMs); } },
@@ -306,6 +443,7 @@ test("does not retry permanent, malformed-response, policy, or budget failures",
     const provider = new StructuredModelAgentProvider(
       transport,
       budgets,
+      validCredentials(),
       new InMemoryModelCostBudgetState(),
       { maxAttempts: 2, delaysMs: [0] },
       { async wait() { throw new Error("Unexpected retry timing."); } },
@@ -324,6 +462,7 @@ test("bounds retry configuration and stops after the configured transient attemp
   assert.throws(() => new StructuredModelAgentProvider(
     new DeterministicTransport([]),
     budgets,
+    validCredentials(),
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 6, delaysMs: [0, 0, 0, 0, 0] },
   ), /maxAttempts/);
@@ -336,6 +475,7 @@ test("bounds retry configuration and stops after the configured transient attemp
   const provider = new StructuredModelAgentProvider(
     transport,
     { ...budgets, dailyLimitUsd: 0.02 },
+    validCredentials(),
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },
@@ -357,6 +497,7 @@ test("fails closed before a retry transport call when conservative usage exhaust
   const provider = new StructuredModelAgentProvider(
     transport,
     { ...budgets, dailyLimitUsd: 0.007 },
+    validCredentials(),
     new InMemoryModelCostBudgetState(),
     { maxAttempts: 2, delaysMs: [0] },
     { async wait() {} },
