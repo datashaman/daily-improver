@@ -344,6 +344,7 @@ function task(context: AgentContext) {
   const { spec } = context;
   return {
     id: spec.id,
+    improvementIntent: spec.improvementIntent,
     title: spec.title,
     objective: spec.objective,
     currentBehaviour: spec.currentBehaviour,

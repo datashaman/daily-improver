@@ -46,6 +46,7 @@ async function mutationCandidates(root: string): Promise<ImprovementCandidate[]>
     .map((mutation) => ({
       id: `mutation-${fingerprint(`${mutation.file}:${mutation.line ?? 0}:${mutation.mutator ?? "unknown"}`)}`,
       kind: "test-protection" as const,
+      improvementIntent: mutation.status === "escaped" ? "defect" as const : "refactor" as const,
       title: `Kill surviving mutation in ${mutation.file}`,
       rationale: mutation.description ?? `A ${mutation.mutator ?? "behavioral"} mutation survived existing tests.`,
       confidence: mutation.status === "escaped" ? 0.98 : 0.88,

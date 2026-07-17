@@ -9,6 +9,7 @@ import {
 
 const task = {
   id: "spec-money-allocation",
+  improvementIntent: { schemaVersion: "improvement-intent/v1", intent: "defect", baselineProof: "defect-regression" },
   title: "Preserve allocation totals",
   objective: "Ensure integer allocations preserve the requested total.",
   currentBehaviour: "Remainders are discarded.",
@@ -54,6 +55,7 @@ test("accepts bounded versioned test-agent and builder requests", () => {
   });
 
   assert.equal(testRequest.task.id, task.id);
+  assert.equal(testRequest.task.improvementIntent.intent, "defect");
   assert.deepEqual(builderRequest.allowedFiles, ["app/Domain/MoneyAllocator.php"]);
 });
 

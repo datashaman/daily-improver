@@ -97,6 +97,7 @@ const context: AgentContext = {
   specPath: "/private/customer/repository/.ai/runs/2026-07-17/spec.json",
   spec: {
     id: "spec-money-allocation",
+    improvementIntent: { schemaVersion: "improvement-intent/v1", intent: "defect", baselineProof: "defect-regression" },
     title: "Preserve allocation totals",
     objective: "Ensure integer allocations preserve the requested total.",
     currentBehaviour: "Remainders are discarded.",
@@ -198,6 +199,7 @@ test("constructs approved stage requests and accepts bounded deterministic model
     stage: "test",
     task: {
       id: context.spec.id,
+      improvementIntent: context.spec.improvementIntent,
       title: context.spec.title,
       objective: context.spec.objective,
       currentBehaviour: context.spec.currentBehaviour,

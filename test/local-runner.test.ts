@@ -185,6 +185,7 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   ).run(repository);
 
   assert.equal(result.baselineTestFailed, true);
+  assert.equal(result.baselineProofSatisfied, true);
   assert.equal(result.verificationPassed, true);
   assert.equal(result.publication.draft, true);
   assert.match(result.branch, /^ai\/daily\/2026-07-17-/);
@@ -201,6 +202,13 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(usageArtifact.stdout, /"classification": "completed"/);
   const rationaleArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
   assert.match(rationaleArtifact.stdout, /"trust": "untrusted-model-output"/);
+  const specification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/spec.json`], repository));
+  assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
+  assert.match(specification.stdout, /"intent": "defect"/);
+  const testPlan = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-plan.json`], repository));
+  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v2"/);
+  assert.match(testPlan.stdout, /"baselineProof": "defect-regression"/);
+  assert.match(testPlan.stdout, /"outcome": "failed-as-expected"/);
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);

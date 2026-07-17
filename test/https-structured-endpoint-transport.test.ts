@@ -24,6 +24,7 @@ const invocation: ModelTransportInvocation = {
     stage: "test",
     task: {
       id: "spec-money-allocation",
+      improvementIntent: { schemaVersion: "improvement-intent/v1", intent: "defect", baselineProof: "defect-regression" },
       title: "Preserve allocation totals",
       objective: "Ensure integer allocations preserve the requested total.",
       currentBehaviour: "Remainders are discarded.",

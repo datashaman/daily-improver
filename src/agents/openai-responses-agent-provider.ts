@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readFile, realpath, rename, rm } from "node:fs/prom
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { glob } from "node:fs/promises";
 import { minimatch } from "minimatch";
+import type { ImprovementIntent } from "../domain/improvement-intent.js";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "./agent-provider.js";
 import {
   builderRequestSchemaVersion,
@@ -218,7 +219,7 @@ export class OpenAiResponsesAgentProvider implements AgentProvider {
     const startedAt = this.nowMs();
     const raw = await this.client.create({
       model: this.options.model,
-      instructions: instructions(stage, runnerRequirements),
+      instructions: instructions(stage, request.task.improvementIntent.intent, runnerRequirements),
       input,
       reasoning: { effort: this.options.reasoningEffort },
       max_output_tokens: this.options.maxOutputTokens,
@@ -326,10 +327,20 @@ const builderOutputSchema = {
   required: ["summary", "files", "implementationNotes"],
 } as const;
 
-function instructions(stage: "test" | "build", runnerRequirements: readonly string[]): string {
+function instructions(
+  stage: "test" | "build",
+  intent: ImprovementIntent,
+  runnerRequirements: readonly string[],
+): string {
   const action = stage === "test"
     ? [
-        "Generate focused regression or property tests that must fail against the supplied defective source.",
+        intent === "defect"
+          ? "Generate focused regression or property tests that must fail behaviorally against the supplied defective source."
+          : intent === "refactor"
+            ? "Generate focused characterization tests that must pass before and after the refactor."
+            : intent === "performance"
+              ? "Generate a deterministic performance measurement that passes while capturing the approved baseline for before-and-after comparison."
+              : "Generate a focused maintainability quality check that passes before and after the bounded change.",
         "Use only dependencies, autoloading, and execution mechanisms visibly supplied by the test harness and command.",
         "The test must fail because the selected behavior violates the approved invariant, never because tooling, framework classes, dependencies, or autoloading are unavailable.",
         "When the supplied command directly loads generated test files, emit top-level executable checks using only symbols visibly loaded by that harness.",
@@ -354,6 +365,7 @@ function agentTask(context: AgentContext) {
   const { spec } = context;
   return {
     id: spec.id,
+    improvementIntent: spec.improvementIntent,
     title: spec.title,
     objective: spec.objective,
     currentBehaviour: spec.currentBehaviour,

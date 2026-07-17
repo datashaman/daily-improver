@@ -291,6 +291,7 @@ function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
   return {
     id: finding.id,
     kind: "test-protection",
+    improvementIntent: escaped ? "defect" : "refactor",
     title: `Kill ${finding.status} mutation in ${finding.file}`,
     rationale: escaped
       ? `An Infection ${finding.mutator} mutation escaped the existing tests at ${finding.file}:${finding.line}.`

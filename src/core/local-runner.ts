@@ -6,11 +6,17 @@ import { CommandRunner } from "../infra/command-runner.js";
 import { GitWorkspaceManager } from "../infra/git-workspace.js";
 import { createTestManifest, runDirectory, writeArtifact } from "./artifacts.js";
 import type { PipelineStages } from "./stages.js";
+import {
+  assertImprovementIntent,
+  baselineMustFail,
+  type ImprovementIntentContract,
+} from "../domain/improvement-intent.js";
 
 export interface LocalRunResult {
   readonly branch: string;
   readonly candidate: string;
   readonly baselineTestFailed: boolean;
+  readonly baselineProofSatisfied: boolean;
   readonly verificationPassed: boolean;
   readonly publication: { readonly title: string; readonly body: string; readonly draft: boolean; readonly labels: readonly string[] };
 }
@@ -37,6 +43,7 @@ export class LocalImprovementRunner {
       const adapter = await this.stagesAdapter(isolated.path);
       const profile = await adapter.profile(isolated.path);
       const config = await loadConfig(isolated.path);
+      const improvementIntent = assertImprovementIntent(spec.improvementIntent);
       const test = profile.capabilities.get("test");
       if (!test) throw new Error("A test capability is required for autonomous correctness work.");
       const allowedTestPaths = config.protected_paths.filter((path) => path === "tests" || path === "test" || path.startsWith("tests/") || path.startsWith("test/"));
@@ -65,15 +72,12 @@ export class LocalImprovementRunner {
       await persistAgentExecution(isolated.path, "test", testExecution);
 
       const baseline = await this.runner.run(test.command, isolated.path);
-      if (baseline.exitCode === 0) throw new Error("Generated regression test did not fail against main behavior.");
       const baselineClassification = adapter.classifyFailure?.(`${baseline.stdout}\n${baseline.stderr}`) ?? "unclassified";
-      if (!defectBaselineFailureIsCredible(baselineClassification)) {
-        throw new Error(`Generated defect test failed for a non-behavioral reason: ${baselineClassification}.`);
-      }
+      const baselineProof = proveBaseline(improvementIntent, baseline.exitCode, baselineClassification);
       await writeArtifact(isolated.path, "test-plan.json", {
-        schema: 1,
-        baseline: "failed-as-expected",
-        baselineClassification,
+        schemaVersion: "test-plan/v2",
+        improvementIntent,
+        baseline: baselineProof,
         command: test.command,
         propertyInvariants: spec.propertyInvariants,
       });
@@ -98,7 +102,8 @@ export class LocalImprovementRunner {
       return {
         branch: isolated.branch,
         candidate: analysis.candidates[0]?.id ?? "unknown",
-        baselineTestFailed: true,
+        baselineTestFailed: baseline.exitCode !== 0,
+        baselineProofSatisfied: true,
         verificationPassed: verification.passed,
         publication,
       };
@@ -116,6 +121,32 @@ export function defectBaselineFailureIsCredible(classification: string): boolean
   return classification !== "syntax"
     && classification !== "resource-limit"
     && classification !== "dependency-or-autoload";
+}
+
+export interface BaselineProofResult {
+  readonly expected: "fail" | "pass";
+  readonly outcome: "failed-as-expected" | "passed-as-expected";
+  readonly classification?: string;
+}
+
+export function proveBaseline(
+  intent: ImprovementIntentContract,
+  exitCode: number,
+  classification: string,
+): BaselineProofResult {
+  const validated = assertImprovementIntent(intent);
+  if (!Number.isInteger(exitCode) || exitCode < 0) throw new Error("Baseline command exit code is malformed.");
+  if (baselineMustFail(validated)) {
+    if (exitCode === 0) throw new Error("Generated defect regression test did not fail against baseline behavior.");
+    if (!defectBaselineFailureIsCredible(classification)) {
+      throw new Error(`Generated defect test failed for a non-behavioral reason: ${classification}.`);
+    }
+    return { expected: "fail", outcome: "failed-as-expected", classification };
+  }
+  if (exitCode !== 0) {
+    throw new Error(`Generated ${validated.intent} baseline proof must pass before and after the change.`);
+  }
+  return { expected: "pass", outcome: "passed-as-expected" };
 }
 
 export async function persistAgentExecution(

@@ -144,11 +144,16 @@ export class PipelineStages {
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
     const verification = await readArtifact<{ passed: boolean; checks: readonly { command: string; exitCode: number }[] }>(root, "verification.json");
-    const testPlan = await optionalArtifact<{ baseline?: string; propertyInvariants?: readonly string[] }>(root, "test-plan.json");
+    const testPlan = await optionalArtifact<{
+      schemaVersion?: string;
+      improvementIntent?: { readonly intent?: string };
+      baseline?: { readonly outcome?: string };
+      propertyInvariants?: readonly string[];
+    }>(root, "test-plan.json");
     if (!verification.passed) throw new Error("Cannot publish an unverified improvement.");
     const request = {
       title: spec.title,
-      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${testPlan?.baseline === "failed-as-expected" ? "- Regression/property test failed against main and passed after the change.\n- The targeted surviving behavior is now detected.\n" : ""}${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
+      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${baselineSummary(testPlan)}${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
       draft: config.pull_request.draft,
       labels: config.pull_request.labels,
     };
@@ -173,6 +178,21 @@ export class PipelineStages {
     if (!this.unresolvedFindings) throw new Error("Unresolved finding state is required for analysis.");
     return this.unresolvedFindings;
   }
+}
+
+function baselineSummary(testPlan: {
+  readonly schemaVersion?: string;
+  readonly improvementIntent?: { readonly intent?: string };
+  readonly baseline?: { readonly outcome?: string };
+} | undefined): string {
+  if (testPlan?.schemaVersion !== "test-plan/v2") return "";
+  if (testPlan.baseline?.outcome === "failed-as-expected" && testPlan.improvementIntent?.intent === "defect") {
+    return "- Defect regression test failed behaviorally against the baseline and passed after the change.\n";
+  }
+  if (testPlan.baseline?.outcome === "passed-as-expected" && testPlan.improvementIntent?.intent) {
+    return `- ${testPlan.improvementIntent.intent} baseline proof passed before and after the change.\n`;
+  }
+  return "";
 }
 
 async function optionalArtifact<T>(root: string, name: string): Promise<T | undefined> {

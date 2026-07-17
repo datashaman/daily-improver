@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: independently verified real-model MoneyAllocator proof with trusted runner requirements and credible defect-baseline failure classification.
-- Current checkpoint commit: `fix: validate generated defect test execution`.
+- Last completed milestone: language-neutral improvement-intent classification with intent-specific baseline proof semantics.
+- Current checkpoint commit: `feat: classify improvement proof intent`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1D — Generated-test quality.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D now has an exhaustive `improvement-intent/v1` contract and intent-specific baseline proof semantics. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Introduce an explicit language-neutral improvement-intent classification (`defect`, `refactor`, `performance`, or `maintainability`) and use it to choose the baseline proof semantics.
+Require generated property tests to execute a meaningful input space and prove that they exercise the selected target and invariant.
 
 ## Acceptance criteria for the next task
 
-- Define a versioned, exhaustive, language-neutral improvement-intent contract.
-- Derive or validate the intent deterministically before the test-agent stage and retain it in trusted artifacts.
-- Require defect tests to fail credibly against baseline while defining pass-before-and-after semantics for refactors and appropriate proof modes for performance and maintainability work.
-- Reject missing, malformed, unsupported, or inconsistent intent without weakening existing safety gates.
-- Add executable examples and focused tests for every intent and failure mode, and update durable documentation.
+- Define a versioned, language-neutral property-test execution proof contract.
+- Require a bounded, meaningful generated input count rather than a single hard-coded example.
+- Bind the proof to the selected target and at least one approved property invariant without trusting model rationale.
+- Reject missing, malformed, unexecuted, trivial, wrong-target, or wrong-invariant proof before the builder stage.
+- Add executable examples and focused failure-mode tests without weakening sealed-artifact or independent-verification gates.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -51,6 +51,8 @@ Introduce an explicit language-neutral improvement-intent classification (`defec
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
+- Every specification and structured agent request carries an exact `improvement-intent/v1` contract. Candidate categories provide exhaustive deterministic defaults, while adapters may declare more precise bounded intent from evidence; escaped mutations are defects and uncovered behavior remains refactor/test-protection work.
+- `test-plan/v2` retains the sealed intent and observed baseline outcome. Defects require a credible behavioral failure; refactor characterization, performance measurement, and maintainability quality baselines must pass before the builder runs; every intent must then pass independent verification.
 - The opt-in direct OpenAI MoneyAllocator proof passed end to end with separate real-model test and builder calls, sealed protected artifacts, independent verification, and a draft publication request.
 - Builder changes are checked against sealed test/spec artifacts.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
@@ -70,17 +72,17 @@ Introduce an explicit language-neutral improvement-intent classification (`defec
 
 ## Last verification
 
-Verified on 2026-07-17 for the real-model MoneyAllocator proof follow-up:
+Verified on 2026-07-17 for the improvement-intent classification slice:
 
-- Focused provider, failure-classification, and local-runner tests: 8 tests passed.
-- `npm test`: 192 tests passed; both live model proofs remained excluded.
+- Focused intent, provider-contract, replay, OpenAI provider, and local-runner tests: 33 tests passed.
+- `npm test`: 196 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .`: not required; CLI runtime and production dependencies did not change.
-- End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- `npm run test:openai-live` passed with `gpt-5.6-terra`: the real test stage produced a credible baseline failure, the separate builder stage produced the bounded fix, protected artifacts remained sealed, independent `php tests/run.php` verification passed, and the draft publication request was produced. Key and artifact sanitization assertions passed.
+- End-to-end defect → classified failing property test → bounded fix → independently verified daily branch flow passed with sealed `improvement-intent/v1` and `test-plan/v2` artifacts.
+- The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

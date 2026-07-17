@@ -1,3 +1,5 @@
+import { assertImprovementIntent, type ImprovementIntentContract } from "../domain/improvement-intent.js";
+
 export const testAgentRequestSchemaVersion = "test-agent-request/v1" as const;
 export const testAgentResponseSchemaVersion = "test-agent-response/v1" as const;
 export const builderRequestSchemaVersion = "builder-request/v1" as const;
@@ -25,6 +27,7 @@ export interface AgentRepositoryContext {
 
 export interface AgentTask {
   readonly id: string;
+  readonly improvementIntent: ImprovementIntentContract;
   readonly title: string;
   readonly objective: string;
   readonly currentBehaviour: string;
@@ -161,10 +164,11 @@ export function parseBuilderResponse(value: unknown): BuilderResponse {
 }
 
 function parseTask(value: unknown): AgentTask {
-  const task = exactRecord(value, ["id", "title", "objective", "currentBehaviour", "proposedImprovement", "behavioursToPreserve", "acceptanceCriteria", "propertyInvariants", "exclusions", "evidence", "limits"], "agent task");
+  const task = exactRecord(value, ["id", "improvementIntent", "title", "objective", "currentBehaviour", "proposedImprovement", "behavioursToPreserve", "acceptanceCriteria", "propertyInvariants", "exclusions", "evidence", "limits"], "agent task");
   const taskLimits = exactRecord(task.limits, ["maxFiles", "maxChangedLines", "maxCostUsd"], "agent task limits");
   return {
     id: string(task.id, "agent task id", limits.identifier),
+    improvementIntent: assertImprovementIntent(task.improvementIntent),
     title: string(task.title, "agent task title"),
     objective: string(task.objective, "agent task objective"),
     currentBehaviour: string(task.currentBehaviour, "agent task currentBehaviour"),

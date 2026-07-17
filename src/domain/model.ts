@@ -1,5 +1,6 @@
 import type { CandidateValueClassification } from "./candidate-value.js";
 import type { CandidateScoreExplanation } from "./candidate-score.js";
+import type { ImprovementIntent, ImprovementIntentContract } from "./improvement-intent.js";
 
 export const capabilityKinds = [
   "install",
@@ -62,6 +63,7 @@ export interface CandidateReproducibility {
 export interface ImprovementCandidate {
   readonly id: string;
   readonly kind: CandidateKind;
+  readonly improvementIntent?: ImprovementIntent;
   readonly title: string;
   readonly rationale: string;
   readonly confidence: number;
@@ -122,6 +124,7 @@ export interface HumanTaskRecommendation {
 
 export interface ImprovementSpec {
   readonly id: string;
+  readonly improvementIntent: ImprovementIntentContract;
   readonly title: string;
   readonly objective: string;
   readonly currentBehaviour: string;

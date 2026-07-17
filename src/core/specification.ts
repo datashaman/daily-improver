@@ -1,4 +1,5 @@
 import type { ImprovementSpec, RankedCandidate, RepositoryProfile } from "../domain/model.js";
+import { classifyImprovementIntent } from "../domain/improvement-intent.js";
 
 export function createSpec(
   candidate: RankedCandidate,
@@ -8,6 +9,7 @@ export function createSpec(
   const verification = ["test", "lint", "static-analysis"] as const;
   return {
     id: `spec-${candidate.id}`,
+    improvementIntent: classifyImprovementIntent(candidate.kind, candidate.improvementIntent),
     title: candidate.title,
     objective: candidate.rationale,
     currentBehaviour: "Behavior is inferred from the current main branch and must be characterized before mutation.",

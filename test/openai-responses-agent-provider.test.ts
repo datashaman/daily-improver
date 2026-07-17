@@ -194,6 +194,7 @@ async function fixtureContext(): Promise<AgentContext> {
     specPath: join(repository, ".ai", "runs", "2026-07-17", "spec.json"),
     spec: {
       id: "spec-money-allocation",
+      improvementIntent: { schemaVersion: "improvement-intent/v1", intent: "defect", baselineProof: "defect-regression" },
       title: "Preserve allocation totals",
       objective: "Ensure integer allocations preserve the requested total.",
       currentBehaviour: "Remainders are discarded.",

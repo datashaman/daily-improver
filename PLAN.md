@@ -13,6 +13,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
 - Phase 1B is complete. Category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; versioned explanations replay those factors and weights through priority influence, value caps, and final scores, explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
+- Phase 1D now derives or validates an exact language-neutral `improvement-intent/v1` contract before agent execution. Defects require a credible behavioral baseline failure; refactors require passing characterization tests; performance and maintainability work use distinct passing measurement and quality baselines. All four require passing post-change verification.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
@@ -156,9 +157,9 @@ Exit gate: the MoneyAllocator fixture passes with a real model provider rather t
 
 Goal: prove that generated tests are meaningful and cannot be weakened by the builder.
 
-- [ ] Classify candidates as defect, refactor, performance, or maintainability work.
-- [ ] Require defect regression tests to fail against main.
-- [ ] Require refactor characterization tests to pass before and after.
+- [x] Classify candidates as defect, refactor, performance, or maintainability work.
+- [x] Require defect regression tests to fail against main.
+- [x] Require refactor characterization tests to pass before and after.
 - [ ] Require property tests to execute a meaningful generated input space.
 - [ ] Require property tests to exercise the selected target and invariant.
 - [ ] Require the relevant test to fail under a known mutation where applicable.
@@ -486,8 +487,9 @@ The recent and next commit-sized milestones are:
 17. [x] `test: add opt-in trusted runner live proof`
 18. [x] `feat: add opt-in OpenAI Responses proof`
 19. [x] `fix: validate generated defect test execution`
+20. [x] `feat: classify improvement proof intent`
 
-The immediate next task is Phase 1D: introduce an explicit language-neutral improvement-intent classification (`defect`, `refactor`, `performance`, or `maintainability`) and use it to select the correct baseline proof semantics. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: require property tests to execute a meaningful generated input space and prove that they exercise the selected target and invariant. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 
