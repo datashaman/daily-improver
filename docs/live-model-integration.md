@@ -66,7 +66,7 @@ For a workflow where live inputs are optional, set `DAILY_IMPROVER_LIVE_MODE=ski
 
 The live run must demonstrate all of the following:
 
-1. The test-stage endpoint materializes its declared MoneyAllocator property test.
+1. The test-stage endpoint materializes its declared MoneyAllocator property test, which emits the required `property-test-execution-proof/v1` artifact during execution.
 2. The generated test fails against the committed defective baseline.
 3. The test/specification artifacts are sealed before the builder runs.
 4. The build-stage endpoint changes only its bounded declared implementation files.

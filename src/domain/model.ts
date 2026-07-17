@@ -133,6 +133,7 @@ export interface ImprovementSpec {
   readonly behavioursToPreserve: readonly string[];
   readonly acceptanceCriteria: readonly string[];
   readonly propertyInvariants: readonly string[];
+  readonly propertyTestTarget?: string;
   readonly exclusions: readonly string[];
   readonly verification: readonly CapabilityKind[];
   readonly constraints: {

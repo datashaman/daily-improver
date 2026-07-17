@@ -1,4 +1,5 @@
-import { cp } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../agents/agent-provider.js";
 import { loadConfig } from "../config.js";
@@ -11,6 +12,10 @@ import {
   baselineMustFail,
   type ImprovementIntentContract,
 } from "../domain/improvement-intent.js";
+import {
+  readPropertyTestExecutionProof,
+  type PropertyTestExecutionProof,
+} from "../domain/property-test-execution-proof.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -44,6 +49,9 @@ export class LocalImprovementRunner {
       const profile = await adapter.profile(isolated.path);
       const config = await loadConfig(isolated.path);
       const improvementIntent = assertImprovementIntent(spec.improvementIntent);
+      if (spec.propertyInvariants.length > 0 && !spec.propertyTestTarget) {
+        throw new Error("A selected target is required when the specification requires property-test proof.");
+      }
       const test = profile.capabilities.get("test");
       if (!test) throw new Error("A test capability is required for autonomous correctness work.");
       const allowedTestPaths = config.protected_paths.filter((path) => path === "tests" || path === "test" || path.startsWith("tests/") || path.startsWith("test/"));
@@ -64,6 +72,10 @@ export class LocalImprovementRunner {
           testConventions: [
             "Add focused regression or property tests using the repository test harness.",
             "Use only dependencies and loading mechanisms demonstrably available to the detected test command; the test must fail because of the selected defect, not missing tooling or autoloading.",
+            ...(spec.propertyTestTarget ? [
+              `Exercise the selected target ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one approved property invariant for every input.`,
+              "During the test command, write property-test-execution-proof/v1 JSON to DAILY_IMPROVER_PROPERTY_PROOF_PATH using DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE. Include the generated test path, selected target, exact approved invariant, unique SHA-256 input digests, and execution/check/failure counts.",
+            ] : []),
           ],
           builderConventions: ["Implement only the approved specification and preserve existing public interfaces."],
         },
@@ -71,15 +83,46 @@ export class LocalImprovementRunner {
       const testExecution = await this.agents.generateTests(baseContext);
       await persistAgentExecution(isolated.path, "test", testExecution);
 
-      const baseline = await this.runner.run(test.command, isolated.path);
+      const propertyProofRuntimePath = join(isolated.path, ".daily-improver", "property-test-execution-proof.json");
+      const propertyExecutionNonce = randomBytes(16).toString("hex");
+      await mkdir(join(isolated.path, ".daily-improver"), { recursive: true });
+      await rm(propertyProofRuntimePath, { force: true });
+      const baseline = await this.runner.run(test.command, isolated.path, undefined, spec.propertyTestTarget ? {
+        DAILY_IMPROVER_PROPERTY_PROOF_PATH: propertyProofRuntimePath,
+        DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE: propertyExecutionNonce,
+        DAILY_IMPROVER_PROPERTY_TARGET: spec.propertyTestTarget,
+        DAILY_IMPROVER_PROPERTY_INVARIANTS: JSON.stringify(spec.propertyInvariants),
+      } : {});
       const baselineClassification = adapter.classifyFailure?.(`${baseline.stdout}\n${baseline.stderr}`) ?? "unclassified";
       const baselineProof = proveBaseline(improvementIntent, baseline.exitCode, baselineClassification);
+      let propertyProof: PropertyTestExecutionProof | undefined;
+      if (spec.propertyTestTarget) {
+        const changedTests = await changedTestPaths(this.runner, isolated.path, allowedTestPaths);
+        propertyProof = await readPropertyTestExecutionProof(propertyProofRuntimePath, {
+          executionNonce: propertyExecutionNonce,
+          target: spec.propertyTestTarget,
+          approvedInvariants: spec.propertyInvariants,
+          changedTestPaths: changedTests,
+          baselineMustFail: baselineMustFail(improvementIntent),
+        });
+        await writeArtifact(isolated.path, "property-test-execution-proof.json", propertyProof);
+      }
+      await rm(propertyProofRuntimePath, { force: true });
       await writeArtifact(isolated.path, "test-plan.json", {
-        schemaVersion: "test-plan/v2",
+        schemaVersion: "test-plan/v3",
         improvementIntent,
         baseline: baselineProof,
         command: test.command,
         propertyInvariants: spec.propertyInvariants,
+        ...(propertyProof ? {
+          propertyTestExecutionProof: {
+            schemaVersion: propertyProof.schemaVersion,
+            artifact: "property-test-execution-proof.json",
+            target: propertyProof.target,
+            invariant: propertyProof.invariant,
+            generatedInputCount: propertyProof.inputDigests.length,
+          },
+        } : {}),
       });
       const manifest = await createTestManifest(isolated.path, this.manifestKey);
       await writeArtifact(isolated.path, "test-manifest.json", manifest);
@@ -115,6 +158,22 @@ export class LocalImprovementRunner {
   private async stagesAdapter(root: string) {
     return await this.stages.resolveAdapter(root);
   }
+}
+
+async function changedTestPaths(
+  runner: CommandRunner,
+  root: string,
+  allowedTestPaths: readonly string[],
+): Promise<readonly string[]> {
+  const result = await runner.run(["git", "ls-files", "--modified", "--others", "--exclude-standard"], root);
+  if (result.exitCode !== 0) throw new Error(`Unable to identify generated property tests: ${result.stderr.trim()}`);
+  return result.stdout.split("\n")
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0 && allowedTestPaths.some((allowed) => {
+      const wildcardIndex = allowed.search(/[?*\[]/);
+      const prefix = (wildcardIndex === -1 ? allowed : allowed.slice(0, wildcardIndex)).replace(/\/$/, "");
+      return path === allowed || path === prefix || path.startsWith(`${prefix}/`);
+    }));
 }
 
 export function defectBaselineFailureIsCredible(classification: string): boolean {

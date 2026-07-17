@@ -20,13 +20,37 @@ declare(strict_types=1);
 use App\\Domain\\MoneyAllocator;
 
 $allocator = new MoneyAllocator();
+$inputDigests = [];
+$failures = [];
 for ($total = 0; $total <= 50; $total++) {
     for ($parts = 1; $parts <= 10; $parts++) {
+        $inputDigests[] = hash('sha256', json_encode([$total, $parts], JSON_THROW_ON_ERROR));
         $allocation = $allocator->allocate($total, $parts);
         if (array_sum($allocation) !== $total) {
-            throw new RuntimeException("Allocation did not preserve total {$total} across {$parts} parts.");
+            $failures[] = "Allocation did not preserve total {$total} across {$parts} parts.";
         }
     }
+}
+
+$proofPath = getenv('DAILY_IMPROVER_PROPERTY_PROOF_PATH');
+$executionNonce = getenv('DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE');
+$target = getenv('DAILY_IMPROVER_PROPERTY_TARGET');
+$invariants = json_decode(getenv('DAILY_IMPROVER_PROPERTY_INVARIANTS') ?: '[]', true, 512, JSON_THROW_ON_ERROR);
+if (is_string($proofPath) && is_string($executionNonce) && is_string($target) && isset($invariants[0])) {
+    file_put_contents($proofPath, json_encode([
+        'schemaVersion' => 'property-test-execution-proof/v1',
+        'executionNonce' => $executionNonce,
+        'testPath' => 'tests/Property/MoneyAllocatorInvariantTest.php',
+        'target' => $target,
+        'invariant' => $invariants[0],
+        'inputDigests' => $inputDigests,
+        'targetExecutionCount' => count($inputDigests),
+        'invariantCheckCount' => count($inputDigests),
+        'failedInvariantCheckCount' => count($failures),
+    ], JSON_THROW_ON_ERROR));
+}
+if ($failures !== []) {
+    throw new RuntimeException($failures[0]);
 }
 `);
     const budgetDecision = fixtureBudgetDecision("test", 0, 0);
@@ -206,9 +230,13 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
   const testPlan = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/test-plan.json`], repository));
-  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v2"/);
+  assert.match(testPlan.stdout, /"schemaVersion": "test-plan\/v3"/);
   assert.match(testPlan.stdout, /"baselineProof": "defect-regression"/);
   assert.match(testPlan.stdout, /"outcome": "failed-as-expected"/);
+  assert.match(testPlan.stdout, /"generatedInputCount": 510/);
+  const propertyProof = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/property-test-execution-proof.json`], repository));
+  assert.match(propertyProof.stdout, /"schemaVersion": "property-test-execution-proof\/v1"/);
+  assert.match(propertyProof.stdout, /"targetExecutionCount": 510/);
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);

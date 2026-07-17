@@ -160,8 +160,8 @@ Goal: prove that generated tests are meaningful and cannot be weakened by the bu
 - [x] Classify candidates as defect, refactor, performance, or maintainability work.
 - [x] Require defect regression tests to fail against main.
 - [x] Require refactor characterization tests to pass before and after.
-- [ ] Require property tests to execute a meaningful generated input space.
-- [ ] Require property tests to exercise the selected target and invariant.
+- [x] Require property tests to execute a meaningful generated input space.
+- [x] Require property tests to exercise the selected target and invariant.
 - [ ] Require the relevant test to fail under a known mutation where applicable.
 - [ ] Detect tests that merely restate implementation details.
 - [ ] Detect deleted, skipped, weakened, or newly flaky tests.
@@ -488,8 +488,9 @@ The recent and next commit-sized milestones are:
 18. [x] `feat: add opt-in OpenAI Responses proof`
 19. [x] `fix: validate generated defect test execution`
 20. [x] `feat: classify improvement proof intent`
+21. [x] `feat: prove generated property test execution`
 
-The immediate next task is Phase 1D: require property tests to execute a meaningful generated input space and prove that they exercise the selected target and invariant. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1D: require the relevant generated test to fail under a known mutation where applicable. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

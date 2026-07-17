@@ -185,7 +185,7 @@ function baselineSummary(testPlan: {
   readonly improvementIntent?: { readonly intent?: string };
   readonly baseline?: { readonly outcome?: string };
 } | undefined): string {
-  if (testPlan?.schemaVersion !== "test-plan/v2") return "";
+  if (testPlan?.schemaVersion !== "test-plan/v3") return "";
   if (testPlan.baseline?.outcome === "failed-as-expected" && testPlan.improvementIntent?.intent === "defect") {
     return "- Defect regression test failed behaviorally against the baseline and passed after the change.\n";
   }

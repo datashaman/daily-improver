@@ -101,6 +101,10 @@ function candidate(kind: CandidateKind): RankedCandidate {
     testability: 0.8,
     evidence: ["bounded fixture evidence"],
     suggestedFiles: ["src/Target.fixture"],
+    ...(kind === "property-testing" ? {
+      target: "src/Target.fixture",
+      propertyInvariants: ["The selected target preserves its approved invariant."],
+    } : {}),
     estimatedDiffLines: 20,
     score: 0.8,
   };

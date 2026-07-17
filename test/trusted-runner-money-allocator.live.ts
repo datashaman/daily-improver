@@ -11,6 +11,7 @@ import { loadConfig } from "../src/config.js";
 import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../src/contracts.js";
 import { createTestManifest, runDirectory, writeArtifact } from "../src/core/artifacts.js";
 import { persistAgentExecution } from "../src/core/local-runner.js";
+import { readPropertyTestExecutionProof } from "../src/domain/property-test-execution-proof.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import {
   assertWorkspaceCanBeCreated,
@@ -51,6 +52,7 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     const analysis = await app.stages.analyse(live.workspace);
     const spec = await app.stages.specify(live.workspace);
     assert.equal(analysis.candidates.length, 1);
+    assert.ok(spec.propertyTestTarget, "The live property proof requires a selected target.");
 
     const provider = createTrustedRunnerStructuredProvider(live.configuration, {
       endpointResolver: { async resolve() { return live.endpointResolution; } },
@@ -79,7 +81,11 @@ test("MoneyAllocator passes through the live trusted structured provider", async
         allowedTestPaths,
         protectedFiles: [],
         commands,
-        testConventions: ["Add a focused property test using the repository test harness."],
+        testConventions: [
+          "Add a focused property test using the repository test harness.",
+          `Exercise ${spec.propertyTestTarget} across at least 32 unique generated inputs and check one exact approved invariant for every input.`,
+          "During the test command, write property-test-execution-proof/v1 JSON to DAILY_IMPROVER_PROPERTY_PROOF_PATH using DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE.",
+        ],
         builderConventions: ["Implement only the approved specification and preserve existing public interfaces."],
       },
     };
@@ -87,13 +93,39 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     const testExecution = await provider.generateTests(baseContext);
     await assertDeclaredFilesExist(live.workspace, testExecution.rationale.changedFiles);
     await persistAgentExecution(live.workspace, "test", testExecution);
-    const baseline = await shell.run(testCapability.command, live.workspace);
+    const proofRuntimePath = join(live.workspace, ".daily-improver", "property-test-execution-proof.json");
+    const executionNonce = randomBytes(16).toString("hex");
+    await mkdir(join(live.workspace, ".daily-improver"), { recursive: true });
+    const baseline = await shell.run(testCapability.command, live.workspace, undefined, {
+      DAILY_IMPROVER_PROPERTY_PROOF_PATH: proofRuntimePath,
+      DAILY_IMPROVER_PROPERTY_EXECUTION_NONCE: executionNonce,
+      DAILY_IMPROVER_PROPERTY_TARGET: spec.propertyTestTarget,
+      DAILY_IMPROVER_PROPERTY_INVARIANTS: JSON.stringify(spec.propertyInvariants),
+    });
     assert.notEqual(baseline.exitCode, 0, "The generated defect test must fail against the baseline.");
+    const observedChanges = await expectSuccess(shell.run(["git", "ls-files", "--modified", "--others", "--exclude-standard"], live.workspace));
+    const propertyProof = await readPropertyTestExecutionProof(proofRuntimePath, {
+      executionNonce,
+      target: spec.propertyTestTarget,
+      approvedInvariants: spec.propertyInvariants,
+      changedTestPaths: observedChanges.stdout.split("\n").filter((path) => path.startsWith("tests/")),
+      baselineMustFail: true,
+    });
+    await writeArtifact(live.workspace, "property-test-execution-proof.json", propertyProof);
+    await rm(proofRuntimePath, { force: true });
     await writeArtifact(live.workspace, "test-plan.json", {
-      schema: 1,
-      baseline: "failed-as-expected",
+      schemaVersion: "test-plan/v3",
+      improvementIntent: spec.improvementIntent,
+      baseline: { expected: "fail", outcome: "failed-as-expected" },
       command: testCapability.command,
       propertyInvariants: spec.propertyInvariants,
+      propertyTestExecutionProof: {
+        schemaVersion: propertyProof.schemaVersion,
+        artifact: "property-test-execution-proof.json",
+        target: propertyProof.target,
+        invariant: propertyProof.invariant,
+        generatedInputCount: propertyProof.inputDigests.length,
+      },
     });
     const manifestKey = randomBytes(32).toString("hex");
     const manifest = await createTestManifest(live.workspace, manifestKey);
