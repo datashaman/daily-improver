@@ -9,11 +9,12 @@ import { exists, readJson } from "./shared.js";
 import { collectPhpEvidence } from "./php-evidence.js";
 import { collectComposerValidationEvidence } from "./composer-validation.js";
 import { collectComposerAuditEvidence } from "./composer-audit.js";
-import { collectPhpStaticAnalysisEvidence } from "./php-static-analysis.js";
-import { collectPhpCoverageEvidence } from "./php-coverage.js";
-import { collectPhpMutationEvidence } from "./php-mutation.js";
-import { collectPhpComplexityEvidence } from "./php-complexity.js";
+import { collectPhpStaticAnalysisEvidence, phpStaticAnalysisCommand, phpStaticAnalysisSchemaVersion } from "./php-static-analysis.js";
+import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersion } from "./php-coverage.js";
+import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
+import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
+import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
 
 interface ComposerManifest {
@@ -27,7 +28,10 @@ type PackageMap = Readonly<Record<string, string>>;
 export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
 
-  constructor(private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner()) {}
+  constructor(
+    private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner(),
+    private readonly evidenceCache: PhpEvidenceCache = new PhpEvidenceCache(),
+  ) {}
 
   async detect(root: string): Promise<number> {
     return (await exists(root, "composer.json")) ? 100 : 0;
@@ -54,19 +58,35 @@ export class PhpAdapter implements RepositoryAdapter {
     const composerAudit = await collectComposerAuditEvidence(profile.root, this.evidenceRunner);
     const staticAnalysisCapability = profile.capabilities.get("static-analysis");
     const staticAnalysis = staticAnalysisCapability
-      ? await collectPhpStaticAnalysisEvidence(profile.root, staticAnalysisCapability, this.evidenceRunner)
+      ? await this.evidenceCache.collect(
+        profile.root,
+        staticAnalysisCachePolicy(staticAnalysisCapability),
+        () => collectPhpStaticAnalysisEvidence(profile.root, staticAnalysisCapability, this.evidenceRunner),
+      )
       : undefined;
     const coverageCapability = profile.capabilities.get("coverage");
     const coverage = coverageCapability
-      ? await collectPhpCoverageEvidence(profile.root, coverageCapability, this.evidenceRunner)
+      ? await this.evidenceCache.collect(
+        profile.root,
+        coverageCachePolicy(coverageCapability),
+        () => collectPhpCoverageEvidence(profile.root, coverageCapability, this.evidenceRunner),
+      )
       : undefined;
     const mutationCapability = profile.capabilities.get("mutation-testing");
     const mutation = mutationCapability
-      ? await collectPhpMutationEvidence(profile.root, mutationCapability, this.evidenceRunner)
+      ? await this.evidenceCache.collect(
+        profile.root,
+        await mutationCachePolicy(profile.root),
+        () => collectPhpMutationEvidence(profile.root, mutationCapability, this.evidenceRunner),
+      )
       : undefined;
     const complexityCapability = profile.capabilities.get("complexity");
     const complexity = complexityCapability
-      ? await collectPhpComplexityEvidence(profile.root, complexityCapability, this.evidenceRunner)
+      ? await this.evidenceCache.collect(
+        profile.root,
+        complexityCachePolicy,
+        () => collectPhpComplexityEvidence(profile.root, complexityCapability, this.evidenceRunner),
+      )
       : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
@@ -147,4 +167,67 @@ function detectCapabilities(
 
 function command(kind: CapabilityKind, args: string[], source: CommandCapability["source"], framework?: string): CommandCapability {
   return framework ? { kind, command: args, source, framework } : { kind, command: args, source };
+}
+
+const phpSourcePatterns = ["composer.json", "composer.lock", "**/*.php"];
+
+function staticAnalysisCachePolicy(capability: CommandCapability): PhpEvidenceCachePolicy {
+  const tool = capability.framework === "psalm" ? "psalm" : "phpstan";
+  return {
+    collector: `static-analysis-${tool}`,
+    policyVersion: "php-static-analysis-policy/v1",
+    evidenceSchemaVersion: phpStaticAnalysisSchemaVersion,
+    command: phpStaticAnalysisCommand(tool),
+    versionCommand: [`vendor/bin/${tool}`, "--version"],
+    configurationPaths: tool === "phpstan"
+      ? ["phpstan.neon", "phpstan.neon.dist"]
+      : ["psalm.xml", "psalm.xml.dist"],
+    sourcePatterns: phpSourcePatterns,
+  };
+}
+
+function coverageCachePolicy(capability: CommandCapability): PhpEvidenceCachePolicy {
+  const tool = capability.framework === "pest" ? "pest" : "phpunit";
+  return {
+    collector: `coverage-${tool}`,
+    policyVersion: "php-coverage-policy/v1",
+    evidenceSchemaVersion: phpCoverageSchemaVersion,
+    command: phpCoverageCommand(tool, "$TRUSTED_CLOVER_PATH"),
+    versionCommand: [`vendor/bin/${tool}`, "--version"],
+    configurationPaths: tool === "pest"
+      ? ["phpunit.xml", "phpunit.xml.dist", "tests/Pest.php"]
+      : ["phpunit.xml", "phpunit.xml.dist"],
+    sourcePatterns: phpSourcePatterns,
+  };
+}
+
+async function mutationCachePolicy(root: string): Promise<PhpEvidenceCachePolicy> {
+  const configNames = ["infection.json5", "infection.json", "infection.json5.dist", "infection.json.dist"];
+  const selectedIndex = await firstExistingIndex(root, configNames);
+  return {
+    collector: "mutation-infection",
+    policyVersion: "php-mutation-policy/v1",
+    evidenceSchemaVersion: phpMutationSchemaVersion,
+    command: phpMutationCommand("$TRUSTED_INFECTION_CONFIG"),
+    versionCommand: ["vendor/bin/infection", "--version"],
+    configurationPaths: configNames.slice(0, selectedIndex + 1),
+    sourcePatterns: phpSourcePatterns,
+  };
+}
+
+const complexityCachePolicy: PhpEvidenceCachePolicy = {
+  collector: "complexity-phpmetrics",
+  policyVersion: "php-complexity-policy/v1",
+  evidenceSchemaVersion: phpComplexitySchemaVersion,
+  command: phpComplexityCommand("$TRUSTED_REPORT_PATH"),
+  versionCommand: ["vendor/bin/phpmetrics", "--version"],
+  configurationPaths: [".ai/improver.yml"],
+  sourcePatterns: ["composer.json", "composer.lock", "app/Domain/**/*.php", "src/**/*.php"],
+};
+
+async function firstExistingIndex(root: string, paths: readonly string[]): Promise<number> {
+  for (const [index, path] of paths.entries()) {
+    if (await exists(root, path)) return index;
+  }
+  return paths.length - 1;
 }

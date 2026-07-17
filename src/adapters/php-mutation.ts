@@ -20,6 +20,18 @@ const findingLimit = 200;
 const targetFilter = "app/Domain,src";
 const configNames = ["infection.json5", "infection.json", "infection.json5.dist", "infection.json.dist"] as const;
 
+export function phpMutationCommand(configPath: string): readonly string[] {
+  return [
+    "vendor/bin/infection",
+    `--configuration=${configPath}`,
+    `--filter=${targetFilter}`,
+    "--threads=1",
+    "--no-progress",
+    "--show-mutations=0",
+    "--no-interaction",
+  ];
+}
+
 export interface PhpMutationFinding {
   readonly id: string;
   readonly tool: "infection";
@@ -58,15 +70,7 @@ export async function collectPhpMutationEvidence(
     const prepared = await prepareWorkspace(root, workspace, configPath, reportPath);
     const run = await runner.run({
       identity: "infection.mutation",
-      command: [
-        "vendor/bin/infection",
-        `--configuration=${configPath}`,
-        `--filter=${targetFilter}`,
-        "--threads=1",
-        "--no-progress",
-        "--show-mutations=0",
-        "--no-interaction",
-      ],
+      command: phpMutationCommand(configPath),
       cwd: workspace,
       timeoutMs: 300_000,
       maxOutputBytes: 512 * 1024,

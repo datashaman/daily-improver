@@ -44,6 +44,10 @@ const trustedCommands: Readonly<Record<StaticAnalysisTool, readonly string[]>> =
   ],
 };
 
+export function phpStaticAnalysisCommand(tool: StaticAnalysisTool): readonly string[] {
+  return trustedCommands[tool];
+}
+
 export async function collectPhpStaticAnalysisEvidence(
   root: string,
   capability: CommandCapability,
@@ -52,7 +56,7 @@ export async function collectPhpStaticAnalysisEvidence(
   const tool = selectTool(capability);
   const run = await runner.run({
     identity: `${tool}.analyse`,
-    command: trustedCommands[tool],
+    command: phpStaticAnalysisCommand(tool),
     cwd: root,
     timeoutMs: 120_000,
     maxOutputBytes: 512 * 1024,

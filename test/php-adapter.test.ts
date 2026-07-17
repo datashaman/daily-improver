@@ -6,6 +6,7 @@ import test from "node:test";
 import type { EvidenceCommand, EvidenceRun, EvidenceRunner } from "../src/contracts.js";
 import { evidenceStubMetadata } from "./evidence-stub.js";
 import { PhpAdapter } from "../src/adapters/php.js";
+import { PhpEvidenceCache } from "../src/infra/php-evidence-cache.js";
 
 const successfulEvidenceRunner: EvidenceRunner = {
   async run(command: EvidenceCommand): Promise<EvidenceRun> {
@@ -122,8 +123,11 @@ test("executes static analysis selected from the detected manifest capability", 
       };
     },
   };
-  const adapter = new PhpAdapter(runner);
+  const adapter = new PhpAdapter(runner, new PhpEvidenceCache({
+    resolveToolVersion: async () => "2.1.0",
+  }));
 
+  await adapter.discoverCandidates(await adapter.profile(root));
   await adapter.discoverCandidates(await adapter.profile(root));
 
   assert.deepEqual(commands.find((command) => command.identity === "phpstan.analyse")?.command, [
@@ -134,6 +138,7 @@ test("executes static analysis selected from the detected manifest capability", 
     "--no-interaction",
   ]);
   assert.equal(commands.some((command) => command.command.includes("repository-owned-analysis-script")), false);
+  assert.equal(commands.filter((command) => command.identity === "phpstan.analyse").length, 1);
 });
 
 test("executes coverage selected from the detected manifest capability", async () => {

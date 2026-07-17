@@ -4,31 +4,31 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded tool-version and relevant-configuration provenance for every executed PHP collector.
-- Current checkpoint commit: `feat: record php evidence provenance`.
+- Last completed milestone: bounded normalized-evidence caching for expensive PHP collectors.
+- Current checkpoint commit: `feat: cache php evidence`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, and shared provenance slices are implemented and verified.
+- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, shared provenance, and evidence-cache slices are implemented and verified.
 
 ## Exact next task
 
-Cache expensive PHP evidence when its relevant source, trusted command, tool version, and configuration have not changed.
+Collect deprecated PHP and Laravel API evidence directly from trusted tools and version-aware rules.
 
 ## Acceptance criteria for the next task
 
-- Add a versioned bounded cache artifact for normalized static-analysis, coverage, mutation-analysis, and complexity evidence.
-- Derive cache identity from relevant source inputs, the exact trusted command, tool version, and relevant configuration hash.
-- Reuse only successful or code-finding evidence; never cache or replay unavailable, configuration, timeout, truncation, or infrastructure failures.
-- Invalidate deterministically when source, command, tool version, configuration, schema, or collector policy changes.
-- Keep cached artifacts bounded, free of raw tool output, and safe under concurrent runs.
-- Unit tests cover cache hits, every invalidation input, corrupt/oversized cache artifacts, failure non-caching, and concurrent access.
+- Define a bounded, versioned normalized deprecated-API evidence artifact.
+- Detect deprecated PHP APIs using trusted, version-aware inputs without embedding language-specific behavior in `src/core/`.
+- Detect supported Laravel deprecations from explicit framework-version and rule provenance rather than unbounded model inference.
+- Preserve repository-relative file, line, deprecated symbol/rule, replacement guidance when known, and bounded evidence messages.
+- Distinguish clean output, code findings, unsupported versions/rules, unavailable tooling, configuration failures, timeouts, truncation, and infrastructure failures.
+- Add deterministic fixtures and unit tests for PHP and Laravel findings plus every failure class.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
 
 - The CLI detects PHP and Laravel repositories.
-- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, and PhpMetrics evidence, with bounded version/configuration provenance and prepared-artifact fallbacks where applicable.
+- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, and PhpMetrics evidence, with bounded version/configuration provenance, deterministic normalized-evidence caching, and prepared-artifact fallbacks where applicable.
 - Candidate selection chooses one bounded improvement.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
@@ -50,10 +50,10 @@ Cache expensive PHP evidence when its relevant source, trusted command, tool ver
 
 ## Last verification
 
-Verified on 2026-07-17 for the PHP evidence-provenance slice:
+Verified on 2026-07-17 for the PHP evidence-cache slice:
 
-- Focused provenance tests: 8 tests passed.
-- `npm test`: 60 tests passed.
+- Focused cache and adapter tests: 12 tests passed.
+- `npm test`: 65 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -65,7 +65,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint will be safe to clear after the provenance slice is committed from a clean tree and the post-commit checkpoint passes.
+This checkpoint is safe to clear: the cache slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

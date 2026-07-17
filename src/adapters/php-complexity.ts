@@ -18,6 +18,10 @@ const reportLimitBytes = 2 * 1024 * 1024;
 const findingLimit = 200;
 const highComplexityThreshold = 10;
 
+export function phpComplexityCommand(reportPath: string): readonly string[] {
+  return ["vendor/bin/phpmetrics", `--report-json=${reportPath}`, "--exclude=vendor", "app/Domain,src"];
+}
+
 export interface PhpComplexityFinding {
   readonly id: string;
   readonly tool: "phpmetrics";
@@ -54,12 +58,7 @@ export async function collectPhpComplexityEvidence(
   try {
     const run = await runner.run({
       identity: "phpmetrics.complexity",
-      command: [
-        "vendor/bin/phpmetrics",
-        `--report-json=${reportPath}`,
-        "--exclude=vendor",
-        "app/Domain,src",
-      ],
+      command: phpComplexityCommand(reportPath),
       cwd: root,
       timeoutMs: 120_000,
       maxOutputBytes: 512 * 1024,

@@ -19,7 +19,11 @@ const findingLimit = 200;
 const minimumStatements = 5;
 const lowCoverageThreshold = 0.5;
 
-type CoverageTool = "phpunit" | "pest";
+export type CoverageTool = "phpunit" | "pest";
+
+export function phpCoverageCommand(tool: CoverageTool, cloverPath: string): readonly string[] {
+  return [`vendor/bin/${tool}`, "--coverage-clover", cloverPath, "--colors=never"];
+}
 
 export interface PhpCoverageFinding {
   readonly id: string;
@@ -57,12 +61,7 @@ export async function collectPhpCoverageEvidence(
   try {
     const run = await runner.run({
       identity: `${tool}.coverage`,
-      command: [
-        `vendor/bin/${tool}`,
-        "--coverage-clover",
-        cloverPath,
-        "--colors=never",
-      ],
+      command: phpCoverageCommand(tool, cloverPath),
       cwd: root,
       timeoutMs: 180_000,
       maxOutputBytes: 512 * 1024,
