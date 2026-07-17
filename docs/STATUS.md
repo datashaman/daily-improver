@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: trusted PHPUnit/Pest execution and bounded Clover coverage normalization.
-- Current checkpoint commit: `feat: execute and normalize php coverage`.
+- Last completed milestone: trusted targeted Infection execution and bounded mutation normalization.
+- Current checkpoint commit: `feat: execute and normalize php mutation analysis`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, and coverage slices are implemented, verified, and committed.
+- Current state: the Composer validation/audit, static-analysis, coverage, and mutation-analysis slices are implemented, verified, and committed.
 
 ## Exact next task
 
-Invoke targeted Infection analysis through the evidence-runner contract and normalize mutation evidence.
+Invoke a configured PHP complexity tool through the evidence-runner contract and normalize complexity evidence.
 
 ## Acceptance criteria for the next task
 
-- Select Infection from detected manifest capabilities without invoking repository scripts.
-- Request a machine-readable mutation report at an isolated, trusted output path and normalize bounded targeted mutation evidence.
-- Escaped/not-covered mutations, malformed output, configuration failure, missing coverage support, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
+- Detect one supported complexity tool from manifest or explicit Daily Improver configuration without invoking repository scripts.
+- Request machine-readable per-file or per-symbol complexity output through a trusted bounded command.
+- High-complexity findings, malformed output, configuration failure, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
 - Findings and execution metadata do not persist raw command output or unbounded reports.
-- Unit tests cover clean mutation output, escaped and uncovered mutations, malformed output/configuration failure, missing executable, timeout, and truncation.
+- Unit tests cover clean output, high-complexity findings, malformed output/configuration failure, missing executable, timeout, and truncation.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -37,7 +37,7 @@ Invoke targeted Infection analysis through the evidence-runner contract and norm
 
 ## Known placeholders
 
-- Composer validation/audit, PHPStan/Psalm, and PHPUnit/Pest coverage are automatically executed; the remaining PHP evidence tools still depend on prepared artifacts.
+- Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage, and Infection are automatically executed; complexity and the remaining PHP evidence tools still depend on prepared artifacts.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -49,21 +49,22 @@ Invoke targeted Infection analysis through the evidence-runner contract and norm
 
 ## Last verification
 
-Verified on 2026-07-17 for the PHPUnit/Pest coverage slice:
+Verified on 2026-07-17 for the targeted Infection slice:
 
-- Focused coverage and adapter-integration tests: 10 tests passed.
-- `npm test`: 40 tests passed.
+- Focused mutation, adapter-integration, and end-to-end tests: 13 tests passed.
+- `npm test`: 48 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
+- Docker image build passed (`daily-improver:local`).
 - End-to-end defect → failing property test → bounded fix → independent verification → daily branch flow passed.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the coverage slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
+This checkpoint is safe to clear: the mutation slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
 
 ## Updating this file
 

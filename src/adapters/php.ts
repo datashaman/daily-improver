@@ -11,6 +11,7 @@ import { collectComposerValidationEvidence } from "./composer-validation.js";
 import { collectComposerAuditEvidence } from "./composer-audit.js";
 import { collectPhpStaticAnalysisEvidence } from "./php-static-analysis.js";
 import { collectPhpCoverageEvidence } from "./php-coverage.js";
+import { collectPhpMutationEvidence } from "./php-mutation.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 
 interface ComposerManifest {
@@ -56,12 +57,20 @@ export class PhpAdapter implements RepositoryAdapter {
     const coverage = coverageCapability
       ? await collectPhpCoverageEvidence(profile.root, coverageCapability, this.evidenceRunner)
       : undefined;
+    const mutationCapability = profile.capabilities.get("mutation-testing");
+    const mutation = mutationCapability
+      ? await collectPhpMutationEvidence(profile.root, mutationCapability, this.evidenceRunner)
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
       ...(staticAnalysis?.candidates ?? []),
       ...(coverage?.candidates ?? []),
-      ...await collectPhpEvidence(profile.root, coverageCapability === undefined),
+      ...(mutation?.candidates ?? []),
+      ...await collectPhpEvidence(profile.root, {
+        includePreparedCoverage: coverageCapability === undefined,
+        includePreparedMutation: mutationCapability === undefined,
+      }),
     ];
     if (!profile.capabilities.has("test")) {
       candidates.push(candidate("php-test-baseline", "test-protection", "Add an automated test baseline", "The repository has no detected PHPUnit or Pest test capability.", 0.95, 0.95, 0.55, 0.2, ["composer.json has no detected test runner"], ["composer.json", "tests"]));

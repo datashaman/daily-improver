@@ -42,15 +42,17 @@ Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.
 
 ## PHP evidence
 
-The PHP adapter directly runs trusted Composer, static-analysis, and test-coverage commands with timeouts and bounded output capture. Repository scripts and plugins cannot replace these command definitions. It runs `composer validate --no-interaction --no-plugins` and `composer audit --format=json --no-interaction --no-plugins`; validation errors and warnings become normalized candidates, while audit output from legacy Composer releases through Composer 2.10 is normalized by its JSON content rather than version-specific numeric exit codes.
+The PHP adapter directly runs trusted Composer, static-analysis, test-coverage, and mutation-analysis commands with timeouts and bounded output capture. Repository scripts and plugins cannot replace these command definitions. It runs `composer validate --no-interaction --no-plugins` and `composer audit --format=json --no-interaction --no-plugins`; validation errors and warnings become normalized candidates, while audit output from legacy Composer releases through Composer 2.10 is normalized by its JSON content rather than version-specific numeric exit codes.
 
 When PHPStan or Psalm is declared in `composer.json`, the adapter selects that manifest capability and invokes `vendor/bin/phpstan analyse --error-format=json --no-progress --no-interaction` or `vendor/bin/psalm --output-format=json --no-progress`. Findings retain a normalized repository-relative file, line, rule/identifier, and bounded message. Malformed output, invalid configuration, unavailable tools, timeouts, truncated output, infrastructure failures, and source findings remain distinct outcomes. Persistable evidence retains the schema version, normalized bounded findings, command identity, duration, exit code, byte counts, and full-output hashes rather than raw command output.
 
 When PHPUnit or Pest is declared in `composer.json`, the adapter invokes the selected executable directly with `--coverage-clover` and a fresh trusted temporary output path. Clover artifacts are hashed, size-limited, removed after normalization, and reduced to bounded low-coverage findings for domain files. Missing coverage drivers, configuration failures, malformed or oversized XML, unavailable tools, timeouts, infrastructure failures, clean coverage, and low-coverage findings remain distinct outcomes. Repository-owned Composer scripts are not invoked.
 
+When Infection is declared in `composer.json`, the adapter runs a single-threaded mutation analysis targeted to `app/Domain` and `src`. It mirrors the repository with temporary symlinks, preserves valid repository Infection settings, replaces repository-configured loggers with one trusted full JSON report outside the repository, and removes the mirror after normalization. Escaped and not-covered mutants retain only bounded file, line, mutator, and status fields. Missing coverage support, invalid configuration, malformed or oversized reports, mutation-run infrastructure failures, unavailable tools, timeouts, and clean runs remain distinct outcomes. Repository-owned Composer scripts and logger paths are not invoked.
+
 The adapter also consumes machine-readable evidence under `.ai/evidence/`:
 
-- `infection.json`: escaped/not-covered mutations with file, line, mutator, description, and optional invariant.
+- `infection.json`: fallback prepared escaped/not-covered mutations when no manifest-backed Infection runner is detected.
 - `clover.xml`: fallback prepared PHPUnit/Pest Clover coverage when no manifest-backed runner is detected; domain files below 50% become test-protection candidates.
 - `complexity.json`: per-file cyclomatic complexity and maintainability index from the configured complexity tool.
 - `TODO` and `FIXME` markers in `app/**/*.php` and `src/**/*.php` as low-priority maintainability evidence.

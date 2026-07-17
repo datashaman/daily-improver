@@ -11,8 +11,8 @@ Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
-- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, and PHPUnit/Pest coverage slices are implemented.
-- The exact next task is targeted Infection execution with machine-readable normalization.
+- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage, and targeted Infection slices are implemented.
+- The exact next task is trusted configured complexity-tool execution with machine-readable normalization.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -83,7 +83,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Run `composer audit --format=json`.
 - [x] Run PHPStan or Psalm with machine-readable output.
 - [x] Run PHPUnit or Pest with Clover coverage.
-- [ ] Run targeted Infection analysis.
+- [x] Run targeted Infection analysis.
 - [ ] Run a configured complexity tool.
 - [ ] Record command, tool version, duration, exit code, output hash, and relevant configuration hash.
 - [ ] Normalize tool output into stable internal findings.

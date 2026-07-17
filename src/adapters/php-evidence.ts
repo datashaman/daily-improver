@@ -19,10 +19,15 @@ interface InfectionReport {
 
 export async function collectPhpEvidence(
   root: string,
-  includePreparedCoverage = true,
+  options: {
+    readonly includePreparedCoverage?: boolean;
+    readonly includePreparedMutation?: boolean;
+  } = {},
 ): Promise<readonly ImprovementCandidate[]> {
+  const includePreparedCoverage = options.includePreparedCoverage ?? true;
+  const includePreparedMutation = options.includePreparedMutation ?? true;
   const [mutations, coverage, complexity, todos] = await Promise.all([
-    mutationCandidates(root),
+    includePreparedMutation ? mutationCandidates(root) : Promise.resolve([]),
     includePreparedCoverage ? coverageCandidates(root) : Promise.resolve([]),
     complexityCandidates(root),
     todoCandidates(root),
