@@ -6,6 +6,7 @@ import type {
   EvidenceRun,
   EvidenceRunner,
 } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import {
   collectComposerAuditEvidence,
   composerAuditSchemaVersion,
@@ -24,6 +25,8 @@ test("invokes the trusted Composer audit command directly and normalizes clean o
   ]);
   assert.equal(runner.command?.identity, "composer.audit");
   assert.equal(runner.command?.cwd, "/repository");
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["composer", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["composer.json", "composer.lock"]);
   assert.equal(evidence.schemaVersion, composerAuditSchemaVersion);
   assert.equal(evidence.result.status, "success");
   assert.deepEqual(evidence.findings, []);
@@ -198,6 +201,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

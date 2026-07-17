@@ -5,6 +5,7 @@ import type {
   EvidenceRunner,
 } from "../contracts.js";
 import type { ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 const composerAuditCommand = [
   "composer",
@@ -63,6 +64,10 @@ export async function collectComposerAuditEvidence(
     cwd: root,
     timeoutMs: 60_000,
     maxOutputBytes: 256 * 1024,
+    provenance: phpEvidenceProvenance(
+      ["composer", "--version"],
+      ["composer.json", "composer.lock"],
+    ),
     classify: classifyComposerAudit,
   });
 

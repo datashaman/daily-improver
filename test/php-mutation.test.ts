@@ -10,6 +10,7 @@ import type {
   EvidenceRun,
   EvidenceRunner,
 } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import type { CommandCapability } from "../src/domain/model.js";
 import {
   collectPhpMutationEvidence,
@@ -41,6 +42,9 @@ test("runs targeted Infection with a trusted mirrored config and normalizes clea
   assert.equal(runner.command?.command.includes("--threads=1"), true);
   assert.equal(runner.command?.command.includes("repository-owned-mutation-script"), false);
   assert.notEqual(runner.command?.cwd, root);
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["vendor/bin/infection", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["infection.json5"]);
+  assert.equal(runner.command?.provenance.configurationRoot, root);
   assert.deepEqual(runner.generatedConfig?.source, { directories: ["src"] });
   assert.deepEqual(runner.generatedConfig?.mutators, { "@default": true });
   assert.deepEqual(Object.keys(runner.generatedConfig?.logs ?? {}), ["json"]);
@@ -269,6 +273,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

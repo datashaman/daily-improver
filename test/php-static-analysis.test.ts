@@ -6,6 +6,7 @@ import type {
   EvidenceRun,
   EvidenceRunner,
 } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import type { CommandCapability } from "../src/domain/model.js";
 import {
   collectPhpStaticAnalysisEvidence,
@@ -41,6 +42,8 @@ test("runs the trusted PHPStan JSON command and normalizes clean output", async 
   ]);
   assert.equal(runner.command?.identity, "phpstan.analyse");
   assert.equal(runner.command?.cwd, "/repository");
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["vendor/bin/phpstan", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["phpstan.neon", "phpstan.neon.dist"]);
   assert.equal(evidence.schemaVersion, phpStaticAnalysisSchemaVersion);
   assert.equal(evidence.result.status, "success");
   assert.deepEqual(evidence.findings, []);
@@ -99,6 +102,7 @@ test("selects Psalm from manifest capability and normalizes its JSON issues", as
     "--output-format=json",
     "--no-progress",
   ]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["psalm.xml", "psalm.xml.dist"]);
   assert.equal(evidence.result.status, "code-finding");
   assert.deepEqual(evidence.findings.map(({ tool, file, line, rule }) => ({ tool, file, line, rule })), [{
     tool: "psalm",
@@ -195,6 +199,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

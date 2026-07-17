@@ -10,6 +10,7 @@ import type {
   EvidenceRunner,
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 export const phpCoverageSchemaVersion = "php-coverage-evidence/v1" as const;
 
@@ -65,6 +66,12 @@ export async function collectPhpCoverageEvidence(
       cwd: root,
       timeoutMs: 180_000,
       maxOutputBytes: 512 * 1024,
+      provenance: phpEvidenceProvenance(
+        [`vendor/bin/${tool}`, "--version"],
+        tool === "pest"
+          ? ["phpunit.xml", "phpunit.xml.dist", "tests/Pest.php"]
+          : ["phpunit.xml", "phpunit.xml.dist"],
+      ),
       classify: classifyCoverageCommand,
     });
 

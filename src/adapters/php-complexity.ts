@@ -10,6 +10,7 @@ import type {
   EvidenceRunner,
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 export const phpComplexitySchemaVersion = "php-complexity-evidence/v1" as const;
 
@@ -62,6 +63,10 @@ export async function collectPhpComplexityEvidence(
       cwd: root,
       timeoutMs: 120_000,
       maxOutputBytes: 512 * 1024,
+      provenance: phpEvidenceProvenance(
+        ["vendor/bin/phpmetrics", "--version"],
+        [".ai/improver.yml"],
+      ),
       classify: classifyComplexityCommand,
     });
 

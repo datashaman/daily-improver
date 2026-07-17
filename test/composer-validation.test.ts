@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { EvidenceCommand, EvidenceRun, EvidenceRunner } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import { collectComposerValidationEvidence } from "../src/adapters/composer-validation.js";
 
 test("invokes the trusted Composer validation command directly", async () => {
@@ -10,6 +11,8 @@ test("invokes the trusted Composer validation command directly", async () => {
   assert.deepEqual(runner.command?.command, ["composer", "validate", "--no-interaction", "--no-plugins"]);
   assert.equal(runner.command?.identity, "composer.validate");
   assert.equal(runner.command?.cwd, "/repository");
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["composer", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["composer.json", "composer.lock"]);
   assert.deepEqual(evidence.candidates, []);
 });
 
@@ -50,6 +53,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

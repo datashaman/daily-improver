@@ -1,5 +1,6 @@
 import type { EvidenceResult, EvidenceRunner } from "../contracts.js";
 import type { ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 const composerValidateCommand = [
   "composer",
@@ -23,6 +24,10 @@ export async function collectComposerValidationEvidence(
     cwd: root,
     timeoutMs: 30_000,
     maxOutputBytes: 64 * 1024,
+    provenance: phpEvidenceProvenance(
+      ["composer", "--version"],
+      ["composer.json", "composer.lock"],
+    ),
     classify: ({ exitCode, stdout, stderr }) => {
       if (exitCode !== 0) return "configuration-failure";
       return /warning|not recommended/i.test(`${stdout}\n${stderr}`) ? "code-finding" : "success";

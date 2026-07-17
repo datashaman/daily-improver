@@ -4,30 +4,31 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: trusted configured PhpMetrics execution and bounded complexity normalization.
-- Current checkpoint commit: `feat: execute and normalize php complexity analysis`.
+- Last completed milestone: bounded tool-version and relevant-configuration provenance for every executed PHP collector.
+- Current checkpoint commit: `feat: record php evidence provenance`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, and complexity-analysis slices are implemented and verified.
+- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, and shared provenance slices are implemented and verified.
 
 ## Exact next task
 
-Record tool-version and relevant-configuration provenance for every executed PHP evidence collector.
+Cache expensive PHP evidence when its relevant source, trusted command, tool version, and configuration have not changed.
 
 ## Acceptance criteria for the next task
 
-- Extend the versioned persistable evidence metadata with a bounded tool version and relevant configuration hash.
-- Collect provenance without invoking repository scripts or allowing repository configuration to replace trusted evidence commands.
-- Hash only the configuration files that can affect each collector and distinguish absent configuration from unreadable or oversized inputs.
-- Unavailable version commands, malformed versions, and configuration-hash failures fail closed without persisting raw output.
-- Unit tests cover version capture, configuration changes, absent configuration, unavailable tools, malformed output, and bounded hashing.
+- Add a versioned bounded cache artifact for normalized static-analysis, coverage, mutation-analysis, and complexity evidence.
+- Derive cache identity from relevant source inputs, the exact trusted command, tool version, and relevant configuration hash.
+- Reuse only successful or code-finding evidence; never cache or replay unavailable, configuration, timeout, truncation, or infrastructure failures.
+- Invalidate deterministically when source, command, tool version, configuration, schema, or collector policy changes.
+- Keep cached artifacts bounded, free of raw tool output, and safe under concurrent runs.
+- Unit tests cover cache hits, every invalidation input, corrupt/oversized cache artifacts, failure non-caching, and concurrent access.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
 
 - The CLI detects PHP and Laravel repositories.
-- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, and PhpMetrics evidence, with prepared-artifact fallbacks where applicable.
+- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, and PhpMetrics evidence, with bounded version/configuration provenance and prepared-artifact fallbacks where applicable.
 - Candidate selection chooses one bounded improvement.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
@@ -49,10 +50,10 @@ Record tool-version and relevant-configuration provenance for every executed PHP
 
 ## Last verification
 
-Verified on 2026-07-17 for the configured PhpMetrics slice:
+Verified on 2026-07-17 for the PHP evidence-provenance slice:
 
-- Focused complexity, adapter-integration, configuration, and end-to-end tests: 15 tests passed.
-- `npm test`: 56 tests passed.
+- Focused provenance tests: 8 tests passed.
+- `npm test`: 60 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -64,7 +65,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the complexity slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
+This checkpoint will be safe to clear after the provenance slice is committed from a clean tree and the post-commit checkpoint passes.
 
 ## Updating this file
 

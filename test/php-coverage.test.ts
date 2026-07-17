@@ -7,6 +7,7 @@ import type {
   EvidenceRun,
   EvidenceRunner,
 } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import type { CommandCapability } from "../src/domain/model.js";
 import {
   collectPhpCoverageEvidence,
@@ -37,6 +38,8 @@ test("runs trusted PHPUnit coverage into an isolated Clover artifact and normali
   assert.equal(runner.command?.command[0], "vendor/bin/phpunit");
   assert.deepEqual(runner.command?.command.slice(1, 2), ["--coverage-clover"]);
   assert.equal(runner.command?.command.includes("repository-owned-coverage-script"), false);
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["vendor/bin/phpunit", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, ["phpunit.xml", "phpunit.xml.dist"]);
   assert.equal(runner.cloverPath?.startsWith("/repository"), false);
   await assert.rejects(access(runner.cloverPath ?? ""));
   assert.equal(evidence.schemaVersion, phpCoverageSchemaVersion);
@@ -54,6 +57,11 @@ test("selects Pest and normalizes bounded low-coverage per-file evidence", async
   const evidence = await collectPhpCoverageEvidence("/repository", pestCapability, runner);
 
   assert.equal(runner.command?.command[0], "vendor/bin/pest");
+  assert.deepEqual(runner.command?.provenance.configurationPaths, [
+    "phpunit.xml",
+    "phpunit.xml.dist",
+    "tests/Pest.php",
+  ]);
   assert.equal(evidence.result.status, "code-finding");
   assert.deepEqual(evidence.findings.map(({ tool, file, statements, coveredStatements, coveragePercent }) => ({
     tool,
@@ -182,6 +190,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

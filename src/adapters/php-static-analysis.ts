@@ -7,6 +7,7 @@ import type {
   EvidenceRunner,
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 export const phpStaticAnalysisSchemaVersion = "php-static-analysis-evidence/v1" as const;
 
@@ -55,6 +56,12 @@ export async function collectPhpStaticAnalysisEvidence(
     cwd: root,
     timeoutMs: 120_000,
     maxOutputBytes: 512 * 1024,
+    provenance: phpEvidenceProvenance(
+      [`vendor/bin/${tool}`, "--version"],
+      tool === "phpstan"
+        ? ["phpstan.neon", "phpstan.neon.dist"]
+        : ["psalm.xml", "psalm.xml.dist"],
+    ),
     classify: (output) => classifyStaticAnalysis(tool, root, output),
   });
 

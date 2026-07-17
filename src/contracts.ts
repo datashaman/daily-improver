@@ -60,10 +60,46 @@ export interface EvidenceCommand {
   readonly timeoutMs: number;
   readonly maxOutputBytes: number;
   readonly environment?: Readonly<Record<string, string>>;
+  readonly provenance: EvidenceProvenanceRequest;
   readonly classify: (output: EvidenceCommandOutput) => EvidenceResultStatus;
 }
 
+export interface EvidenceProvenanceRequest {
+  readonly versionCommand: readonly string[];
+  readonly configurationRoot?: string;
+  readonly configurationPaths: readonly string[];
+  readonly maxConfigurationFileBytes: number;
+}
+
+export type EvidenceConfigurationFileStatus = "hashed" | "absent" | "unreadable" | "oversized";
+
+export interface EvidenceConfigurationFile {
+  readonly path: string;
+  readonly status: EvidenceConfigurationFileStatus;
+  readonly bytes: number | null;
+  readonly sha256: string | null;
+}
+
+export type EvidenceProvenanceStatus =
+  | "success"
+  | "unavailable-version-command"
+  | "version-command-failure"
+  | "malformed-version"
+  | "configuration-hash-failure";
+
+export interface EvidenceProvenance {
+  readonly status: EvidenceProvenanceStatus;
+  readonly versionCommand: readonly string[];
+  readonly toolVersion: string | null;
+  readonly configurationHash: string | null;
+  readonly configurationFiles: readonly EvidenceConfigurationFile[];
+  readonly maxConfigurationFileBytes: number;
+}
+
+export const evidenceResultSchemaVersion = "evidence-command-result/v2" as const;
+
 export interface EvidenceResult {
+  readonly schemaVersion: typeof evidenceResultSchemaVersion;
   readonly commandIdentity: string;
   readonly command: readonly string[];
   readonly status: EvidenceResultStatus;
@@ -75,6 +111,7 @@ export interface EvidenceResult {
   readonly stderrBytes: number;
   readonly outputLimitBytes: number;
   readonly outputTruncated: boolean;
+  readonly provenance: EvidenceProvenance;
 }
 
 export interface EvidenceRun {

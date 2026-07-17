@@ -11,6 +11,7 @@ import type {
   EvidenceRunner,
 } from "../contracts.js";
 import type { CommandCapability, ImprovementCandidate } from "../domain/model.js";
+import { phpEvidenceProvenance } from "./php-provenance.js";
 
 export const phpMutationSchemaVersion = "php-mutation-evidence/v1" as const;
 
@@ -54,7 +55,7 @@ export async function collectPhpMutationEvidence(
   const configPath = join(workspace, "infection.json5");
 
   try {
-    const configIsValid = await prepareWorkspace(root, workspace, configPath, reportPath);
+    const prepared = await prepareWorkspace(root, workspace, configPath, reportPath);
     const run = await runner.run({
       identity: "infection.mutation",
       command: [
@@ -69,7 +70,12 @@ export async function collectPhpMutationEvidence(
       cwd: workspace,
       timeoutMs: 300_000,
       maxOutputBytes: 512 * 1024,
-      classify: configIsValid ? classifyMutationCommand : classifyInvalidConfiguration,
+      provenance: phpEvidenceProvenance(
+        ["vendor/bin/infection", "--version"],
+        prepared.repositoryConfig ? [relative(root, prepared.repositoryConfig)] : [],
+        root,
+      ),
+      classify: prepared.configIsValid ? classifyMutationCommand : classifyInvalidConfiguration,
     });
 
     if (run.result.status !== "success" && run.result.status !== "code-finding") {
@@ -121,7 +127,7 @@ async function prepareWorkspace(
   workspace: string,
   configPath: string,
   reportPath: string,
-): Promise<boolean> {
+): Promise<{ readonly configIsValid: boolean; readonly repositoryConfig?: string }> {
   for (const entry of await readdir(root, { withFileTypes: true })) {
     if (configNames.includes(entry.name as (typeof configNames)[number])) continue;
     await symlink(join(root, entry.name), join(workspace, entry.name), entry.isDirectory() ? "dir" : "file");
@@ -134,7 +140,7 @@ async function prepareWorkspace(
       source: { directories: sourceDirectories },
       logs: { json: reportPath },
     }));
-    return true;
+    return { configIsValid: true };
   }
 
   const rawConfig = await readFile(repositoryConfig, "utf8");
@@ -142,10 +148,10 @@ async function prepareWorkspace(
     const parsed = JSON5.parse(rawConfig) as unknown;
     if (!isRecord(parsed)) throw new Error("Infection configuration must be an object.");
     await writeFile(configPath, JSON.stringify({ ...parsed, logs: { json: reportPath } }));
-    return true;
+    return { configIsValid: true, repositoryConfig };
   } catch {
     await copyFile(repositoryConfig, configPath);
-    return false;
+    return { configIsValid: false, repositoryConfig };
   }
 }
 

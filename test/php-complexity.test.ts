@@ -9,6 +9,7 @@ import type {
   EvidenceRun,
   EvidenceRunner,
 } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import type { CommandCapability } from "../src/domain/model.js";
 import {
   collectPhpComplexityEvidence,
@@ -33,6 +34,8 @@ test("runs trusted PhpMetrics JSON analysis and normalizes clean output", async 
   assert.equal(runner.command?.command[0], "vendor/bin/phpmetrics");
   assert.equal(runner.command?.command.includes("repository-owned-complexity-script"), false);
   assert.equal(runner.command?.command.at(-1), "app/Domain,src");
+  assert.deepEqual(runner.command?.provenance.versionCommand, ["vendor/bin/phpmetrics", "--version"]);
+  assert.deepEqual(runner.command?.provenance.configurationPaths, [".ai/improver.yml"]);
   assert.equal(runner.reportPath?.startsWith(root), false);
   await assert.rejects(access(runner.reportPath ?? ""));
   assert.equal(evidence.schemaVersion, phpComplexitySchemaVersion);
@@ -197,6 +200,7 @@ class StubEvidenceRunner implements EvidenceRunner {
     });
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status,

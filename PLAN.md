@@ -12,7 +12,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage, targeted Infection, and configured PhpMetrics slices are implemented.
-- The exact next task is tool-version and relevant-configuration provenance for executed PHP evidence.
+- Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
+- The exact next task is caching expensive evidence against relevant source, command, tool-version, and configuration inputs.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -85,11 +86,11 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Run PHPUnit or Pest with Clover coverage.
 - [x] Run targeted Infection analysis.
 - [x] Run a configured complexity tool.
-- [ ] Record command, tool version, duration, exit code, output hash, and relevant configuration hash.
-- [ ] Normalize tool output into stable internal findings.
-- [ ] Distinguish unavailable tools, configuration failures, code findings, infrastructure failures, and timeouts.
+- [x] Record command, tool version, duration, exit code, output hash, and relevant configuration hash.
+- [x] Normalize tool output into stable internal findings.
+- [x] Distinguish unavailable tools, configuration failures, code findings, infrastructure failures, and timeouts.
 - [ ] Cache expensive evidence when relevant source and configuration have not changed.
-- [ ] Prevent repository configuration from silently replacing trusted commands.
+- [x] Prevent repository configuration from silently replacing trusted commands.
 - [ ] Add collectors for deprecated PHP/Laravel APIs.
 - [x] Add dependency-vulnerability findings.
 - [ ] Add slow-test and slow-query findings.

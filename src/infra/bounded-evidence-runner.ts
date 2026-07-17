@@ -3,10 +3,13 @@ import { createHash, type Hash } from "node:crypto";
 import type {
   EvidenceCommand,
   EvidenceCommandOutput,
+  EvidenceProvenance,
   EvidenceResultStatus,
   EvidenceRun,
   EvidenceRunner,
 } from "../contracts.js";
+import { evidenceResultSchemaVersion } from "../contracts.js";
+import { hashEvidenceConfiguration } from "./evidence-provenance.js";
 
 interface CapturedStream {
   readonly chunks: Buffer[];
@@ -17,6 +20,71 @@ interface CapturedStream {
 
 export class BoundedEvidenceRunner implements EvidenceRunner {
   async run(request: EvidenceCommand): Promise<EvidenceRun> {
+    const started = performance.now();
+    const configuration = await hashEvidenceConfiguration(
+      request.provenance.configurationRoot ?? request.cwd,
+      request.provenance,
+    );
+    if (configuration.failed) {
+      return failedRun(request, started, {
+        status: "configuration-hash-failure",
+        versionCommand: request.provenance.versionCommand,
+        toolVersion: null,
+        configurationHash: null,
+        configurationFiles: configuration.files,
+        maxConfigurationFileBytes: request.provenance.maxConfigurationFileBytes,
+      }, "infrastructure-failure");
+    }
+
+    const versionRun = await this.runCommand({
+      ...request,
+      identity: `${request.identity}.version`,
+      command: request.provenance.versionCommand,
+      timeoutMs: 10_000,
+      maxOutputBytes: 16 * 1024,
+      classify: ({ exitCode, outputTruncated }) => exitCode === 0 && !outputTruncated
+        ? "success"
+        : "infrastructure-failure",
+    });
+    const toolVersion = versionRun.result.status === "success"
+      ? parseToolVersion(`${versionRun.output.stdout}\n${versionRun.output.stderr}`)
+      : null;
+    const provenance: EvidenceProvenance = {
+      status: versionRun.result.status === "unavailable-tool"
+        ? "unavailable-version-command"
+        : versionRun.result.status !== "success"
+          ? "version-command-failure"
+          : toolVersion === null
+            ? "malformed-version"
+            : "success",
+      versionCommand: request.provenance.versionCommand,
+      toolVersion,
+      configurationHash: configuration.hash,
+      configurationFiles: configuration.files,
+      maxConfigurationFileBytes: request.provenance.maxConfigurationFileBytes,
+    };
+    if (provenance.status !== "success") {
+      return failedRun(
+        request,
+        started,
+        provenance,
+        provenance.status === "unavailable-version-command" ? "unavailable-tool" : "infrastructure-failure",
+      );
+    }
+
+    const run = await this.runCommand(request);
+    return {
+      result: {
+        ...run.result,
+        schemaVersion: evidenceResultSchemaVersion,
+        durationMs: Math.round(performance.now() - started),
+        provenance,
+      },
+      output: run.output,
+    };
+  }
+
+  private async runCommand(request: EvidenceCommand): Promise<EvidenceRun> {
     const [program, ...args] = request.command;
     if (!program) throw new Error("Cannot execute an empty evidence command.");
     if (request.timeoutMs <= 0) throw new Error("Evidence command timeout must be positive.");
@@ -47,6 +115,7 @@ export class BoundedEvidenceRunner implements EvidenceRunner {
         };
         resolve({
           result: {
+            schemaVersion: evidenceResultSchemaVersion,
             commandIdentity: request.identity,
             command: request.command,
             status,
@@ -58,6 +127,7 @@ export class BoundedEvidenceRunner implements EvidenceRunner {
             stderrBytes: stderr.bytes,
             outputLimitBytes: request.maxOutputBytes,
             outputTruncated: stdout.bytes > stdout.capturedBytes || stderr.bytes > stderr.capturedBytes,
+            provenance: pendingProvenance(request),
           },
           output,
         });
@@ -96,6 +166,51 @@ export class BoundedEvidenceRunner implements EvidenceRunner {
       }, request.timeoutMs);
     });
   }
+}
+
+function parseToolVersion(output: string): string | null {
+  const matches = [...output.matchAll(/(?:^|[^0-9])v?(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)(?=$|[^0-9A-Za-z.+-])/gm)];
+  const version = matches.at(-1)?.[1];
+  if (!version || version.length > 64) return null;
+  return version;
+}
+
+function pendingProvenance(request: EvidenceCommand): EvidenceProvenance {
+  return {
+    status: "version-command-failure",
+    versionCommand: request.provenance.versionCommand,
+    toolVersion: null,
+    configurationHash: null,
+    configurationFiles: [],
+    maxConfigurationFileBytes: request.provenance.maxConfigurationFileBytes,
+  };
+}
+
+function failedRun(
+  request: EvidenceCommand,
+  started: number,
+  provenance: EvidenceProvenance,
+  status: EvidenceResultStatus,
+): EvidenceRun {
+  const emptyHash = `sha256:${createHash("sha256").digest("hex")}`;
+  return {
+    result: {
+      schemaVersion: evidenceResultSchemaVersion,
+      commandIdentity: request.identity,
+      command: request.command,
+      status,
+      durationMs: Math.round(performance.now() - started),
+      exitCode: null,
+      stdoutHash: emptyHash,
+      stderrHash: emptyHash,
+      stdoutBytes: 0,
+      stderrBytes: 0,
+      outputLimitBytes: request.maxOutputBytes,
+      outputTruncated: false,
+      provenance,
+    },
+    output: { stdout: "", stderr: "" },
+  };
 }
 
 function capturedStream(): CapturedStream {

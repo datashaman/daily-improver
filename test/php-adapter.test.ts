@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { EvidenceCommand, EvidenceRun, EvidenceRunner } from "../src/contracts.js";
+import { evidenceStubMetadata } from "./evidence-stub.js";
 import { PhpAdapter } from "../src/adapters/php.js";
 
 const successfulEvidenceRunner: EvidenceRunner = {
   async run(command: EvidenceCommand): Promise<EvidenceRun> {
     return {
       result: {
+        ...evidenceStubMetadata(command),
         commandIdentity: command.identity,
         command: command.command,
         status: "success",
@@ -103,6 +105,7 @@ test("executes static analysis selected from the detected manifest capability", 
       const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
       return {
         result: {
+          ...evidenceStubMetadata(command),
           commandIdentity: command.identity,
           command: command.command,
           status,
@@ -155,6 +158,7 @@ test("executes coverage selected from the detected manifest capability", async (
       const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
       return {
         result: {
+          ...evidenceStubMetadata(command),
           commandIdentity: command.identity,
           command: command.command,
           status,
@@ -211,6 +215,7 @@ test("executes targeted Infection selected from the detected manifest capability
       const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
       return {
         result: {
+          ...evidenceStubMetadata(command),
           commandIdentity: command.identity,
           command: command.command,
           status,
@@ -263,6 +268,7 @@ test("executes PhpMetrics selected from the detected manifest capability", async
       const status = command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false });
       return {
         result: {
+          ...evidenceStubMetadata(command),
           commandIdentity: command.identity,
           command: command.command,
           status,
