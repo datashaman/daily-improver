@@ -11,7 +11,11 @@ test("loads the repository-owned versioned product configuration", async () => {
   await writeFile(join(root, ".ai", "improver.yml"), `version: 1
 schedule: { timezone: Africa/Johannesburg, time: "05:00" }
 selection: { priorities: [correctness] }
-analysis: { php: { complexity_tool: phpmetrics } }
+analysis:
+  php:
+    complexity_tool: phpmetrics
+    slow_test_threshold_ms: 750
+    slow_query: { mechanism: laravel-listener, threshold_ms: 125 }
 limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
 protected_paths: [tests/Property/**]
 verification: { commands: [vendor/bin/phpunit], mutation_testing: targeted }
@@ -22,4 +26,38 @@ pull_request: { draft: true, labels: [ai-improvement] }
   assert.equal(config.limits.max_diff_lines, 250);
   assert.deepEqual(config.verification.commands, ["vendor/bin/phpunit"]);
   assert.equal(config.analysis.php.complexity_tool, "phpmetrics");
+  assert.equal(config.analysis.php.slow_test_threshold_ms, 750);
+  assert.deepEqual(config.analysis.php.slow_query, { mechanism: "laravel-listener", threshold_ms: 125 });
+});
+
+test("rejects unbounded PHP performance configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-config-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [] }
+analysis: { php: { slow_test_threshold_ms: 600001, slow_query: { mechanism: shell-command } } }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+
+  await assert.rejects(loadConfig(root), /slow_test_threshold_ms must be at most 600000/);
+});
+
+test("rejects repository-owned slow-query commands", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-config-"));
+  await mkdir(join(root, ".ai"));
+  await writeFile(join(root, ".ai", "improver.yml"), `version: 1
+schedule: { timezone: UTC, time: "05:00" }
+selection: { priorities: [] }
+analysis: { php: { slow_query: { mechanism: shell-command } } }
+limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 4 }
+protected_paths: []
+verification: { commands: [], mutation_testing: targeted }
+pull_request: { draft: true, labels: [] }
+`);
+
+  await assert.rejects(loadConfig(root), /slow_query.mechanism must be off or laravel-listener/);
 });

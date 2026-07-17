@@ -14,6 +14,7 @@ import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersio
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
+import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
 import { BoundedEvidenceRunner } from "../infra/bounded-evidence-runner.js";
 import { PhpEvidenceCache, type PhpEvidenceCachePolicy } from "../infra/php-evidence-cache.js";
 import { loadConfig, type ImproverConfig } from "../config.js";
@@ -55,6 +56,7 @@ export class PhpAdapter implements RepositoryAdapter {
   }
 
   async discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]> {
+    const config = await loadConfig(profile.root);
     const composerValidation = await collectComposerValidationEvidence(profile.root, this.evidenceRunner);
     const composerAudit = await collectComposerAuditEvidence(profile.root, this.evidenceRunner);
     const staticAnalysisCapability = profile.capabilities.get("static-analysis");
@@ -96,6 +98,20 @@ export class PhpAdapter implements RepositoryAdapter {
     const laravelDeprecations = profile.frameworks.includes("laravel")
       ? await collectLaravelDeprecatedApiEvidence(profile.root)
       : undefined;
+    const testCapability = profile.capabilities.get("test");
+    const performance = testCapability?.framework === "phpunit" || testCapability?.framework === "pest"
+      ? await this.evidenceCache.collect(
+        profile.root,
+        performanceCachePolicy(testCapability),
+        () => collectPhpPerformanceEvidence(
+          profile.root,
+          testCapability,
+          config.analysis.php,
+          profile.frameworks.includes("laravel"),
+          this.evidenceRunner,
+        ),
+      )
+      : undefined;
     const candidates: ImprovementCandidate[] = [
       ...composerValidation.candidates,
       ...composerAudit.candidates,
@@ -105,6 +121,7 @@ export class PhpAdapter implements RepositoryAdapter {
       ...(complexity?.candidates ?? []),
       ...(phpDeprecations?.candidates ?? []),
       ...(laravelDeprecations?.candidates ?? []),
+      ...(performance?.candidates ?? []),
       ...await collectPhpEvidence(profile.root, {
         includePreparedCoverage: coverageCapability === undefined,
         includePreparedMutation: mutationCapability === undefined,
@@ -208,6 +225,21 @@ function coverageCachePolicy(capability: CommandCapability): PhpEvidenceCachePol
     configurationPaths: tool === "pest"
       ? ["phpunit.xml", "phpunit.xml.dist", "tests/Pest.php"]
       : ["phpunit.xml", "phpunit.xml.dist"],
+    sourcePatterns: phpSourcePatterns,
+  };
+}
+
+function performanceCachePolicy(capability: CommandCapability): PhpEvidenceCachePolicy {
+  const tool = capability.framework === "pest" ? "pest" : "phpunit";
+  return {
+    collector: `performance-${tool}`,
+    policyVersion: "php-performance-policy/v1",
+    evidenceSchemaVersion: phpPerformanceSchemaVersion,
+    command: phpPerformanceCommand(tool, "$TRUSTED_JUNIT_PATH"),
+    versionCommand: [`vendor/bin/${tool}`, "--version"],
+    configurationPaths: tool === "pest"
+      ? [".ai/improver.yml", "phpunit.xml", "phpunit.xml.dist", "tests/Pest.php"]
+      : [".ai/improver.yml", "phpunit.xml", "phpunit.xml.dist"],
     sourcePatterns: phpSourcePatterns,
   };
 }

@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: version-aware deprecated PHP and Laravel API evidence.
-- Current checkpoint commit: `feat: collect deprecated php apis`.
+- Last completed milestone: bounded PHPUnit/Pest slow-test and opt-in Laravel slow-query evidence.
+- Current checkpoint commit: `feat: collect php performance evidence`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, deprecation-analysis, shared provenance, and evidence-cache slices are implemented and verified.
+- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, deprecation-analysis, performance-analysis, shared provenance, and evidence-cache slices are implemented and verified.
 
 ## Exact next task
 
-Collect slow-test and slow-query evidence directly from bounded trusted inputs.
+Collect duplicate-code evidence directly from a bounded trusted tool.
 
 ## Acceptance criteria for the next task
 
-- Define bounded, versioned normalized slow-test and slow-query evidence artifacts.
-- Collect machine-readable PHPUnit/Pest timing evidence without executing repository-owned scripts.
-- Collect supported Laravel slow-query evidence from an explicit trusted mechanism with bounded configuration and output.
-- Preserve repository-relative test/query identity, duration, threshold provenance, and bounded messages without retaining query parameters or sensitive raw SQL.
-- Distinguish clean output, code findings, unsupported inputs, unavailable tooling, configuration failures, timeouts, truncation, and infrastructure failures.
+- Select one supported PHP duplicate-code tool from manifest detection or an explicit bounded configuration value.
+- Invoke the executable directly with machine-readable output and without executing repository-owned scripts.
+- Normalize bounded repository-relative duplicate regions, line ranges, similarity/size evidence, tool/configuration provenance, and messages.
+- Avoid retaining duplicated source bodies or other raw source excerpts in persisted evidence.
+- Distinguish clean output, code findings, unsupported inputs, unavailable tooling, configuration failures, timeouts, truncation, malformed output, and infrastructure failures.
 - Add deterministic fixtures and unit tests for findings plus every failure class.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
@@ -28,7 +28,7 @@ Collect slow-test and slow-query evidence directly from bounded trusted inputs.
 ## Current verified behavior
 
 - The CLI detects PHP and Laravel repositories.
-- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover, Infection, PhpMetrics, PHPCompatibility, and explicit Laravel deprecation-rule evidence, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
+- The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCompatibility, explicit Laravel deprecation rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
 - Candidate selection chooses one bounded improvement.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
@@ -38,7 +38,7 @@ Collect slow-test and slow-query evidence directly from bounded trusted inputs.
 
 ## Known placeholders
 
-- Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage, Infection, PhpMetrics, PHPCompatibility, and Laravel deprecation rules are automatically executed when detected or applicable; remaining PHP evidence types still depend on prepared artifacts or are not implemented.
+- Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCompatibility, Laravel deprecation rules, and configured Laravel query timing are automatically executed when detected or applicable; remaining PHP evidence types still depend on prepared artifacts or are not implemented.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -50,10 +50,10 @@ Collect slow-test and slow-query evidence directly from bounded trusted inputs.
 
 ## Last verification
 
-Verified on 2026-07-17 for the deprecated-API evidence slice:
+Verified on 2026-07-17 for the PHP performance-evidence slice:
 
-- Focused deprecation and adapter tests: 15 tests passed.
-- `npm test`: 73 tests passed.
+- Focused performance, configuration, and adapter tests: 18 tests passed.
+- `npm test`: 83 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -65,7 +65,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the deprecated-API evidence slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear after the performance-evidence slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

@@ -35,6 +35,7 @@ export type CandidateKind =
   | "mutation-testing"
   | "property-testing"
   | "dependency-vulnerability"
+  | "performance"
   | "maintainability"
   | "documentation";
 

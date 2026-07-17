@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "laravel-slow-query-report/v1",
+  "queries": [
+    {
+      "sql": "select * from `allocations` where `account_id` = 8675309 and `email` = 'private@example.test'",
+      "durationMs": 245,
+      "file": "app/Repositories/AllocationRepository.php",
+      "line": 42
+    },
+    {
+      "sql": "select * from `settings`",
+      "durationMs": 5,
+      "file": "app/Repositories/SettingsRepository.php",
+      "line": 12
+    }
+  ]
+}

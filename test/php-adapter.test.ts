@@ -159,6 +159,11 @@ test("executes coverage selected from the detected manifest capability", async (
         assert.ok(outputPath);
         await writeFile(outputPath, "<coverage><project></project></coverage>");
       }
+      if (command.identity === "phpunit.performance") {
+        const outputPath = command.command[command.command.indexOf("--log-junit") + 1];
+        assert.ok(outputPath);
+        await writeFile(outputPath, "<testsuites><testsuite><testcase name=\"fast\" file=\"tests/FastTest.php\" time=\"0.001\" /></testsuite></testsuites>");
+      }
       const stdout = command.identity === "composer.audit"
         ? JSON.stringify({ advisories: [], abandoned: [] })
         : "";
@@ -189,6 +194,54 @@ test("executes coverage selected from the detected manifest capability", async (
   const coverageCommand = commands.find((command) => command.identity === "phpunit.coverage");
   assert.equal(coverageCommand?.command[0], "vendor/bin/phpunit");
   assert.equal(coverageCommand?.command.includes("repository-owned-coverage-script"), false);
+  const performanceCommand = commands.find((command) => command.identity === "phpunit.performance");
+  assert.equal(performanceCommand?.command[0], "vendor/bin/phpunit");
+  assert.equal(performanceCommand?.command.includes("repository-owned-coverage-script"), false);
+});
+
+test("collects slow PHPUnit timings as ranked adapter candidates", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-php-"));
+  await writeFile(join(root, "composer.json"), JSON.stringify({
+    require: { php: "^8.3" },
+    "require-dev": { "phpunit/phpunit": "^12" },
+  }));
+  const runner: EvidenceRunner = {
+    async run(command: EvidenceCommand): Promise<EvidenceRun> {
+      if (command.identity === "phpunit.coverage") {
+        const outputPath = command.command[command.command.indexOf("--coverage-clover") + 1];
+        assert.ok(outputPath);
+        await writeFile(outputPath, "<coverage><project></project></coverage>");
+      }
+      if (command.identity === "phpunit.performance") {
+        const outputPath = command.command[command.command.indexOf("--log-junit") + 1];
+        assert.ok(outputPath);
+        await writeFile(outputPath, `<testsuites><testsuite><testcase name="slow_domain_case" class="DomainTest" file="tests/DomainTest.php" time="1.25" /></testsuite></testsuites>`);
+      }
+      const stdout = command.identity === "composer.audit" ? JSON.stringify({ advisories: [], abandoned: [] }) : "";
+      return {
+        result: {
+          ...evidenceStubMetadata(command),
+          commandIdentity: command.identity,
+          command: command.command,
+          status: command.classify({ exitCode: 0, stdout, stderr: "", outputTruncated: false }),
+          durationMs: 1,
+          exitCode: 0,
+          stdoutHash: "sha256:output",
+          stderrHash: "sha256:empty",
+          stdoutBytes: Buffer.byteLength(stdout),
+          stderrBytes: 0,
+          outputLimitBytes: command.maxOutputBytes,
+          outputTruncated: false,
+        },
+        output: { stdout, stderr: "" },
+      };
+    },
+  };
+  const adapter = new PhpAdapter(runner);
+
+  const candidates = await adapter.discoverCandidates(await adapter.profile(root));
+
+  assert.equal(candidates.some((candidate) => candidate.id.startsWith("slow-test:") && candidate.kind === "performance"), true);
 });
 
 test("executes targeted Infection selected from the detected manifest capability", async () => {

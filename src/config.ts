@@ -7,7 +7,14 @@ export interface ImproverConfig {
   readonly schedule: { readonly timezone: string; readonly time: string };
   readonly selection: { readonly priorities: readonly string[] };
   readonly analysis: {
-    readonly php: { readonly complexity_tool: "auto" | "phpmetrics" | "off" };
+    readonly php: {
+      readonly complexity_tool: "auto" | "phpmetrics" | "off";
+      readonly slow_test_threshold_ms: number;
+      readonly slow_query: {
+        readonly mechanism: "off" | "laravel-listener";
+        readonly threshold_ms: number;
+      };
+    };
   };
   readonly limits: {
     readonly max_changed_files: number;
@@ -27,7 +34,13 @@ export const defaultConfig: ImproverConfig = {
   version: 1,
   schedule: { timezone: "UTC", time: "05:00" },
   selection: { priorities: ["correctness", "static-analysis", "maintainability"] },
-  analysis: { php: { complexity_tool: "auto" } },
+  analysis: {
+    php: {
+      complexity_tool: "auto",
+      slow_test_threshold_ms: 500,
+      slow_query: { mechanism: "off", threshold_ms: 100 },
+    },
+  },
   limits: { max_changed_files: 5, max_diff_lines: 250, max_open_prs: 3, max_cost_usd: 5 },
   protected_paths: [".github/**", "infrastructure/**", "database/migrations/**", "tests/Property/**"],
   verification: { commands: [], mutation_testing: "targeted" },
@@ -48,6 +61,7 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
   const selection = record(value.selection, "selection");
   const analysis = value.analysis === undefined ? undefined : record(value.analysis, "analysis");
   const phpAnalysis = analysis?.php === undefined ? undefined : record(analysis.php, "analysis.php");
+  const slowQuery = phpAnalysis?.slow_query === undefined ? undefined : record(phpAnalysis.slow_query, "analysis.php.slow_query");
   const verification = record(value.verification, "verification");
   const pullRequest = record(value.pull_request, "pull_request");
   return {
@@ -57,6 +71,21 @@ export async function loadConfig(root: string): Promise<ImproverConfig> {
     analysis: {
       php: {
         complexity_tool: complexityTool(phpAnalysis?.complexity_tool),
+        slow_test_threshold_ms: boundedPositive(
+          phpAnalysis?.slow_test_threshold_ms,
+          "analysis.php.slow_test_threshold_ms",
+          defaultConfig.analysis.php.slow_test_threshold_ms,
+          600_000,
+        ),
+        slow_query: {
+          mechanism: slowQueryMechanism(slowQuery?.mechanism),
+          threshold_ms: boundedPositive(
+            slowQuery?.threshold_ms,
+            "analysis.php.slow_query.threshold_ms",
+            defaultConfig.analysis.php.slow_query.threshold_ms,
+            60_000,
+          ),
+        },
       },
     },
     limits: {
@@ -82,3 +111,5 @@ function positive(value: unknown, name: string): number { if (!Number.isInteger(
 function time(value: unknown): string { const result = string(value, "schedule.time"); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result)) throw new Error("schedule.time must be HH:MM"); return result; }
 function mutationMode(value: unknown): "off" | "targeted" | "full" { if (value !== "off" && value !== "targeted" && value !== "full") throw new Error("verification.mutation_testing must be off, targeted, or full"); return value; }
 function complexityTool(value: unknown): "auto" | "phpmetrics" | "off" { if (value === undefined) return "auto"; if (value !== "auto" && value !== "phpmetrics" && value !== "off") throw new Error("analysis.php.complexity_tool must be auto, phpmetrics, or off"); return value; }
+function slowQueryMechanism(value: unknown): "off" | "laravel-listener" { if (value === undefined) return "off"; if (value !== "off" && value !== "laravel-listener") throw new Error("analysis.php.slow_query.mechanism must be off or laravel-listener"); return value; }
+function boundedPositive(value: unknown, name: string, fallback: number, maximum: number): number { if (value === undefined) return fallback; const result = positive(value, name); if (result > maximum) throw new Error(`${name} must be at most ${maximum}`); return result; }

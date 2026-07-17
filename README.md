@@ -58,6 +58,26 @@ When `phpmetrics/phpmetrics` is declared in `composer.json`, the adapter invokes
 
 When `phpcompatibility/php-compatibility` is declared in `composer.json`, the adapter invokes `vendor/bin/phpcs` directly with the `PHPCompatibility` standard, JSON output, and an explicit PHP target resolved from `config.platform.php` or the root PHP requirement. Only deprecated or removed API findings are retained, with repository-relative file, line, sniff rule, symbol, bounded message, and replacement guidance when the tool reports it. Laravel repositories are also checked against the bounded `laravel-deprecation-rules/v1` registry, selected from the installed framework version in `composer.lock` or the root framework constraint. Each Laravel finding records its official upgrade-guide provenance. Unsupported PHP/Laravel versions, unsupported rule coverage, unavailable tooling, configuration failures, timeouts, truncation, malformed output, infrastructure failures, clean output, and code findings remain distinct; unsupported inputs never fall back to model inference.
 
+When PHPUnit or Pest is manifest-detected, the adapter also invokes the executable directly with a trusted temporary `--log-junit` path. Test cases at or above `analysis.php.slow_test_threshold_ms` become performance findings with a repository-relative test file, bounded test identity and message, duration, and configured threshold. The JUnit artifact is size-limited, hashed, normalized, and removed; repository-owned Composer scripts are never used.
+
+Laravel slow-query collection is explicitly opt-in. Set `analysis.php.slow_query.mechanism` to `laravel-listener` and configure `threshold_ms`. During the direct test run, Daily Improver supplies `DAILY_IMPROVER_LARAVEL_QUERY_LOG` as a fresh temporary path and `DAILY_IMPROVER_LARAVEL_QUERY_THRESHOLD_MS`. A test-only Laravel service provider or bootstrap listener may use `DB::listen` to write this report contract:
+
+```json
+{
+  "schemaVersion": "laravel-slow-query-report/v1",
+  "queries": [
+    {
+      "sql": "select * from allocations where account_id = ?",
+      "durationMs": 245,
+      "file": "app/Repositories/AllocationRepository.php",
+      "line": 42
+    }
+  ]
+}
+```
+
+The listener must ignore query bindings and write only to the supplied path. The adapter treats the report as untrusted input: it bounds its size and finding count, rejects paths outside `app/` or `src/`, filters against the configured threshold, normalizes SQL literals, and persists only a SHA-256 query fingerprint. Raw SQL, bindings, and query parameters are removed with the temporary report. Disabled/non-Laravel inputs, a missing listener, malformed or oversized reports, unavailable tooling, test configuration failures, timeouts, truncated command output, infrastructure failures, clean output, and findings remain distinct outcomes.
+
 The adapter also consumes machine-readable evidence under `.ai/evidence/`:
 
 - `infection.json`: fallback prepared escaped/not-covered mutations when no manifest-backed Infection runner is detected.

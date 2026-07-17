@@ -11,10 +11,10 @@ Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
-- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage, targeted Infection, configured PhpMetrics, and version-aware PHP/Laravel deprecation slices are implemented.
+- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics, version-aware PHP/Laravel deprecation, and opt-in Laravel slow-query slices are implemented.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- The exact next task is collecting slow-test and slow-query evidence.
+- The exact next task is collecting duplicate-code evidence.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -63,7 +63,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- Deprecated-API, slow-test/query, duplicate-code, and validation/error-handling evidence still depend on prepared inputs or are not yet collected.
+- Duplicate-code and validation/error-handling evidence still depend on prepared inputs or are not yet collected.
 - Agent implementations are command-backed; no first-class model provider exists.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
@@ -94,7 +94,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Prevent repository configuration from silently replacing trusted commands.
 - [x] Add collectors for deprecated PHP/Laravel APIs.
 - [x] Add dependency-vulnerability findings.
-- [ ] Add slow-test and slow-query findings.
+- [x] Add slow-test and slow-query findings.
 - [ ] Add duplicate-code findings.
 - [ ] Add missing-validation and error-handling findings.
 - [ ] Deduplicate overlapping findings against the same subsystem.
@@ -456,13 +456,13 @@ Exit gate: one bounded improvement safely targets one component in a mixed monor
 
 The next five commit-sized milestones are:
 
-1. `feat: execute and normalize PHP evidence tools`
-2. `feat: add structured model agent provider`
-3. `feat: harden generated test quality gates`
-4. `feat: verify patches from a fresh checkout`
-5. `feat: dogfood complete loop on real Laravel repository`
+1. `feat: collect duplicate PHP code evidence`
+2. `feat: collect validation and error-handling evidence`
+3. `feat: deduplicate overlapping findings`
+4. `feat: reject candidates without reproducible evidence`
+5. `feat: add structured model agent provider`
 
-The immediate next task is Phase 1A: make `daily-improver analyse` invoke PHPStan, PHPUnit coverage, Infection, Composer Audit, and complexity tooling instead of depending on pre-generated evidence files.
+The immediate next task is Phase 1A: collect bounded, reproducible duplicate-code evidence without executing repository-owned scripts.
 
 ## Initial operating limits
 

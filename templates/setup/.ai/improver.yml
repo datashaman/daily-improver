@@ -4,6 +4,13 @@ schedule:
   time: "05:00"
 selection:
   priorities: [correctness, static-analysis, mutation-survivors, maintainability]
+analysis:
+  php:
+    complexity_tool: auto
+    slow_test_threshold_ms: 500
+    slow_query:
+      mechanism: off
+      threshold_ms: 100
 limits:
   max_changed_files: 5
   max_diff_lines: 250

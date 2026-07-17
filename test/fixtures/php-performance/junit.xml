@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" time="1.260">
+  <testsuite name="Domain" tests="2" time="1.260">
+    <testcase name="test_allocates_money" class="Tests\Feature\MoneyAllocatorTest" file="tests/Feature/MoneyAllocatorTest.php" line="18" time="1.250" />
+    <testcase name="test_rejects_negative_amount" class="Tests\Feature\MoneyAllocatorTest" file="tests/Feature/MoneyAllocatorTest.php" line="29" time="0.010" />
+  </testsuite>
+</testsuites>
