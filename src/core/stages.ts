@@ -11,6 +11,7 @@ import { selectCandidatesByScope } from "./candidate-scope.js";
 import { createSpec } from "./specification.js";
 import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
 import { excludeUnresolvedFindings } from "./unresolved-findings.js";
+import { assertScoreExplanations } from "../domain/candidate-score.js";
 
 export class PipelineStages {
   constructor(
@@ -40,11 +41,12 @@ export class PipelineStages {
       await this.requiredUnresolvedFindings().current(generatedAt),
     );
     const artifact: AnalysisArtifact = {
-      schema: 4,
+      schema: 5,
       repository: root,
       adapter: adapter.id,
       generatedAt,
-      candidates: selection.candidates,
+      candidates: selection.candidates.slice(0, 1),
+      scoreExplanations: selection.scoreExplanations,
       candidateExclusions: selection.exclusions,
       ...(selection.humanTaskRecommendation === undefined
         ? {}
@@ -56,11 +58,13 @@ export class PipelineStages {
 
   async specify(root: string): Promise<ImprovementSpec> {
     const analysis = await readArtifact<AnalysisArtifact>(root, "candidate.json");
+    if (analysis.schema !== 5) throw new Error("Analysis artifact must use schema 5.");
+    const config = await loadConfig(root);
+    assertScoreExplanations(analysis.candidates, analysis.scoreExplanations, config.selection.priorities);
     const selected = analysis.candidates[0];
     if (!selected) throw new Error("Analysis produced no candidate to specify.");
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
-    const config = await loadConfig(root);
     const decidedAt = this.clock.now().toISOString();
     const openPullRequestLimitDecision = decideOpenPullRequestLimit(
       await this.requiredOpenPullRequests().current(decidedAt),

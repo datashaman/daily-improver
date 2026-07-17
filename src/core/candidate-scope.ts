@@ -7,6 +7,7 @@ import type {
 } from "../domain/model.js";
 import { excludeCandidate, sortCandidateExclusions } from "./candidate-exclusion.js";
 import { rankCandidatesWithExclusions } from "./ranking.js";
+import type { CandidateScoreExplanation } from "../domain/candidate-score.js";
 
 export interface AutonomousScopeLimits {
   readonly maxFiles: number;
@@ -15,6 +16,7 @@ export interface AutonomousScopeLimits {
 
 export interface CandidateSelection {
   readonly candidates: readonly RankedCandidate[];
+  readonly scoreExplanations: readonly CandidateScoreExplanation[];
   readonly exclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
 }
@@ -36,6 +38,7 @@ export function selectCandidatesByScope(
 
   return {
     candidates: autonomous,
+    scoreExplanations: ranking.explanations,
     exclusions: sortCandidateExclusions([
       ...candidates.filter((candidate) => !hasBoundedScope(candidate))
         .map((candidate) => excludeCandidate(candidate, "malformed-scope")),

@@ -56,6 +56,7 @@ export class ImprovementPipeline {
         finishedAt: this.clock.now().toISOString(),
         status: "rejected",
         adapter: adapter.id,
+        scoreExplanations: selection.scoreExplanations,
         candidateExclusions: selection.exclusions,
         ...(selection.humanTaskRecommendation === undefined
           ? {}
@@ -81,6 +82,7 @@ export class ImprovementPipeline {
         status: "rejected",
         adapter: adapter.id,
         candidate,
+        scoreExplanations: selection.scoreExplanations,
         candidateExclusions: selection.exclusions,
         ...(selection.humanTaskRecommendation === undefined
           ? {}
@@ -102,6 +104,7 @@ export class ImprovementPipeline {
         status: "rejected",
         adapter: adapter.id,
         candidate,
+        scoreExplanations: selection.scoreExplanations,
         candidateExclusions: selection.exclusions,
         ...(selection.humanTaskRecommendation === undefined
           ? {}
@@ -138,6 +141,7 @@ export class ImprovementPipeline {
       status,
       adapter: adapter.id,
       candidate,
+      scoreExplanations: selection.scoreExplanations,
       candidateExclusions: selection.exclusions,
       ...(selection.humanTaskRecommendation === undefined
         ? {}

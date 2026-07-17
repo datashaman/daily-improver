@@ -1,30 +1,15 @@
 import { candidateKinds, type CandidateExclusion, type CandidateKind, type ImprovementCandidate, type RankedCandidate } from "../domain/model.js";
+import {
+  assertScoreExplanations,
+  candidateScoreCategoryWeights,
+  candidateScoreExplanationSchemaVersion,
+  type CandidateScoreExplanation,
+  type CandidateScoreFactors,
+} from "../domain/candidate-score.js";
 import { isCandidateValueClassification } from "../domain/candidate-value.js";
 import { deduplicateCandidatesWithDuplicates } from "./candidate-deduplication.js";
 import { excludeCandidate, sortCandidateExclusions } from "./candidate-exclusion.js";
 import { hasReproducibleEvidence } from "./candidate-reproducibility.js";
-
-interface ScoringWeights {
-  readonly impact: number;
-  readonly confidence: number;
-  readonly effort: number;
-  readonly risk: number;
-  readonly evidenceStrength: number;
-  readonly estimatedDiff: number;
-  readonly subsystemRisk: number;
-  readonly testability: number;
-}
-
-const categoryScoringWeights = {
-  "test-protection": { impact: 0.28, confidence: 0.21, effort: 0.1, risk: 0.08, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.1 },
-  "static-analysis": { impact: 0.21, confidence: 0.28, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
-  "mutation-testing": { impact: 0.21, confidence: 0.245, effort: 0.175, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
-  "property-testing": { impact: 0.245, confidence: 0.245, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.06, testability: 0.08 },
-  "dependency-vulnerability": { impact: 0.315, confidence: 0.175, effort: 0.07, risk: 0.12, evidenceStrength: 0.14, estimatedDiff: 0.04, subsystemRisk: 0.08, testability: 0.06 },
-  performance: { impact: 0.28, confidence: 0.21, effort: 0.14, risk: 0.06, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.07, testability: 0.08 },
-  maintainability: { impact: 0.245, confidence: 0.21, effort: 0.14, risk: 0.09, evidenceStrength: 0.12, estimatedDiff: 0.05, subsystemRisk: 0.07, testability: 0.07 },
-  documentation: { impact: 0.175, confidence: 0.28, effort: 0.14, risk: 0.09, evidenceStrength: 0.12, estimatedDiff: 0.06, subsystemRisk: 0.06, testability: 0.07 },
-} satisfies Readonly<Record<CandidateKind, ScoringWeights>>;
 
 const maximumEstimatedDiffLines = 10_000;
 const scoringDiffLineReference = 250;
@@ -41,15 +26,23 @@ export function rankCandidates(
 export function rankCandidatesWithExclusions(
   candidates: readonly ImprovementCandidate[],
   priorities: readonly CandidateKind[] = [],
-): { readonly candidates: readonly RankedCandidate[]; readonly exclusions: readonly CandidateExclusion[] } {
+): {
+  readonly candidates: readonly RankedCandidate[];
+  readonly explanations: readonly CandidateScoreExplanation[];
+  readonly exclusions: readonly CandidateExclusion[];
+} {
   const evidenceAccepted = candidates.filter(hasReproducibleEvidence);
   const scoringAccepted = evidenceAccepted.filter(hasBoundedScoringFactors);
   const deduplicated = deduplicateCandidatesWithDuplicates(scoringAccepted);
-  const ranked = deduplicated.candidates
+  const scored = deduplicated.candidates
     .map((candidate) => scoreCandidate(candidate, priorities))
-    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+    .sort((a, b) => b.candidate.score - a.candidate.score || a.candidate.id.localeCompare(b.candidate.id));
+  const ranked = scored.map(({ candidate }) => candidate);
+  const explanations = scored.map(({ explanation }) => explanation);
+  assertScoreExplanations(ranked, explanations, priorities);
   return {
     candidates: ranked,
+    explanations,
     exclusions: sortCandidateExclusions([
       ...candidates.filter((candidate) => !hasReproducibleEvidence(candidate))
         .map((candidate) => excludeCandidate(candidate, "evidence")),
@@ -61,30 +54,49 @@ export function rankCandidatesWithExclusions(
   };
 }
 
-function scoreCandidate(candidate: ImprovementCandidate, priorities: readonly CandidateKind[]): RankedCandidate {
-  const weights = categoryScoringWeights[candidate.kind];
-  const evidenceStrength = candidate.reproducibility?.strength ?? 0;
-  const estimatedDiff = Math.min(candidate.estimatedDiffLines / scoringDiffLineReference, 1);
-  const categoryScore =
-    candidate.impact * weights.impact +
-      candidate.confidence * weights.confidence -
-      candidate.effort * weights.effort -
-      candidate.risk * weights.risk +
-      evidenceStrength * weights.evidenceStrength -
-      estimatedDiff * weights.estimatedDiff -
-      candidate.subsystemRisk * weights.subsystemRisk +
-      candidate.testability * weights.testability;
+function scoreCandidate(
+  candidate: ImprovementCandidate,
+  priorities: readonly CandidateKind[],
+): { readonly candidate: RankedCandidate; readonly explanation: CandidateScoreExplanation } {
+  const categoryWeights = candidateScoreCategoryWeights[candidate.kind];
+  const normalizedFactors: CandidateScoreFactors = {
+    evidenceStrength: candidate.reproducibility?.strength ?? 0,
+    confidence: candidate.confidence,
+    impact: candidate.impact,
+    effort: candidate.effort,
+    estimatedDiff: Math.min(candidate.estimatedDiffLines / scoringDiffLineReference, 1),
+    changeRisk: candidate.risk,
+    subsystemRisk: candidate.subsystemRisk,
+    testability: candidate.testability,
+  };
+  const rawWeightedContribution = Object.keys(normalizedFactors).reduce(
+    (total, factor) => total + normalizedFactors[factor as keyof CandidateScoreFactors]
+      * categoryWeights[factor as keyof CandidateScoreFactors],
+    0,
+  );
   const priorityIndex = priorities.indexOf(candidate.kind);
   const priorityInfluence = priorityIndex === -1
     ? 0
     : maximumPriorityInfluence * ((priorities.length - priorityIndex) / priorities.length);
-  const weightedScore = round(categoryScore + priorityInfluence);
-  return {
+  const weightedScore = round(rawWeightedContribution + priorityInfluence);
+  const valueClassificationCap = candidate.valueClassification?.classification === "cosmetic-only"
+    ? cosmeticOnlyMaximumScore
+    : null;
+  const score = valueClassificationCap === null ? weightedScore : Math.min(weightedScore, valueClassificationCap);
+  return { candidate: {
     ...candidate,
-    score: candidate.valueClassification?.classification === "cosmetic-only"
-      ? Math.min(weightedScore, cosmeticOnlyMaximumScore)
-      : weightedScore,
-  };
+    score,
+  }, explanation: {
+    schemaVersion: candidateScoreExplanationSchemaVersion,
+    candidateReference: candidate.id,
+    candidateKind: candidate.kind,
+    normalizedFactors,
+    categoryWeights,
+    rawWeightedContribution,
+    repositoryPriorityInfluence: priorityInfluence,
+    valueClassificationCap,
+    finalRoundedScore: score,
+  } };
 }
 
 function hasBoundedScoringFactors(candidate: ImprovementCandidate): boolean {

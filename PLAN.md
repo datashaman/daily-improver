@@ -12,13 +12,13 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
 - Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
-- Phase 1B category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
+- Phase 1B is complete. Category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; versioned explanations replay those factors and weights through priority influence, value caps, and final scores, explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- One active or completed improvement is enforced per canonical repository per UTC day, and fresh repository-bound open-PR state now enforces `max_open_prs`; the exact next task is preventing repeated selection of the same unresolved finding.
+- One active or completed improvement is enforced per canonical repository per UTC day, fresh repository-bound open-PR state enforces `max_open_prs`, and fresh unresolved-finding state suppresses repeated work; the exact next task is adding deterministic provider replay fixtures.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -120,7 +120,7 @@ Goal: make selection predictable, bounded, and explainable.
 - [x] Respect `max_open_prs`.
 - [x] Prevent repeated selection of the same unresolved finding.
 - [x] Make ties deterministic.
-- [ ] Include a machine-readable score explanation.
+- [x] Include a machine-readable score explanation.
 
 Exit gate: repeated analysis against unchanged code produces the same candidate and a clear explanation.
 
@@ -471,8 +471,9 @@ The recent and next commit-sized milestones are:
 10. [x] `feat: enforce one daily repository improvement`
 11. [x] `feat: enforce open improvement PR limit`
 12. [x] `feat: prevent repeated unresolved findings`
+13. [x] `feat: explain candidate scores`
 
-The immediate next task is Phase 1B: include a machine-readable score explanation.
+The immediate next task is Phase 1C: add deterministic provider replay fixtures.
 
 ## Initial operating limits
 

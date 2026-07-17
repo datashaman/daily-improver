@@ -3,13 +3,15 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { glob } from "node:fs/promises";
 import type { CandidateExclusion, HumanTaskRecommendation, ImprovementSpec, RankedCandidate } from "../domain/model.js";
+import type { CandidateScoreExplanation } from "../domain/candidate-score.js";
 
 export interface AnalysisArtifact {
-  readonly schema: 4;
+  readonly schema: 5;
   readonly repository: string;
   readonly adapter: string;
   readonly generatedAt: string;
   readonly candidates: readonly RankedCandidate[];
+  readonly scoreExplanations: readonly CandidateScoreExplanation[];
   readonly candidateExclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
 }

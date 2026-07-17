@@ -1,4 +1,5 @@
 import type { CandidateValueClassification } from "./candidate-value.js";
+import type { CandidateScoreExplanation } from "./candidate-score.js";
 
 export const capabilityKinds = [
   "install",
@@ -189,6 +190,7 @@ export interface ImprovementRun {
   readonly status: RunStatus;
   readonly adapter: string;
   readonly candidate?: RankedCandidate;
+  readonly scoreExplanations: readonly CandidateScoreExplanation[];
   readonly candidateExclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
   readonly openPullRequestLimitDecision?: OpenPullRequestLimitDecision;

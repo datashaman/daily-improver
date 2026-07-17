@@ -6,7 +6,7 @@ import test from "node:test";
 import { createApplication } from "../src/app.js";
 import type { DailyImprovementStore, OpenPullRequestStateSource, RepositoryAdapter, RunStore, UnresolvedFindingStateSource } from "../src/contracts.js";
 import { AdapterRegistry } from "../src/core/adapter-registry.js";
-import { readArtifact, type AnalysisArtifact } from "../src/core/artifacts.js";
+import { readArtifact, writeArtifact, type AnalysisArtifact } from "../src/core/artifacts.js";
 import { ImprovementPipeline } from "../src/core/pipeline.js";
 import { PipelineStages } from "../src/core/stages.js";
 import { candidateFindingId } from "../src/core/unresolved-findings.js";
@@ -123,7 +123,7 @@ test("pipeline rejects work that exceeds its cost budget", async () => {
   assert.equal(run.dailyImprovementDecision?.outcome, "released");
 });
 
-test("pipeline selects exactly one candidate from a deterministic ranking", async () => {
+test("pipeline persists deterministic tie and cosmetic-cap score explanations", async () => {
   const candidate = (id: string, impact: number): ImprovementCandidate => ({
     id,
     kind: "maintainability",
@@ -152,7 +152,17 @@ test("pipeline selects exactly one candidate from a deterministic ranking", asyn
     id: "fixture",
     detect: async () => 1,
     profile: async () => profile,
-    discoverCandidates: async () => [candidate("lower", 0.2), candidate("selected", 0.9)],
+    discoverCandidates: async () => [
+      candidate("zulu", 0.9),
+      candidate("alpha", 0.9),
+      {
+        ...candidate("cosmetic", 1),
+        valueClassification: {
+          schemaVersion: "candidate-value-classification/v1",
+          classification: "cosmetic-only",
+        },
+      },
+    ],
   };
   const saved: ImprovementRun[] = [];
   const store: RunStore = {
@@ -162,9 +172,40 @@ test("pipeline selects exactly one candidate from a deterministic ranking", asyn
 
   const run = await new ImprovementPipeline(new AdapterRegistry([adapter]), [], store, acceptingDailyImprovements, acceptingOpenPullRequests, acceptingUnresolvedFindings).plan(profile.root);
 
-  assert.equal(run.candidate?.id, "selected");
+  assert.equal(run.candidate?.id, "alpha");
+  assert.deepEqual(run.scoreExplanations.map(({ candidateReference }) => candidateReference), ["alpha", "zulu", "cosmetic"]);
+  assert.equal(run.scoreExplanations[0]?.finalRoundedScore, run.candidate?.score);
+  assert.equal(run.scoreExplanations[2]?.valueClassificationCap, 0.01);
+  assert.equal(run.scoreExplanations[2]?.finalRoundedScore, 0.01);
   assert.equal(saved.length, 1);
-  assert.equal(saved[0]?.candidate?.id, "selected");
+  assert.deepEqual(saved, [run]);
+});
+
+test("analyse persists exactly one selected candidate while explaining every ranked alternative", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-exactly-one-analysis-"));
+  const candidate = (id: string, impact: number): ImprovementCandidate => ({
+    id, kind: "maintainability", title: id, rationale: `${id} rationale`, confidence: 0.8, impact,
+    effort: 0.2, risk: 0.1, subsystemRisk: 0.1, testability: 0.8, estimatedDiffLines: 10,
+    evidence: [`${id} evidence`], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.9, [`${id} collector`]),
+  });
+  const profile: RepositoryProfile = {
+    root, adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile,
+    discoverCandidates: async () => [candidate("lower", 0.2), candidate("selected", 0.9)],
+  };
+
+  const artifact = await new PipelineStages(
+    new AdapterRegistry([adapter]), undefined, undefined, acceptingUnresolvedFindings,
+  ).analyse(root);
+
+  assert.deepEqual(artifact.candidates.map(({ id }) => id), ["selected"]);
+  assert.deepEqual(
+    artifact.scoreExplanations.map(({ candidateReference }) => candidateReference),
+    ["selected", "lower"],
+  );
 });
 
 test("pipeline persists unresolved finding exclusion and selects the lower-ranked fallback", async () => {
@@ -290,9 +331,11 @@ test("analyse emits the versioned human task in its persisted artifact", async (
   const artifact = await new PipelineStages(new AdapterRegistry([adapter]), undefined, undefined, acceptingUnresolvedFindings).analyse(root);
   const persisted = await readArtifact<AnalysisArtifact>(root, "candidate.json");
 
-  assert.equal(artifact.schema, 4);
+  assert.equal(artifact.schema, 5);
   assert.deepEqual(persisted, artifact);
   assert.equal(persisted.candidates.length, 0);
+  assert.equal(persisted.scoreExplanations[0]?.candidateReference, "large-analysis");
+  assert.doesNotMatch(JSON.stringify(persisted.scoreExplanations), /raw evidence|raw rationale|src\/Service/iu);
   assert.equal(persisted.humanTaskRecommendation?.schemaVersion, "human-task-recommendation/v1");
   assert.equal(persisted.candidateExclusions[0]?.reason, "oversized-scope");
   assert.doesNotMatch(JSON.stringify(persisted.humanTaskRecommendation), /raw evidence|raw rationale|src\/Service/iu);
@@ -335,6 +378,41 @@ test("specify persists the blocked open pull request decision without claiming t
     outcome: "blocked",
     decidedAt: decision.decidedAt,
   });
+});
+
+test("specify fails closed when a persisted score explanation is inconsistent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-score-explanation-stage-"));
+  const candidate: ImprovementCandidate = {
+    id: "bounded-stage", kind: "maintainability", title: "Bounded stage candidate",
+    rationale: "Raw rationale.", confidence: 0.9, impact: 0.9,
+    effort: 0.2, risk: 0.2, subsystemRisk: 0.2, testability: 0.8, estimatedDiffLines: 20,
+    evidence: ["raw evidence"], suggestedFiles: ["src/Service.ts"],
+    reproducibility: reproducibleEvidence(0.9, ["fixture collector"]),
+  };
+  const profile: RepositoryProfile = {
+    root, adapter: "fixture", language: "unknown", frameworks: [], signals: ["fixture"], capabilities: new Map(),
+  };
+  const adapter: RepositoryAdapter = {
+    id: "fixture", detect: async () => 1, profile: async () => profile, discoverCandidates: async () => [candidate],
+  };
+  const stages = new PipelineStages(
+    new AdapterRegistry([adapter]),
+    unexpectedDailyImprovementClaim,
+    unexpectedOpenPullRequestRead,
+    acceptingUnresolvedFindings,
+  );
+  const artifact = await stages.analyse(root);
+  const explanation = artifact.scoreExplanations[0];
+  assert.ok(explanation);
+  await writeArtifact(root, "candidate.json", {
+    ...artifact,
+    scoreExplanations: [{
+      ...explanation,
+      rawWeightedContribution: explanation.rawWeightedContribution + 0.01,
+    }],
+  });
+
+  await assert.rejects(stages.specify(root), /raw contribution is inconsistent/u);
 });
 
 test("pipeline persists a machine-readable rejection when no candidate has reproducible evidence", async () => {
