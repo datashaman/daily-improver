@@ -1,0 +1,110 @@
+name: Daily improvement
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMPROVER_IMAGE: ghcr.io/datashaman/daily-improver:latest
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analyse and select exactly one candidate
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" analyse /repo
+          docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" specify /repo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: approved-spec
+          path: .ai/runs/
+          include-hidden-files: true
+
+  test-generation:
+    needs: analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-spec
+          path: .ai/runs/
+      - name: Exchange GitHub OIDC identity for a stage-scoped credential
+        run: daily-improver-auth test-generation >> "$GITHUB_ENV"
+      - name: Generate tests from the approved spec
+        run: "$DAILY_IMPROVER_TEST_AGENT_COMMAND"
+      - name: Sign the protected test manifest
+        run: docker run --rm -e DAILY_IMPROVER_MANIFEST_KEY -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" test /repo
+      - run: |
+          git add -N .
+          git diff --binary -- . ':!.ai/runs' > .ai/runs/${{ github.run_id }}/tests.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: protected-tests
+          path: .ai/runs/
+          include-hidden-files: true
+
+  builder:
+    needs: test-generation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: protected-tests
+          path: .ai/runs/
+      - run: git apply "$(find .ai/runs -name tests.patch -print -quit)"
+      - name: Exchange OIDC identity for an isolated builder credential
+        run: daily-improver-auth builder >> "$GITHUB_ENV"
+      - name: Implement only the approved spec
+        run: docker run --rm -e DAILY_IMPROVER_BUILDER_COMMAND -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" build /repo
+      - run: |
+          git add -N .
+          git diff --binary -- . ':!.ai/runs' > .ai/runs/${{ github.run_id }}/change.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proposed-change
+          path: .ai/runs/
+          include-hidden-files: true
+
+  verifier:
+    needs: builder
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: proposed-change
+          path: .ai/runs/
+      - run: git apply "$(find .ai/runs -name change.patch -print -quit)"
+      - name: Exchange OIDC identity for a verifier credential
+        run: daily-improver-auth verifier >> "$GITHUB_ENV"
+      - name: Independently verify policy, tests, analysis, and diff
+        run: docker run --rm -e DAILY_IMPROVER_MANIFEST_KEY -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" verify /repo
+      - name: Produce a request for the GitHub App to open a draft PR
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$IMPROVER_IMAGE" publish /repo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-publication
+          path: .ai/runs/
+          include-hidden-files: true

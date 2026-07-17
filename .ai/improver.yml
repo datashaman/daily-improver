@@ -1,0 +1,32 @@
+version: 1
+schedule:
+  timezone: Africa/Johannesburg
+  time: "05:00"
+selection:
+  priorities:
+    - correctness
+    - static-analysis
+    - mutation-survivors
+    - maintainability
+    - performance
+limits:
+  max_changed_files: 5
+  max_diff_lines: 250
+  max_open_prs: 3
+  max_cost_usd: 5
+protected_paths:
+  - .github/**
+  - infrastructure/**
+  - database/migrations/**
+  - tests/Property/**
+  - .ai/runs/**/spec.json
+  - .ai/policies/**
+verification:
+  commands:
+    - npm run check
+    - npm test
+  mutation_testing: targeted
+pull_request:
+  draft: true
+  labels:
+    - ai-improvement

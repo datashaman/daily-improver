@@ -1,0 +1,33 @@
+# Architecture
+
+Daily Improver is a portable, language-neutral improvement engine. PHP/Laravel is its first proving adapter. GitHub Actions is an execution substrate, and a GitHub App-backed control plane supplies scheduling, installation state, short-lived credentials, metering, feedback, and PR creation.
+
+```mermaid
+flowchart LR
+  App[GitHub App] --> Scheduler[Thin scheduler]
+  Scheduler --> Actions[Customer GitHub Actions]
+  Actions --> Observe[Observe and select]
+  Observe --> Tests[Specify and test]
+  Tests --> Build[Isolated builder]
+  Build --> Verify[Fresh verifier]
+  Verify --> Request[Publication request]
+  Request --> App
+```
+
+The control plane does not clone repositories, install dependencies, run tests, or retain source code. Repository execution remains on GitHub-hosted or customer-controlled runners.
+
+## Trust boundaries
+
+- Analysis has read-only repository access and produces evidence plus one selected candidate.
+- Test generation receives the approved candidate and emits tests plus an HMAC integrity manifest.
+- The builder receives the repository, immutable tests, the spec, and a file allowlist. It has no access to earlier stage credentials.
+- Verification starts from a fresh checkout, validates the manifest and diff, and executes repository-owned verification commands.
+- Publication emits a request. The GitHub App, not the workflow token, opens the draft PR.
+
+GitHub OIDC is exchanged for short-lived, stage-scoped control-plane credentials. The workflow token only needs repository-local permissions appropriate to its job. The setup workflow is introduced through a human-reviewed setup PR; the App does not request workflow-write permission.
+
+## Extension model
+
+`RepositoryAdapter` detects an ecosystem, constructs capabilities, discovers evidence-backed candidates, and classifies failures. Framework adapters will decorate language profiles. Core ranking, policy, specifications, history, isolation, verification, and publishing stay language-neutral.
+
+The next adapters should be TypeScript and Python, but only after the PHP/Laravel loop consistently yields mergeable PRs.

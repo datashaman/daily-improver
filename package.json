@@ -1,0 +1,29 @@
+{
+  "name": "daily-improver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A language-neutral continuous codebase improvement system.",
+  "bin": {
+    "daily-improver": "./dist/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/**/*.test.js",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/src/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "minimatch": "^10.0.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

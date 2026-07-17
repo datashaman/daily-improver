@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.daily-improver
+.ai/runs
+coverage
+*.log

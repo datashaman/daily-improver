@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.daily-improver/
+coverage/
+*.log
+.DS_Store
