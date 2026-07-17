@@ -145,6 +145,8 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Keep the provider interface compatible with private customer endpoints.
 - [x] Add a bounded production HTTPS transport behind trusted opaque endpoint resolution.
 - [x] Exchange injected trusted runner identity for short-lived stage credentials through a bounded trusted HTTPS boundary.
+- [x] Add an opt-in customer-runner MoneyAllocator live-proof harness outside the deterministic checkpoint suite.
+- [ ] Execute and record the live proof against a configured customer-runner structured endpoint.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
 
@@ -479,8 +481,9 @@ The recent and next commit-sized milestones are:
 14. [x] `feat: add HTTPS structured endpoint transport`
 15. [x] `feat: exchange trusted runner identity for model credentials`
 16. [x] `feat: compose trusted runner structured model provider`
+17. [x] `test: add opt-in trusted runner live proof`
 
-The immediate next task is Phase 1C: add an opt-in customer-runner integration proof that drives the MoneyAllocator fixture through the trusted structured-provider composition against a real model endpoint while keeping permanent credentials and live calls out of the deterministic checkpoint suite.
+The immediate next task is Phase 1C: execute the opt-in MoneyAllocator proof on a customer-controlled runner with fresh stage identity and a configured structured endpoint, then record the successful live result without adding live calls or credentials to the deterministic checkpoint suite.
 
 ## Initial operating limits
 

@@ -59,7 +59,7 @@ export class LocalImprovementRunner {
         },
       };
       const testExecution = await this.agents.generateTests(baseContext);
-      await persistExecution(isolated.path, "test", testExecution);
+      await persistAgentExecution(isolated.path, "test", testExecution);
 
       const baseline = await this.runner.run(test.command, isolated.path);
       if (baseline.exitCode === 0) throw new Error("Generated regression test did not fail against main behavior.");
@@ -80,7 +80,7 @@ export class LocalImprovementRunner {
         },
       };
       const builderExecution = await this.agents.build(builderContext);
-      const trustedBuilderArtifacts = await persistExecution(isolated.path, "build", builderExecution);
+      const trustedBuilderArtifacts = await persistAgentExecution(isolated.path, "build", builderExecution);
       await this.runner.run(["git", "add", "-N", "."], isolated.path);
       const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey, trustedBuilderArtifacts);
       const publication = await this.stages.publicationRequest(isolated.path);
@@ -104,7 +104,7 @@ export class LocalImprovementRunner {
   }
 }
 
-async function persistExecution(
+export async function persistAgentExecution(
   root: string,
   stage: "test" | "build",
   execution: TestAgentExecution | BuilderExecution | void,

@@ -4,23 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: explicit production composition of trusted runner policy, endpoint resolution, identity, credential exchange, and structured model transport.
-- Current checkpoint commit: `feat: compose trusted runner structured model provider`.
+- Last completed milestone: opt-in customer-runner MoneyAllocator live-proof harness with explicit no-network skip/require gating.
+- Current checkpoint commit: `test: add opt-in trusted runner live proof`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1C — Structured model agent providers.
-- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, bounded trusted-runner identity exchange for exact stage/scope credentials, and an explicit production composition boundary for runner-owned inputs; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A and Phase 1B are complete. Phase 1B has deterministic reproducibility, deduplication, category weights, bounded scoring factors, replayable versioned score explanations, a near-zero cap for explicitly cosmetic-only work, validated repository priority ordering with bounded influence, repository file/line scope gates with a bounded human-task route, deterministic machine-readable exclusions for every pre-selection rejection, one active or completed improvement per canonical repository per UTC day, fresh repository-bound open-PR and unresolved-finding gates, exactly-one selection in a run, and stable-ID tie-breaking. Phase 1C retains strict versioned stage contracts, deterministic per-attempt stage/daily/specification cost enforcement, bounded retries for explicitly classified transient failures, distinct short-lived test/builder credentials, committed deterministic test/build replays, versioned lower/higher routing, exact endpoint-neutral private-endpoint capabilities, a production HTTPS model transport behind opaque trusted resolution, bounded trusted-runner identity exchange for exact stage/scope credentials, an explicit production composition boundary for runner-owned inputs, and an opt-in live proof harness excluded from deterministic checkpoints; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Add an opt-in customer-runner integration proof that drives the MoneyAllocator fixture through the trusted structured-provider composition against a real model endpoint without adding live calls to the deterministic checkpoint suite.
+Execute the opt-in MoneyAllocator proof on a customer-controlled runner with fresh stage identity assertions and a configured runner-side structured endpoint, then record the successful live result without adding credentials or live calls to the deterministic checkpoint suite.
 
 ## Acceptance criteria for the next task
 
-- Exercise both test and builder stages through `createTrustedRunnerStructuredProvider` against an explicitly enabled real structured endpoint on a customer-controlled runner.
-- Keep the integration opt-in and excluded from `npm run checkpoint`; absence of live runner identity or endpoint configuration must skip or fail before any network call according to the explicit invocation mode.
-- Prove the MoneyAllocator defect test fails against baseline and the independently verified bounded patch passes.
-- Retain distinct short-lived stage credentials, trusted opaque endpoint resolution, cost limits, protected artifacts, and sanitized run outputs.
-- Document the invocation and required runner-owned configuration without placing permanent credentials in the repository.
+- Run `npm run test:live-model` with `DAILY_IMPROVER_LIVE_MODE=require`, absolute runner-owned policy/resolution files, an absent dedicated workspace, and freshly acquired distinct test/build identity assertions.
+- Exercise both stages against the configured real endpoint; the endpoint must be bound out-of-band to the dedicated workspace and materialize only response-declared files.
+- Record a passing baseline-defect-test failure, sealed test/specification artifacts, independently verified bounded builder patch, completed cost/attempt records, and sanitized artifacts.
+- Retain no identity assertion, stage credential, endpoint locator, or permanent credential in the repository or recorded run outputs.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -48,6 +47,7 @@ Add an opt-in customer-runner integration proof that drives the MoneyAllocator f
 - `TrustedRunnerModelStageCredentialSource` resolves exchange configuration without repository arguments, validates exact trusted issuer/audience/stage/scope identity claims, keeps the assertion only in the bounded exchange authorization header, and accepts only an exact short-lived `model-stage-credential/v1` response for the requested stage and hashed repository/specification scope.
 - Credential exchange bounds identity, request, response, and timeout values; unsupported protocols, extended schemas, mismatched claims, status failures, malformed responses, and oversized values fail closed with sanitized explicit classifications. Only transient acquisition failures retry, and failed exchanges settle zero model cost.
 - The local runner creates an isolated daily worktree and branch.
+- The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
@@ -56,7 +56,7 @@ Add an opt-in customer-runner integration proof that drives the MoneyAllocator f
 ## Known placeholders
 
 - Composer validation/audit, PHPStan/Psalm, PHPUnit/Pest coverage and timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, Laravel deprecation and validation/error-handling rules, and configured Laravel query timing are automatically executed or applied when detected or applicable; some remaining PHP evidence types still depend on prepared artifacts.
-- The local CLI delegates to configured commands; production customer-controlled runners now have an explicit structured-provider composition boundary, but the real-model MoneyAllocator integration proof is not yet implemented.
+- The local CLI delegates to configured commands; the live MoneyAllocator harness exists, but it has not yet been executed against a configured customer-runner model endpoint.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation; its `daily-improver-auth unresolved-findings` and `daily-improver-auth open-pull-requests` producers are not implemented.
 - `publish` does not push a branch or create a GitHub PR.
@@ -67,17 +67,18 @@ Add an opt-in customer-runner integration proof that drives the MoneyAllocator f
 
 ## Last verification
 
-Verified on 2026-07-17 for the trusted runner structured-provider composition slice:
+Verified on 2026-07-17 for the opt-in trusted runner live-proof harness slice:
 
-- Focused trusted-runner composition tests: 5 tests passed.
-- `npm test`: 183 tests passed.
+- Focused live configuration gate tests: 3 tests passed.
+- Explicit optional live invocation: 1 test skipped before file or network access because live runner inputs were absent.
+- `npm test`: 186 tests passed; the live endpoint proof remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
 - `npm run checkpoint` passed after the slice commit.
 - `docker build -t daily-improver:local .`: not required; CLI runtime and production dependencies did not change.
 - End-to-end defect → failing property test → bounded fix → independently verified daily branch flow passed.
-- The deterministic composition example proved separate test/build identity, credential exchange, opaque endpoint resolution, and authenticated structured calls with no network, live identity provider, model API, or permanent credentials; absent, malformed, cross-stage, cross-scope, and cross-endpoint inputs failed before a model call.
+- Live configuration absence in `require` mode and an omitted invocation mode failed before network access; `skip` mode produced an intentional skip. Full live execution remains pending because this checkout has no customer-runner endpoint or fresh identity assertions.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

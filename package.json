@@ -13,6 +13,7 @@
     "check:unused": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
     "checkpoint": "npm run check && npm run check:unused && npm test && git diff --check && git status --short --branch",
     "test": "npm run build && node --test dist/test/**/*.test.js",
+    "test:live-model": "npm run build && node --test dist/test/trusted-runner-money-allocator.live.js",
     "dev": "tsx src/cli.ts",
     "start": "node dist/src/cli.js"
   },
