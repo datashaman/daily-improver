@@ -1,4 +1,4 @@
-export const modelCostBudgetDecisionSchemaVersion = "model-cost-budget-decision/v1" as const;
+export const modelCostBudgetDecisionSchemaVersion = "model-cost-budget-decision/v2" as const;
 
 export type ModelAgentStage = "test" | "build";
 
@@ -31,6 +31,7 @@ export interface ModelCostReservation {
 export interface ModelCostBudgetDecision {
   readonly schemaVersion: typeof modelCostBudgetDecisionSchemaVersion;
   readonly status: "approved";
+  readonly accounting: "validated-usage" | "conservative-reservation";
   readonly stage: ModelAgentStage;
   readonly stageLimitUsd: number;
   readonly dailyLimitUsd: number;
@@ -46,7 +47,11 @@ export interface ModelCostBudgetDecision {
 export interface ModelCostBudgetState {
   reserve(request: ModelCostReservationRequest): ModelCostReservation;
   settle(reservation: ModelCostReservation, actualCostUsd: number): ModelCostBudgetDecision;
-  consumeReservation(reservation: ModelCostReservation): void;
+  consumeReservation(reservation: ModelCostReservation): ModelCostBudgetDecision;
+}
+
+export class ModelCostBudgetError extends Error {
+  override readonly name = "ModelCostBudgetError";
 }
 
 interface ActiveReservation {
@@ -65,16 +70,16 @@ export class InMemoryModelCostBudgetState implements ModelCostBudgetState {
     const stageLimitMicros = costMicros(request.stageLimitUsd, `${request.stage} stage cost limit`);
     const dailyLimitMicros = costMicros(request.dailyLimitUsd, "daily model cost limit");
     const specificationLimitMicros = costMicros(request.specificationLimitUsd, "specification cost limit");
-    if (reservationMicros === 0) throw new Error(`${request.stage} stage reserved model cost must be greater than zero.`);
+    if (reservationMicros === 0) throw new ModelCostBudgetError(`${request.stage} stage reserved model cost must be greater than zero.`);
     if (reservationMicros > stageLimitMicros) {
-      throw new Error(`${request.stage} stage reserved model cost exceeds its stage limit.`);
+      throw new ModelCostBudgetError(`${request.stage} stage reserved model cost exceeds its stage limit.`);
     }
     const specificationCommittedMicros = this.specificationCommittedMicros.get(request.scope) ?? 0;
     if (this.dailyCommittedMicros + reservationMicros > dailyLimitMicros) {
-      throw new Error(`${request.stage} stage reserved model cost is unavailable within the remaining daily budget.`);
+      throw new ModelCostBudgetError(`${request.stage} stage reserved model cost is unavailable within the remaining daily budget.`);
     }
     if (specificationCommittedMicros + reservationMicros > specificationLimitMicros) {
-      throw new Error(`${request.stage} stage reserved model cost is unavailable within the remaining specification budget.`);
+      throw new ModelCostBudgetError(`${request.stage} stage reserved model cost is unavailable within the remaining specification budget.`);
     }
     const reservation: ModelCostReservation = {
       id: this.nextId++,
@@ -89,13 +94,17 @@ export class InMemoryModelCostBudgetState implements ModelCostBudgetState {
   }
 
   settle(reservation: ModelCostReservation, actualCostUsd: number): ModelCostBudgetDecision {
-    const active = this.take(reservation);
     const actualMicros = costMicros(actualCostUsd, "actual model cost");
+    const active = this.take(reservation);
+    if (actualMicros > active.reservationMicros) {
+      throw new ModelCostBudgetError(`${reservation.request.stage} stage actual model cost exceeds its reserved budget.`);
+    }
     this.replaceReservation(active, actualMicros);
     const specificationCommittedMicros = this.specificationCommittedMicros.get(reservation.request.scope) ?? 0;
     const decision: ModelCostBudgetDecision = {
       schemaVersion: modelCostBudgetDecisionSchemaVersion,
       status: "approved",
+      accounting: "validated-usage",
       stage: reservation.request.stage,
       stageLimitUsd: reservation.request.stageLimitUsd,
       dailyLimitUsd: reservation.request.dailyLimitUsd,
@@ -107,19 +116,32 @@ export class InMemoryModelCostBudgetState implements ModelCostBudgetState {
       specificationCommittedBeforeUsd: reservation.specificationCommittedBeforeUsd,
       specificationCommittedAfterUsd: usd(specificationCommittedMicros),
     };
-    if (actualMicros > active.reservationMicros) {
-      throw new Error(`${reservation.request.stage} stage actual model cost exceeds its reserved budget.`);
-    }
     return decision;
   }
 
-  consumeReservation(reservation: ModelCostReservation): void {
-    this.take(reservation);
+  consumeReservation(reservation: ModelCostReservation): ModelCostBudgetDecision {
+    const active = this.take(reservation);
+    const specificationCommittedMicros = this.specificationCommittedMicros.get(reservation.request.scope) ?? 0;
+    return {
+      schemaVersion: modelCostBudgetDecisionSchemaVersion,
+      status: "approved",
+      accounting: "conservative-reservation",
+      stage: reservation.request.stage,
+      stageLimitUsd: reservation.request.stageLimitUsd,
+      dailyLimitUsd: reservation.request.dailyLimitUsd,
+      specificationLimitUsd: reservation.request.specificationLimitUsd,
+      reservedCostUsd: reservation.request.reservationUsd,
+      actualCostUsd: usd(active.reservationMicros),
+      dailyCommittedBeforeUsd: reservation.dailyCommittedBeforeUsd,
+      dailyCommittedAfterUsd: usd(this.dailyCommittedMicros),
+      specificationCommittedBeforeUsd: reservation.specificationCommittedBeforeUsd,
+      specificationCommittedAfterUsd: usd(specificationCommittedMicros),
+    };
   }
 
   private take(reservation: ModelCostReservation): ActiveReservation {
     const active = this.active.get(reservation.id);
-    if (!active || active.reservation !== reservation) throw new Error("Model cost reservation is unavailable or already settled.");
+    if (!active || active.reservation !== reservation) throw new ModelCostBudgetError("Model cost reservation is unavailable or already settled.");
     this.active.delete(reservation.id);
     return active;
   }
@@ -146,11 +168,11 @@ export function validateModelCostBudgets(budgets: ModelCostBudgets): ModelCostBu
 
 function costMicros(value: number, name: string): number {
   if (!Number.isFinite(value) || value < 0 || value > 10_000) {
-    throw new Error(`${name} must be a finite number from 0 through 10000.`);
+    throw new ModelCostBudgetError(`${name} must be a finite number from 0 through 10000.`);
   }
   const micros = Math.round(value * 1_000_000);
   if (Math.abs(micros / 1_000_000 - value) > Number.EPSILON * Math.max(1, value)) {
-    throw new Error(`${name} must use at most six decimal places.`);
+    throw new ModelCostBudgetError(`${name} must use at most six decimal places.`);
   }
   return micros;
 }

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AgentContext } from "../src/agents/agent-provider.js";
 import {
+  ModelTransportFailure,
+  StructuredModelRequestFailure,
   StructuredModelAgentProvider,
   type ModelTransport,
   type ModelTransportInvocation,
@@ -59,9 +61,24 @@ class DeterministicTransport implements ModelTransport {
 
   async invoke(invocation: ModelTransportInvocation): Promise<unknown> {
     this.invocations.push(invocation);
-    return this.responses[this.invocations.length - 1];
+    const response = this.responses[this.invocations.length - 1];
+    if (response instanceof Error) throw response;
+    return response;
   }
 }
+
+const testResponse = {
+  schemaVersion: "test-agent-response/v1",
+  status: "completed",
+  summary: "Added an allocation property test.",
+  changedFiles: ["tests/Property/MoneyAllocatorInvariantTest.php"],
+  tests: [{
+    path: "tests/Property/MoneyAllocatorInvariantTest.php",
+    purpose: "Prove totals are preserved.",
+    invariants: ["sum(allocation) equals total"],
+  }],
+  usage,
+} as const;
 
 test("constructs approved stage requests and accepts bounded deterministic model responses", async () => {
   const transport = new DeterministicTransport([
@@ -216,5 +233,141 @@ test("rejects reported usage above the reserved transport budget", async () => {
   }]);
   const provider = new StructuredModelAgentProvider(transport, budgets);
   await assert.rejects(provider.generateTests(context), /exceeds its reserved budget/);
+  assert.equal(transport.invocations.length, 1);
+});
+
+test("retries only classified transient failures with deterministic timing and per-attempt cost reservations", async () => {
+  const transport = new DeterministicTransport([
+    new ModelTransportFailure("transient", "sensitive upstream timeout detail"),
+    testResponse,
+  ]);
+  const delays: number[] = [];
+  const provider = new StructuredModelAgentProvider(
+    transport,
+    { ...budgets, dailyLimitUsd: 0.02 },
+    new InMemoryModelCostBudgetState(),
+    { maxAttempts: 3, delaysMs: [25, 50] },
+    { async wait(delayMs) { delays.push(delayMs); } },
+  );
+
+  const result = await provider.generateTests(context);
+
+  assert.deepEqual(delays, [25]);
+  assert.equal(transport.invocations.length, 2);
+  assert.equal(result.budgetDecision?.dailyCommittedBeforeUsd, 0.004);
+  assert.equal(result.budgetDecision?.dailyCommittedAfterUsd, 0.006);
+  assert.deepEqual(result.requestAttempts, {
+    schemaVersion: "model-request-attempts/v1",
+    maxAttempts: 3,
+    attempts: [
+      {
+        attempt: 1,
+        classification: "transient",
+        retryDelayMs: 25,
+        budgetDecision: {
+          schemaVersion: "model-cost-budget-decision/v2",
+          status: "approved",
+          accounting: "conservative-reservation",
+          stage: "test",
+          stageLimitUsd: 0.006,
+          dailyLimitUsd: 0.02,
+          specificationLimitUsd: 1.5,
+          reservedCostUsd: 0.004,
+          actualCostUsd: 0.004,
+          dailyCommittedBeforeUsd: 0,
+          dailyCommittedAfterUsd: 0.004,
+          specificationCommittedBeforeUsd: 0,
+          specificationCommittedAfterUsd: 0.004,
+        },
+      },
+      {
+        attempt: 2,
+        classification: "completed",
+        budgetDecision: result.budgetDecision,
+      },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(result.requestAttempts), /sensitive upstream timeout detail/);
+});
+
+test("does not retry permanent, malformed-response, policy, or budget failures", async () => {
+  const cases: readonly {
+    readonly expected: "permanent" | "malformed-response" | "policy" | "budget";
+    readonly response: unknown;
+  }[] = [
+    { expected: "permanent", response: new ModelTransportFailure("permanent", "credential rejected") },
+    { expected: "malformed-response", response: { status: "completed" } },
+    { expected: "policy", response: { ...testResponse, changedFiles: ["app/Domain/MoneyAllocator.php"] } },
+    { expected: "budget", response: { ...testResponse, usage: { ...usage, estimatedCostUsd: 0.005 } } },
+  ];
+
+  for (const item of cases) {
+    const transport = new DeterministicTransport([item.response, testResponse]);
+    const provider = new StructuredModelAgentProvider(
+      transport,
+      budgets,
+      new InMemoryModelCostBudgetState(),
+      { maxAttempts: 2, delaysMs: [0] },
+      { async wait() { throw new Error("Unexpected retry timing."); } },
+    );
+    await assert.rejects(provider.generateTests(context), (error) => {
+      assert.ok(error instanceof StructuredModelRequestFailure);
+      assert.equal(error.classification, item.expected);
+      assert.equal(error.requestAttempts.attempts.length, 1);
+      return true;
+    });
+    assert.equal(transport.invocations.length, 1);
+  }
+});
+
+test("bounds retry configuration and stops after the configured transient attempt count", async () => {
+  assert.throws(() => new StructuredModelAgentProvider(
+    new DeterministicTransport([]),
+    budgets,
+    new InMemoryModelCostBudgetState(),
+    { maxAttempts: 6, delaysMs: [0, 0, 0, 0, 0] },
+  ), /maxAttempts/);
+
+  const transport = new DeterministicTransport([
+    new ModelTransportFailure("transient"),
+    new ModelTransportFailure("transient"),
+    testResponse,
+  ]);
+  const provider = new StructuredModelAgentProvider(
+    transport,
+    { ...budgets, dailyLimitUsd: 0.02 },
+    new InMemoryModelCostBudgetState(),
+    { maxAttempts: 2, delaysMs: [0] },
+    { async wait() {} },
+  );
+  await assert.rejects(provider.generateTests(context), (error) => {
+    assert.ok(error instanceof StructuredModelRequestFailure);
+    assert.equal(error.classification, "transient");
+    assert.equal(error.requestAttempts.attempts.length, 2);
+    return true;
+  });
+  assert.equal(transport.invocations.length, 2);
+});
+
+test("fails closed before a retry transport call when conservative usage exhausts the daily budget", async () => {
+  const transport = new DeterministicTransport([
+    new ModelTransportFailure("transient"),
+    testResponse,
+  ]);
+  const provider = new StructuredModelAgentProvider(
+    transport,
+    { ...budgets, dailyLimitUsd: 0.007 },
+    new InMemoryModelCostBudgetState(),
+    { maxAttempts: 2, delaysMs: [0] },
+    { async wait() {} },
+  );
+
+  await assert.rejects(provider.generateTests(context), (error) => {
+    assert.ok(error instanceof StructuredModelRequestFailure);
+    assert.equal(error.classification, "budget");
+    assert.equal(error.requestAttempts.attempts[0]?.budgetDecision.accounting, "conservative-reservation");
+    assert.equal(error.requestAttempts.attempts[0]?.budgetDecision.dailyCommittedAfterUsd, 0.004);
+    return true;
+  });
   assert.equal(transport.invocations.length, 1);
 });

@@ -16,7 +16,8 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
-- The exact next task is enforcing per-stage and daily model cost budgets before transport requests.
+- Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
+- The exact next task is introducing separate short-lived credentials for test and builder agents.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -65,7 +66,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- Agent implementations are command-backed; no first-class model provider exists.
+- The local CLI remains command-backed; the structured provider still lacks a production endpoint transport and credential flow.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
 - `publish` emits a request artifact but does not push or open a PR.
@@ -132,7 +133,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Add the first model-backed provider.
 - [x] Track model, token usage, latency, and estimated cost.
 - [x] Enforce per-stage and daily cost budgets before requests.
-- [ ] Retry only classified transient failures.
+- [x] Retry only classified transient failures.
 - [x] Reject malformed or incomplete responses.
 - [x] Store model rationale separately from trusted evidence.
 - [ ] Use separate short-lived credentials for test and builder agents.
