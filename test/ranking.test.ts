@@ -16,3 +16,19 @@ test("ranking rewards impact and confidence while penalizing effort and risk", (
   assert.equal(ranked[0]?.id, "safe");
   assert.ok((ranked[0]?.score ?? 0) > (ranked[1]?.score ?? 0));
 });
+
+test("ranking deduplicates semantic overlaps before scoring", () => {
+  const semanticIdentity = {
+    schemaVersion: "candidate-deduplication/v1" as const,
+    subsystem: "src/Service.ts",
+    defect: "coverage-gap",
+    provenance: ["collector"],
+  };
+  const ranked = rankCandidates([
+    { ...base, id: "weak", impact: 1, deduplication: { ...semanticIdentity, reproducibility: 0.5 } },
+    { ...base, id: "strong", impact: 0.5, deduplication: { ...semanticIdentity, reproducibility: 0.99 } },
+    { ...base, id: "other" },
+  ]);
+
+  assert.deepEqual(ranked.map((candidate) => candidate.id), ["other", "strong"]);
+});

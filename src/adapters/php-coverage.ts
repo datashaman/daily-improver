@@ -211,6 +211,13 @@ function coverageCandidate(finding: PhpCoverageFinding): ImprovementCandidate {
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,
     estimatedDiffLines: 70,
+    deduplication: {
+      schemaVersion: "candidate-deduplication/v1",
+      subsystem: finding.file,
+      defect: "statement-coverage-gap",
+      reproducibility: 0.98,
+      provenance: [`${finding.tool} Clover collector`],
+    },
   };
 }
 

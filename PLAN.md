@@ -11,10 +11,10 @@ Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
-- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, and versioned Laravel validation/error-handling slices are implemented.
+- Phase 1A is in progress; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, and language-neutral candidate deduplication slices are implemented.
 - Executed PHP evidence now carries bounded tool-version and relevant-configuration provenance.
 - Expensive normalized PHP evidence is cached against relevant source, trusted command, tool-version, configuration, schema, and collector-policy inputs.
-- The exact next task is deduplicating overlapping findings against the same subsystem.
+- The exact next task is rejecting candidates without reproducible evidence.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -63,7 +63,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- Overlapping findings against the same subsystem are not yet deduplicated.
+- Candidates without reproducible evidence are not yet rejected.
 - Agent implementations are command-backed; no first-class model provider exists.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
@@ -97,7 +97,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Add slow-test and slow-query findings.
 - [x] Add duplicate-code findings.
 - [x] Add missing-validation and error-handling findings.
-- [ ] Deduplicate overlapping findings against the same subsystem.
+- [x] Deduplicate overlapping findings against the same subsystem.
 - [ ] Reject candidates without reproducible evidence.
 
 Exit gate: `daily-improver analyse` produces credible ranked candidates on a real Laravel repository without manually prepared `.ai/evidence` files.
@@ -456,12 +456,12 @@ Exit gate: one bounded improvement safely targets one component in a mixed monor
 
 The next four commit-sized milestones are:
 
-1. `feat: deduplicate overlapping findings`
-2. `feat: reject candidates without reproducible evidence`
-3. `feat: add structured model agent provider`
-4. `feat: add category-specific scoring weights`
+1. `feat: reject candidates without reproducible evidence`
+2. `feat: add structured model agent provider`
+3. `feat: add category-specific scoring weights`
+4. `feat: score candidate evidence and testability`
 
-The immediate next task is Phase 1A: deduplicate overlapping findings against the same subsystem.
+The immediate next task is Phase 1A: reject candidates without reproducible evidence.
 
 ## Initial operating limits
 

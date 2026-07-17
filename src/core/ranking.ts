@@ -1,9 +1,10 @@
 import type { ImprovementCandidate, RankedCandidate } from "../domain/model.js";
+import { deduplicateCandidates } from "./candidate-deduplication.js";
 
 export function rankCandidates(
   candidates: readonly ImprovementCandidate[],
 ): readonly RankedCandidate[] {
-  return candidates
+  return deduplicateCandidates(candidates)
     .map((candidate) => ({
       ...candidate,
       score: round(

@@ -4,22 +4,22 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: bounded Laravel validation and error-handling evidence.
-- Current checkpoint commit: `feat: collect validation and error-handling evidence`.
+- Last completed milestone: language-neutral candidate deduplication.
+- Current checkpoint commit: `feat: deduplicate overlapping findings`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, duplicate-code analysis, deprecation-analysis, performance-analysis, validation/error-handling analysis, shared provenance, and evidence-cache slices are implemented and verified.
+- Current state: the Composer validation/audit, static-analysis, coverage, mutation-analysis, complexity-analysis, duplicate-code analysis, deprecation-analysis, performance-analysis, validation/error-handling analysis, shared provenance, evidence-cache, and candidate-deduplication slices are implemented and verified.
 
 ## Exact next task
 
-Deduplicate overlapping findings against the same subsystem.
+Reject candidates without reproducible evidence.
 
 ## Acceptance criteria for the next task
 
-- Define a language-neutral deduplication contract that groups evidence against the same bounded subsystem without collapsing materially different defects.
-- Preserve the strongest reproducible evidence, provenance, target, and candidate explanation deterministically.
-- Apply deduplication before ranking so a subsystem cannot dominate selection through redundant collectors.
-- Add deterministic unit tests for overlapping and non-overlapping findings plus stable ordering.
+- Define a language-neutral reproducibility contract for ranked candidates.
+- Reject candidates whose evidence is absent, non-reproducible, or lacks bounded provenance before deduplication and ranking.
+- Preserve deterministic selection among the remaining evidence-backed candidates and fail closed when none qualify.
+- Add deterministic unit tests for accepted, rejected, and mixed candidate sets.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -27,7 +27,7 @@ Deduplicate overlapping findings against the same subsystem.
 
 - The CLI detects PHP and Laravel repositories.
 - The observer runs and normalizes Composer, PHPStan/Psalm, PHPUnit/Pest Clover and JUnit timing, Infection, PhpMetrics, PHPCPD, PHPCompatibility, explicit Laravel deprecation rules, versioned Laravel validation/error-handling rules, and opt-in Laravel listener query timing, with bounded version/configuration provenance, deterministic normalized-evidence caching for the established expensive collectors, and prepared-artifact fallbacks where applicable.
-- Candidate selection chooses one bounded improvement.
+- Candidate selection deduplicates semantic overlaps before ranking and chooses one bounded improvement.
 - The local runner creates an isolated daily worktree and branch.
 - A correctness regression/property test must fail against baseline behavior.
 - Builder changes are checked against sealed test/spec artifacts.
@@ -48,10 +48,10 @@ Deduplicate overlapping findings against the same subsystem.
 
 ## Last verification
 
-Verified on 2026-07-17 for the PHP validation/error-handling-evidence slice:
+Verified on 2026-07-17 for the candidate-deduplication slice:
 
-- Focused validation/error-handling and adapter tests: 15 tests passed.
-- `npm test`: 97 tests passed.
+- Focused deduplication and ranking tests: 6 tests passed.
+- `npm test`: 102 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
@@ -63,7 +63,7 @@ Run `npm run checkpoint` after resuming to confirm the checkout still matches th
 
 ## Clear-safety state
 
-This checkpoint is safe to clear after the validation/error-handling-evidence slice is committed, the working tree is clean, and the post-commit checkpoint passes.
+This checkpoint is safe to clear after the candidate-deduplication slice is committed, the working tree is clean, and the post-commit checkpoint passes.
 
 ## Updating this file
 

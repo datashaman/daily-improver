@@ -40,6 +40,14 @@ export type CandidateKind =
   | "maintainability"
   | "documentation";
 
+export interface CandidateDeduplication {
+  readonly schemaVersion: "candidate-deduplication/v1";
+  readonly subsystem: string;
+  readonly defect: string;
+  readonly reproducibility: number;
+  readonly provenance: readonly string[];
+}
+
 export interface ImprovementCandidate {
   readonly id: string;
   readonly kind: CandidateKind;
@@ -54,6 +62,7 @@ export interface ImprovementCandidate {
   readonly target?: string;
   readonly estimatedDiffLines?: number;
   readonly propertyInvariants?: readonly string[];
+  readonly deduplication?: CandidateDeduplication;
 }
 
 export interface RankedCandidate extends ImprovementCandidate {

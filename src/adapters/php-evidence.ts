@@ -56,6 +56,13 @@ async function mutationCandidates(root: string): Promise<ImprovementCandidate[]>
       target: mutation.file,
       estimatedDiffLines: 80,
       propertyInvariants: mutation.invariant ? [mutation.invariant] : [],
+      deduplication: {
+        schemaVersion: "candidate-deduplication/v1" as const,
+        subsystem: mutation.file,
+        defect: `mutation:${mutation.line ?? 0}:${mutation.mutator ?? "unknown"}`,
+        reproducibility: 0.85,
+        provenance: ["Prepared Infection report"],
+      },
     }));
 }
 
@@ -88,6 +95,13 @@ async function coverageCandidates(root: string): Promise<ImprovementCandidate[]>
       suggestedFiles: [file, "tests/Property"],
       target: file,
       estimatedDiffLines: 70,
+      deduplication: {
+        schemaVersion: "candidate-deduplication/v1",
+        subsystem: file,
+        defect: "statement-coverage-gap",
+        reproducibility: 0.8,
+        provenance: ["Prepared Clover report"],
+      },
     });
   }
   return candidates;

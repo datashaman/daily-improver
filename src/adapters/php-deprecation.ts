@@ -392,6 +392,13 @@ function deprecationCandidate(finding: DeprecatedApiFinding): ImprovementCandida
     suggestedFiles: [finding.file, "tests"],
     target: finding.file,
     estimatedDiffLines: 30,
+    deduplication: {
+      schemaVersion: "candidate-deduplication/v1",
+      subsystem: finding.file,
+      defect: `deprecated-api:${finding.line}:${finding.symbol}`,
+      reproducibility: 0.97,
+      provenance: [`${finding.rule} (${finding.ruleProvenance})`],
+    },
   };
 }
 

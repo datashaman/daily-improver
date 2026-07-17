@@ -305,6 +305,13 @@ function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,
     estimatedDiffLines: 80,
+    deduplication: {
+      schemaVersion: "candidate-deduplication/v1",
+      subsystem: finding.file,
+      defect: `mutation:${finding.line}:${finding.mutator}`,
+      reproducibility: 0.99,
+      provenance: ["Infection executed collector"],
+    },
   };
 }
 
