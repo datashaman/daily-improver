@@ -139,6 +139,22 @@ export interface ImprovementSpec {
 
 export type RunStatus = "planned" | "rejected" | "completed" | "failed";
 
+export type DailyImprovementDecisionOutcome =
+  | "claimed"
+  | "blocked-active"
+  | "blocked-completed"
+  | "released"
+  | "completed";
+
+export interface DailyImprovementDecision {
+  readonly schemaVersion: "daily-improvement-decision/v1";
+  readonly repositoryId: string;
+  readonly utcDate: string;
+  readonly claimId: string;
+  readonly outcome: DailyImprovementDecisionOutcome;
+  readonly decidedAt: string;
+}
+
 export interface ImprovementRun {
   readonly id: string;
   readonly repository: string;
@@ -149,6 +165,7 @@ export interface ImprovementRun {
   readonly candidate?: RankedCandidate;
   readonly candidateExclusions: readonly CandidateExclusion[];
   readonly humanTaskRecommendation?: HumanTaskRecommendation;
+  readonly dailyImprovementDecision?: DailyImprovementDecision;
   readonly spec?: ImprovementSpec;
   readonly policyDecisions: readonly PolicyDecision[];
 }

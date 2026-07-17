@@ -18,7 +18,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
-- The exact next task is enforcing one improvement PR per repository per day.
+- One active or completed improvement is now enforced per canonical repository per UTC day; the exact next task is respecting `max_open_prs`.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
 
 Agents must update `docs/STATUS.md` as work progresses; this plan records durable direction rather than transient implementation state.
@@ -116,7 +116,7 @@ Goal: make selection predictable, bounded, and explainable.
 - [x] Enforce exactly one candidate per run.
 - [x] Detect candidates too large for autonomous work and emit a human-task recommendation.
 - [x] Add exclusion reasons to rejected candidates.
-- [ ] Enforce one improvement PR per repository per day.
+- [x] Enforce one improvement PR per repository per day.
 - [ ] Respect `max_open_prs`.
 - [ ] Prevent repeated selection of the same unresolved finding.
 - [x] Make ties deterministic.
@@ -467,8 +467,10 @@ The recent and next commit-sized milestones are:
 6. [x] `feat: enforce structured model cost budgets`
 7. [x] `feat: retry classified transient model failures`
 8. [x] `feat: isolate structured model stage credentials`
+9. [x] `feat: record candidate exclusion reasons`
+10. [x] `feat: enforce one daily repository improvement`
 
-The immediate next task is Phase 1C: add deterministic provider replay fixtures.
+The immediate next task is Phase 1B: respect the repository-owned `max_open_prs` limit.
 
 ## Initial operating limits
 

@@ -1,6 +1,7 @@
 import { loadConfig } from "../config.js";
-import type { ImprovementSpec } from "../domain/model.js";
+import type { DailyImprovementDecision, ImprovementSpec } from "../domain/model.js";
 import { relative } from "node:path";
+import type { Clock, DailyImprovementStore } from "../contracts.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
@@ -12,7 +13,9 @@ import { createSpec } from "./specification.js";
 export class PipelineStages {
   constructor(
     private readonly registry: AdapterRegistry,
+    private readonly dailyImprovements?: DailyImprovementStore,
     private readonly runner = new CommandRunner(),
+    private readonly clock: Clock = { now: () => new Date() },
   ) {}
 
   async resolveAdapter(root: string) {
@@ -50,13 +53,25 @@ export class PipelineStages {
     const adapter = await this.registry.resolve(root);
     const profile = await adapter.profile(root);
     const config = await loadConfig(root);
-    const spec = createSpec(selected, profile, {
-      maxFiles: config.limits.max_changed_files,
-      maxChangedLines: config.limits.max_diff_lines,
-      maxCostUsd: config.limits.max_cost_usd,
-    });
-    await writeArtifact(root, "spec.json", spec);
-    return spec;
+    const dailyImprovements = this.requiredDailyImprovements();
+    const now = this.clock.now().toISOString();
+    const decision = await dailyImprovements.claim(root, now.slice(0, 10), now);
+    if (decision.outcome !== "claimed") {
+      throw new Error(`Daily improvement is already ${decision.outcome === "blocked-completed" ? "completed" : "active"} for this repository on ${decision.utcDate}.`);
+    }
+    try {
+      const spec = createSpec(selected, profile, {
+        maxFiles: config.limits.max_changed_files,
+        maxChangedLines: config.limits.max_diff_lines,
+        maxCostUsd: config.limits.max_cost_usd,
+      });
+      await writeArtifact(root, "daily-improvement-decision.json", decision);
+      await writeArtifact(root, "spec.json", spec);
+      return spec;
+    } catch (error) {
+      await dailyImprovements.release(decision, this.clock.now().toISOString());
+      throw error;
+    }
   }
 
   async protectTests(root: string): Promise<TestManifest> {
@@ -115,8 +130,16 @@ export class PipelineStages {
       draft: config.pull_request.draft,
       labels: config.pull_request.labels,
     };
+    const dailyDecision = await readArtifact<DailyImprovementDecision>(root, "daily-improvement-decision.json");
+    const completed = await this.requiredDailyImprovements().complete(dailyDecision, this.clock.now().toISOString());
+    await writeArtifact(root, "daily-improvement-decision.json", completed);
     await writeArtifact(root, "publication-request.json", request);
     return request;
+  }
+
+  private requiredDailyImprovements(): DailyImprovementStore {
+    if (!this.dailyImprovements) throw new Error("Daily improvement state is required for specification and publication stages.");
+    return this.dailyImprovements;
   }
 }
 

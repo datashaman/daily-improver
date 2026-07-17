@@ -6,18 +6,22 @@ import { ImprovementPipeline } from "./core/pipeline.js";
 import { CostBudgetPolicy, DiffLimitPolicy, TestProtectionPolicy } from "./core/policies.js";
 import { JsonRunStore } from "./infra/json-run-store.js";
 import { PipelineStages } from "./core/stages.js";
+import { JsonDailyImprovementStore } from "./infra/json-daily-improvement-store.js";
 
 export function createApplication(stateDirectory = resolve(".daily-improver")) {
   const registry = new AdapterRegistry([new PhpAdapter(), new GenericAdapter()]);
   const store = new JsonRunStore(stateDirectory);
+  const dailyImprovements = new JsonDailyImprovementStore(stateDirectory);
   return {
     registry,
     store,
-    stages: new PipelineStages(registry),
+    dailyImprovements,
+    stages: new PipelineStages(registry, dailyImprovements),
     pipeline: new ImprovementPipeline(
       registry,
       [new DiffLimitPolicy(), new CostBudgetPolicy(), new TestProtectionPolicy()],
       store,
+      dailyImprovements,
     ),
   };
 }

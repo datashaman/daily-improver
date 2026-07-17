@@ -159,6 +159,9 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(usageArtifact.stdout, /"classification": "completed"/);
   const rationaleArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
   assert.match(rationaleArtifact.stdout, /"trust": "untrusted-model-output"/);
+  const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
+  assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
+  assert.match(dailyDecision.stdout, /"outcome": "completed"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 

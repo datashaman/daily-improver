@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config.js";
-import type { Clock, Policy, PolicyContext, RunStore } from "../contracts.js";
+import type { Clock, DailyImprovementStore, Policy, PolicyContext, RunStore } from "../contracts.js";
 import type { ImprovementRun } from "../domain/model.js";
 import { AdapterRegistry } from "./adapter-registry.js";
 import { evaluatePolicies } from "./policies.js";
@@ -21,6 +21,7 @@ export class ImprovementPipeline {
     private readonly registry: AdapterRegistry,
     private readonly policies: readonly Policy[],
     private readonly store: RunStore,
+    private readonly dailyImprovements: DailyImprovementStore,
     private readonly clock: Clock = { now: () => new Date() },
   ) {}
 
@@ -58,6 +59,27 @@ export class ImprovementPipeline {
       return run;
     }
 
+    const claimed = await this.dailyImprovements.claim(root, startedAt.slice(0, 10), this.clock.now().toISOString());
+    if (claimed.outcome !== "claimed") {
+      const run: ImprovementRun = {
+        id: randomUUID(),
+        repository: root,
+        startedAt,
+        finishedAt: this.clock.now().toISOString(),
+        status: "rejected",
+        adapter: adapter.id,
+        candidate,
+        candidateExclusions: selection.exclusions,
+        ...(selection.humanTaskRecommendation === undefined
+          ? {}
+          : { humanTaskRecommendation: selection.humanTaskRecommendation }),
+        dailyImprovementDecision: claimed,
+        policyDecisions: [],
+      };
+      await this.store.save(run);
+      return run;
+    }
+
     const spec = createSpec(candidate, profile, {
       maxFiles: limits.maxFiles,
       maxChangedLines: limits.maxChangedLines,
@@ -71,6 +93,9 @@ export class ImprovementPipeline {
     };
     const policyDecisions = evaluatePolicies(this.policies, spec, context);
     const status = policyDecisions.every((decision) => decision.allowed) ? "planned" : "rejected";
+    const dailyImprovementDecision = status === "planned"
+      ? claimed
+      : await this.dailyImprovements.release(claimed, this.clock.now().toISOString());
     const run: ImprovementRun = {
       id: randomUUID(),
       repository: root,
@@ -83,6 +108,7 @@ export class ImprovementPipeline {
       ...(selection.humanTaskRecommendation === undefined
         ? {}
         : { humanTaskRecommendation: selection.humanTaskRecommendation }),
+      dailyImprovementDecision,
       spec,
       policyDecisions,
     };

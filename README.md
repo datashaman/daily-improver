@@ -33,14 +33,16 @@ The command-backed provider remains available for the local CLI. The first struc
 
 Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.ai/improver.yml`](.ai/improver.yml). A setup-PR payload lives in [`templates/setup`](templates/setup), including the four-job Actions workflow.
 
+Before creating a specification, Daily Improver atomically claims the canonical repository identity for its UTC day in local state. An active plan or completed publication request blocks another specification and publication for that repository until the next UTC date; a different repository remains independent. Candidate rejection and oversized human-task routing do not consume the daily claim, and a policy-rejected plan releases it. The versioned `daily-improvement-decision/v1` artifact records the claim and its completed publication transition without retaining the repository path.
+
 ## Pipeline
 
 1. `analyse` observes tool output and repository signals, rejects candidates without reproducible bounded evidence, deduplicates semantic overlaps, ranks the survivors, and selects exactly one bounded candidate. Every candidate removed before autonomous selection receives one deterministic `candidate-exclusion/v1` record. A credible candidate beyond repository file or line limits is excluded from autonomous work and may produce one `human-task-recommendation/v1` summary.
-2. `specify` converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
+2. `specify` first acquires the repository/day claim, then converts the candidate into a bounded contract with an allowlist, invariants, preservation rules, exclusions, and diff/cost limits.
 3. `test` seals generated regression, characterization, and property tests in an HMAC manifest.
 4. `build` invokes an isolated builder provider using only the approved inputs.
 5. `verify` checks test integrity, protected paths, allowlists, diff limits, and repository verification commands from a fresh checkout.
-6. `publish` emits a publication request for the GitHub App to turn into a draft PR.
+6. `publish` completes the active repository/day claim and emits one publication request for the GitHub App to turn into a draft PR.
 
 ## PHP evidence
 

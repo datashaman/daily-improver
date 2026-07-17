@@ -1,6 +1,7 @@
 import type {
   CapabilityKind,
   ImprovementCandidate,
+  DailyImprovementDecision,
   ImprovementRun,
   ImprovementSpec,
   PolicyDecision,
@@ -18,6 +19,12 @@ export interface RepositoryAdapter {
 export interface RunStore {
   save(run: ImprovementRun): Promise<void>;
   list(repository: string): Promise<readonly ImprovementRun[]>;
+}
+
+export interface DailyImprovementStore {
+  claim(repository: string, utcDate: string, decidedAt: string): Promise<DailyImprovementDecision>;
+  complete(decision: DailyImprovementDecision, decidedAt: string): Promise<DailyImprovementDecision>;
+  release(decision: DailyImprovementDecision, decidedAt: string): Promise<DailyImprovementDecision>;
 }
 
 export interface Policy {

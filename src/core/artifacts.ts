@@ -38,6 +38,7 @@ export async function createTestManifest(root: string, key: string): Promise<Tes
     "tests/**/*",
     "test/**/*",
     ".ai/runs/**/candidate.json",
+    ".ai/runs/**/daily-improvement-decision.json",
     ".ai/runs/**/spec.json",
     ".ai/runs/**/test-plan.json",
     ".ai/runs/**/test-agent-usage.json",
