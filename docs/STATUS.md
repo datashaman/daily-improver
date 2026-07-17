@@ -4,23 +4,23 @@ Last updated: 2026-07-17
 
 ## Checkpoint
 
-- Last completed milestone: language-neutral bounded evidence runner and trusted Composer validation integration.
-- Last completed implementation commit: `c86c690` (`feat: validate composer evidence with bounded runner`).
+- Last completed milestone: trusted Composer audit execution and bounded dependency finding normalization.
+- Last completed implementation commit: `f6b0166` (`feat: execute and normalize composer audit`).
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1A — Real PHP observer.
-- Current state: the first Phase 1A slice is implemented, verified, and committed.
+- Current state: the Composer validation and audit slices are implemented, verified, and committed.
 
 ## Exact next task
 
-Invoke `composer audit --format=json` through the evidence-runner contract and normalize dependency-vulnerability findings.
+Invoke PHPStan or Psalm through the evidence-runner contract with machine-readable output and normalize static-analysis findings.
 
 ## Acceptance criteria for the next task
 
-- The command is trusted and direct; repository scripts cannot silently replace it.
-- Composer 2.10 and earlier supported audit JSON shapes and exit semantics are normalized deliberately.
-- Vulnerability, abandoned-package, policy, missing-package, configuration, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
-- Findings contain stable package/advisory identity and bounded evidence without persisting raw command output.
-- Unit tests cover clean audit output, vulnerabilities, malformed JSON/configuration failure, missing Composer, timeout, and truncation.
+- Select PHPStan or Psalm from detected manifest capabilities without invoking repository scripts.
+- Request a supported machine-readable format and normalize file, line, rule/identifier, and bounded message evidence.
+- Code findings, malformed output, configuration failure, timeout, unavailable-tool, and infrastructure outcomes remain distinguishable.
+- Findings and execution metadata do not persist raw command output.
+- Unit tests cover clean output, findings, malformed output/configuration failure, missing executable, timeout, and truncation.
 - The end-to-end MoneyAllocator proving loop remains green.
 - `npm run checkpoint` passes.
 
@@ -37,7 +37,7 @@ Invoke `composer audit --format=json` through the evidence-runner contract and n
 
 ## Known placeholders
 
-- Only `composer validate` is automatically executed; the other PHP evidence tools still depend on prepared artifacts.
+- Only Composer validation and audit are automatically executed; the other PHP evidence tools still depend on prepared artifacts.
 - The agent provider delegates to configured commands rather than a first-class model API.
 - `daily-improver-auth` does not exist.
 - The setup workflow is architectural scaffolding, not production-ready automation.
@@ -49,20 +49,22 @@ Invoke `composer audit --format=json` through the evidence-runner contract and n
 
 ## Last verification
 
-Verified on 2026-07-17 for the Composer validation slice:
+Verified on 2026-07-17 for the Composer audit slice:
 
-- `npm test`: 18 tests passed.
+- Focused Composer audit tests: 8 tests passed.
+- `npm test`: 26 tests passed.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed.
-- Docker image build passed.
+- `npm run checkpoint` passed.
+- Docker image build passed (`daily-improver:local`).
 - End-to-end defect → failing property test → bounded fix → independent verification → daily branch flow passed.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 
 ## Clear-safety state
 
-This checkpoint is safe to clear: the Composer validation slice is committed, the working tree is clean, verification passes, and the exact next task is fully represented above.
+This checkpoint is safe to clear: the Composer audit slice is committed, the working tree is clean, verification passes, the exact next task is recorded above, and no external process or decision remains active.
 
 ## Updating this file
 

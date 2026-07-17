@@ -42,7 +42,9 @@ Run artifacts are written to `.ai/runs/<date>/`. The repository interface is [`.
 
 ## PHP evidence
 
-The PHP adapter directly runs the trusted command `composer validate --no-interaction --no-plugins` with a timeout and bounded output capture. Validation errors and warnings become normalized candidates; execution metadata retains command identity, duration, exit code, byte counts, and full-output hashes rather than raw output.
+The PHP adapter directly runs the trusted commands `composer validate --no-interaction --no-plugins` and `composer audit --format=json --no-interaction --no-plugins` with timeouts and bounded output capture. Repository scripts and plugins cannot replace these command definitions. Validation errors and warnings become normalized candidates. Audit output from legacy Composer releases through Composer 2.10 is normalized by its JSON content rather than version-specific numeric exit codes, producing stable vulnerability, abandoned-package, and dependency-policy identities.
+
+Missing installed packages, invalid configuration, unavailable Composer, timeouts, truncated output, and infrastructure failures remain distinct outcomes. Persistable evidence retains the schema version, normalized bounded findings, command identity, duration, exit code, byte counts, and full-output hashes rather than raw command output.
 
 The adapter also consumes machine-readable evidence under `.ai/evidence/`:
 

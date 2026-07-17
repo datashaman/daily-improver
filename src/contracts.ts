@@ -41,6 +41,7 @@ export type EvidenceResultStatus =
   | "code-finding"
   | "unavailable-tool"
   | "configuration-failure"
+  | "missing-packages"
   | "timeout"
   | "infrastructure-failure";
 
