@@ -9,7 +9,10 @@ import {
   type ModelTransportInvocation,
 } from "../src/agents/structured-model-agent-provider.js";
 import { InMemoryModelCostBudgetState } from "../src/agents/model-cost-budget.js";
-import { modelStageCredentialSchemaVersion } from "../src/agents/model-stage-credential.js";
+import {
+  ModelStageCredentialAcquisitionFailure,
+  modelStageCredentialSchemaVersion,
+} from "../src/agents/model-stage-credential.js";
 import {
   modelRoutingPolicySchemaVersion,
   validateModelRoutingPolicy,
@@ -456,6 +459,40 @@ test("prevents one credential secret from crossing the test and builder stage bo
     return true;
   });
   assert.equal(transport.invocations.length, 1);
+});
+
+test("retries only explicitly transient credential exchange failures with zero model cost", async () => {
+  const transport = new DeterministicTransport([testResponse]);
+  let acquisitions = 0;
+  const waits: number[] = [];
+  const provider = new StructuredModelAgentProvider(transport, budgets, {
+    clock: { nowMs: () => credentialNowMs },
+    source: {
+      async acquire(credentialRequest) {
+        acquisitions++;
+        if (acquisitions === 1) throw new ModelStageCredentialAcquisitionFailure("transient", "sensitive assertion detail");
+        return credential({ stage: credentialRequest.stage, scope: credentialRequest.scope });
+      },
+    },
+  }, routingPolicy, endpointPolicy, undefined, { maxAttempts: 2, delaysMs: [17] }, {
+    async wait(delayMs) { waits.push(delayMs); },
+  });
+
+  const result = await provider.generateTests(context);
+
+  assert.equal(acquisitions, 2);
+  assert.deepEqual(waits, [17]);
+  assert.equal(transport.invocations.length, 1);
+  assert.ok(result.requestAttempts);
+  assert.deepEqual(result.requestAttempts.attempts.map((attempt) => ({
+    classification: attempt.classification,
+    actualCostUsd: attempt.budgetDecision.actualCostUsd,
+    retryDelayMs: attempt.retryDelayMs,
+  })), [
+    { classification: "transient", actualCostUsd: 0, retryDelayMs: 17 },
+    { classification: "completed", actualCostUsd: 0.002, retryDelayMs: undefined },
+  ]);
+  assert.doesNotMatch(JSON.stringify(result), /sensitive assertion detail|credential-secret/);
 });
 
 function credential(overrides: {

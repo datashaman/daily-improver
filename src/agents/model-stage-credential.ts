@@ -31,6 +31,23 @@ export interface ModelStageCredentialPolicy {
   readonly maximumLifetimeMs?: number;
 }
 
+export type ModelStageCredentialAcquisitionFailureClassification =
+  | "transient"
+  | "permanent"
+  | "malformed-response"
+  | "policy";
+
+export class ModelStageCredentialAcquisitionFailure extends Error {
+  override readonly name = "ModelStageCredentialAcquisitionFailure";
+
+  constructor(
+    readonly classification: ModelStageCredentialAcquisitionFailureClassification,
+    message = "The model credential exchange failed.",
+  ) {
+    super(message);
+  }
+}
+
 export class ModelStageCredentialError extends Error {
   override readonly name = "ModelStageCredentialError";
 }

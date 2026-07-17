@@ -18,6 +18,7 @@ The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STAT
 - A structured model provider now constructs those requests from approved stage inputs, validates responses and path claims, and persists bounded usage separately from untrusted rationale.
 - Structured model requests now enforce cost before every bounded attempt and retry only explicitly classified transient transport failures.
 - Structured model transport attempts now require distinct short-lived credentials scoped to the test or builder stage and the current repository/specification run.
+- Production credential exchange now obtains exact trusted runner identity through an injected source and uses a bounded HTTPS exchange resolved entirely outside repository configuration.
 - One active or completed improvement is enforced per canonical repository per UTC day, fresh repository-bound open-PR state enforces `max_open_prs`, and fresh unresolved-finding state suppresses repeated work.
 - Committed deterministic provider replays now cover both structured stages, including successful validation, a sanitized transient retry, bounded model routing based on task complexity, and endpoint-neutral private customer endpoint invocation metadata.
 - A context clear is safe only after `docs/STATUS.md` is current, verification passes, the checkpoint is committed, and the working tree is clean.
@@ -68,7 +69,7 @@ PHP/Laravel is the first proving adapter, not the product boundary. The portable
 
 ## Known gaps
 
-- The local CLI remains command-backed; the structured provider has a bounded private-endpoint contract but still lacks a production transport and production credential exchange.
+- The local CLI remains command-backed; production endpoint resolution and credential exchange boundaries exist but are not yet wired into a customer-controlled runner entrypoint.
 - The Laravel proof uses a controlled fixture rather than a real application.
 - Local verification uses an isolated worktree rather than genuinely separate CI runners.
 - `publish` emits a request artifact but does not push or open a PR.
@@ -143,6 +144,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [x] Add model routing based on task complexity.
 - [x] Keep the provider interface compatible with private customer endpoints.
 - [x] Add a bounded production HTTPS transport behind trusted opaque endpoint resolution.
+- [x] Exchange injected trusted runner identity for short-lived stage credentials through a bounded trusted HTTPS boundary.
 
 Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
 
@@ -475,8 +477,9 @@ The recent and next commit-sized milestones are:
 12. [x] `feat: prevent repeated unresolved findings`
 13. [x] `feat: explain candidate scores`
 14. [x] `feat: add HTTPS structured endpoint transport`
+15. [x] `feat: exchange trusted runner identity for model credentials`
 
-The immediate next task is Phase 1C: add production exchange of trusted runner identity for short-lived, stage-scoped model credentials without exposing OIDC assertions or credential secrets to core requests or artifacts.
+The immediate next task is Phase 1C: wire trusted endpoint resolution and credential exchange into a production customer-controlled runner entrypoint while keeping repository configuration unable to select locators, identity claims, or credentials.
 
 ## Initial operating limits
 

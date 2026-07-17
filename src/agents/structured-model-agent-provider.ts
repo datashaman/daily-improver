@@ -40,6 +40,7 @@ import {
 } from "./model-request-retry.js";
 import {
   maximumModelStageCredentialLifetimeMs,
+  ModelStageCredentialAcquisitionFailure,
   systemModelCredentialClock,
   validateModelStageCredential,
   type ModelStageCredentialPolicy,
@@ -215,13 +216,21 @@ export class StructuredModelAgentProvider implements AgentProvider {
       let credential: string;
       try {
         credential = await this.acquireCredential(invocation.stage, context);
-      } catch {
+      } catch (error) {
+        const classification = credentialFailureClassification(error);
+        const willRetry = classification === "transient" && attempt < this.retryPolicy.maxAttempts;
+        const retryDelayMs = willRetry ? this.retryPolicy.delaysMs[attempt - 1] : undefined;
         attempts.push({
           attempt,
-          classification: "policy",
+          classification,
+          ...(retryDelayMs === undefined ? {} : { retryDelayMs }),
           budgetDecision: this.budgetState.settle(reservation, 0),
         });
-        throw this.failure(invocation.stage, "policy", attempts, "A valid model credential is unavailable for this stage and scope.");
+        if (willRetry && retryDelayMs !== undefined) {
+          await this.retryTiming.wait(retryDelayMs);
+          continue;
+        }
+        throw this.failure(invocation.stage, classification, attempts, "A valid model credential is unavailable for this stage and scope.");
       }
 
       let rawResponse: unknown;
@@ -373,4 +382,10 @@ function transportFailureClassification(
 ): Extract<ModelRequestFailureClassification, "transient" | "permanent" | "malformed-response" | "policy"> {
   if (!(error instanceof ModelTransportFailure)) return "permanent";
   return error.classification;
+}
+
+function credentialFailureClassification(
+  error: unknown,
+): Extract<ModelRequestFailureClassification, "transient" | "permanent" | "malformed-response" | "policy"> {
+  return error instanceof ModelStageCredentialAcquisitionFailure ? error.classification : "policy";
 }
