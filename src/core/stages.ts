@@ -37,6 +37,13 @@ import {
   type StaticAnalysisIgnoredFindingsComparison,
   type StaticAnalysisIgnoredFindingsResult,
 } from "../domain/static-analysis-ignored-findings.js";
+import {
+  assertBroadExceptionSwallowingPlan,
+  assertBroadExceptionSwallowingResult,
+  compareBroadExceptionSwallowing,
+  type BroadExceptionSwallowingComparison,
+  type BroadExceptionSwallowingResult,
+} from "../domain/broad-exception-swallowing.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -206,6 +213,8 @@ export class PipelineStages {
     let staticAnalysisComparison: StaticAnalysisFindingsComparison | undefined;
     let staticAnalysisIgnoredFindings: StaticAnalysisIgnoredFindingsResult | undefined;
     let staticAnalysisIgnoredFindingsComparison: StaticAnalysisIgnoredFindingsComparison | undefined;
+    let broadExceptionSwallowing: BroadExceptionSwallowingResult | undefined;
+    let broadExceptionSwallowingComparison: BroadExceptionSwallowingComparison | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -237,6 +246,18 @@ export class PipelineStages {
           baselineStaticAnalysisIgnoredFindings,
           staticAnalysisIgnoredFindings,
         );
+        const baselineBroadExceptionSwallowing = await executeBroadExceptionSwallowing(
+          baselineWorkspace.path,
+          baselineAdapter,
+          inputs,
+          key,
+          this.runner,
+        );
+        broadExceptionSwallowing = await executeBroadExceptionSwallowing(root, currentAdapter, inputs, key, this.runner);
+        broadExceptionSwallowingComparison = compareBroadExceptionSwallowing(
+          baselineBroadExceptionSwallowing,
+          broadExceptionSwallowing,
+        );
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -262,6 +283,8 @@ export class PipelineStages {
       && staticAnalysisComparison !== undefined
       && staticAnalysisIgnoredFindings !== undefined
       && staticAnalysisIgnoredFindingsComparison !== undefined
+      && broadExceptionSwallowing !== undefined
+      && broadExceptionSwallowingComparison !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -277,6 +300,8 @@ export class PipelineStages {
       ...(staticAnalysisComparison ? { staticAnalysisComparison } : {}),
       ...(staticAnalysisIgnoredFindings ? { staticAnalysisIgnoredFindings } : {}),
       ...(staticAnalysisIgnoredFindingsComparison ? { staticAnalysisIgnoredFindingsComparison } : {}),
+      ...(broadExceptionSwallowing ? { broadExceptionSwallowing } : {}),
+      ...(broadExceptionSwallowingComparison ? { broadExceptionSwallowingComparison } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -416,6 +441,36 @@ async function executeStaticAnalysisIgnoredFindings(
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Static-analysis ignored-finding inspection changed a sealed verifier input.");
+  }
+  return result;
+}
+
+async function executeBroadExceptionSwallowing(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<BroadExceptionSwallowingResult> {
+  if (!adapter.prepareBroadExceptionSwallowing || !adapter.inspectBroadExceptionSwallowing) {
+    throw new Error("Broad exception-swallowing inspection is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertBroadExceptionSwallowingPlan(await adapter.prepareBroadExceptionSwallowing(root));
+  const result = assertBroadExceptionSwallowingResult(
+    await adapter.inspectBroadExceptionSwallowing(root, plan),
+    plan,
+  );
+  if (!Array.isArray(adapter.broadExceptionSwallowingHazardIdentitySemantics)
+    || adapter.broadExceptionSwallowingHazardIdentitySemantics.length < 1
+    || adapter.broadExceptionSwallowingHazardIdentitySemantics.length > 16
+    || !adapter.broadExceptionSwallowingHazardIdentitySemantics.includes(result.hazardIdentitySemantics)) {
+    throw new Error("Broad exception-swallowing result uses unsupported adapter identity semantics.");
+  }
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Broad exception-swallowing inspection changed a sealed verifier input.");
   }
   return result;
 }

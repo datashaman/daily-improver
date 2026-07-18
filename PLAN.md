@@ -207,7 +207,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Compare static-analysis findings to baseline.
 - [x] Compare public API surfaces with an ecosystem tool.
 - [x] Detect new ignored static-analysis findings.
-- [ ] Detect broad exception swallowing.
+- [x] Detect broad exception swallowing.
 - [ ] Detect weakened validation.
 - [ ] Detect deleted, skipped, or weakened tests.
 - [ ] Detect accidental dependency, migration, workflow, and generated-binary changes.
@@ -513,8 +513,9 @@ The recent and next commit-sized milestones are:
 42. [x] `feat: compare verifier static analysis to baseline`
 43. [x] `feat: compare verifier public API to baseline`
 44. [x] `feat: detect new ignored static-analysis findings`
+45. [x] `feat: detect broad exception swallowing`
 
-The immediate next task is Phase 1F: detect broad exception swallowing. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: detect weakened validation. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

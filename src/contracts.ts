@@ -30,6 +30,10 @@ import type {
   StaticAnalysisIgnoredFindingsPlan,
   StaticAnalysisIgnoredFindingsResult,
 } from "./domain/static-analysis-ignored-findings.js";
+import type {
+  BroadExceptionSwallowingPlan,
+  BroadExceptionSwallowingResult,
+} from "./domain/broad-exception-swallowing.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -65,6 +69,9 @@ export interface RepositoryAdapter {
   readonly staticAnalysisIgnoredFindingIdentitySemantics?: readonly string[];
   prepareStaticAnalysisIgnoredFindings?(root: string): Promise<StaticAnalysisIgnoredFindingsPlan>;
   inspectStaticAnalysisIgnoredFindings?(root: string, plan: StaticAnalysisIgnoredFindingsPlan): Promise<StaticAnalysisIgnoredFindingsResult>;
+  readonly broadExceptionSwallowingHazardIdentitySemantics?: readonly string[];
+  prepareBroadExceptionSwallowing?(root: string): Promise<BroadExceptionSwallowingPlan>;
+  inspectBroadExceptionSwallowing?(root: string, plan: BroadExceptionSwallowingPlan): Promise<BroadExceptionSwallowingResult>;
   readonly publicApiSymbolIdentitySemantics?: readonly string[];
   preparePublicApiSurface?(root: string): Promise<PublicApiSurfacePlan>;
   inspectPublicApiSurface?(root: string, plan: PublicApiSurfacePlan, execution: PublicApiSurfaceExecution): Promise<PublicApiSurfaceResult>;
