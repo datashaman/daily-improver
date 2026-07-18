@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Stats } from "node:fs";
-import { chmod, copyFile, cp, glob, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm } from "node:fs/promises";
+import { constants, type Stats } from "node:fs";
+import { chmod, cp, glob, lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { minimatch } from "minimatch";
 import type { AgentContext, BuilderExecution } from "../agents/agent-provider.js";
@@ -27,6 +27,36 @@ export interface BuilderProtectionInput {
   readonly sealedFiles: Readonly<Record<string, string>>;
 }
 
+interface PathIdentity {
+  readonly device: number;
+  readonly inode: number;
+}
+
+interface FileIdentity extends PathIdentity {
+  readonly size: number;
+  readonly modifiedAtMs: number;
+}
+
+interface PathConfinementSnapshot {
+  readonly root: PathIdentity;
+  readonly parents: ReadonlyMap<string, PathIdentity>;
+  readonly targets: ReadonlyMap<string, FileIdentity | undefined>;
+}
+
+interface StagedAllowedFile {
+  readonly path: string;
+  readonly stagedPath?: string;
+  readonly stagedIdentity?: FileIdentity;
+  readonly stagedParentIdentity?: PathIdentity;
+  readonly sha256?: string;
+  readonly mode?: number;
+  readonly workspaceIdentity?: FileIdentity;
+}
+
+interface BuilderFilesystemSynchronization {
+  readonly beforeImport?: (workspace: string) => Promise<void>;
+}
+
 export function deriveBuilderWriteAllowlist(context: AgentContext): BuilderWriteAllowlist {
   const entries = context.spec.allowedFiles;
   if (entries.length === 0 || entries.length > context.spec.constraints.maxFiles) {
@@ -47,7 +77,10 @@ export function deriveBuilderWriteAllowlist(context: AgentContext): BuilderWrite
 }
 
 export class IsolatedBuilderFilesystem {
-  constructor(private readonly workspaceBase: string) {}
+  constructor(
+    private readonly workspaceBase: string,
+    private readonly synchronization: BuilderFilesystemSynchronization = {},
+  ) {}
 
   async execute(
     context: AgentContext,
@@ -57,6 +90,7 @@ export class IsolatedBuilderFilesystem {
     const allowlist = deriveBuilderWriteAllowlist(context);
     const root = await realpath(context.repository);
     await assertSafeTargets(root, allowlist.files);
+    const sourceConfinement = await capturePathConfinement(root, allowlist.files);
     const protectedInputs = await deriveBuilderProtectedInputs(root, protection);
     await mkdir(this.workspaceBase, { recursive: true });
     const temporary = await mkdtemp(join(this.workspaceBase, "builder-filesystem-"));
@@ -67,6 +101,7 @@ export class IsolatedBuilderFilesystem {
         filter: (source) => relative(root, source).split("/")[0] !== ".git",
       });
       await assertSafeTargets(workspace, allowlist.files);
+      const workspaceConfinement = await capturePathConfinement(workspace, allowlist.files);
       await materializeReadOnlyProtectedInputs(workspace, protectedInputs);
       const specPath = relative(root, await realpath(context.specPath));
       assertExactRepositoryFile(specPath);
@@ -78,7 +113,11 @@ export class IsolatedBuilderFilesystem {
       };
       const result = await build(isolatedContext);
       await assertProtectedInputsReadOnly(workspace, protectedInputs);
-      await importAllowedFiles(workspace, root, allowlist.files);
+      await assertPathConfinement(workspace, allowlist.files, workspaceConfinement, false);
+      const staged = await stageAllowedFiles(workspace, temporary, allowlist.files, workspaceConfinement);
+      await this.synchronization.beforeImport?.(workspace);
+      await assertProtectedInputsReadOnly(workspace, protectedInputs);
+      await importAllowedFiles(workspace, root, staged, workspaceConfinement, sourceConfinement);
       return result;
     } finally {
       await makeProtectedInputsRemovable(workspace, protectedInputs);
@@ -99,6 +138,7 @@ export async function deriveBuilderProtectedInputs(
       const metadata = await assertSafeProtectedPath(root, path);
       if (metadata.isDirectory()) continue;
       if (!metadata.isFile()) throw new Error(`Builder protected input is not a regular file: ${path}`);
+      assertSingleLinkedFile(metadata, `Builder protected input has multiple hard links: ${path}`);
       files.set(path, { sha256: await hashFile(join(root, path)), source: "trusted-configuration" });
       if (files.size > maximumProtectedFiles) throw new Error("Builder protected inputs exceed the file limit.");
     }
@@ -108,6 +148,7 @@ export async function deriveBuilderProtectedInputs(
     if (!/^[a-f0-9]{64}$/u.test(sha256)) throw new Error(`Builder sealed artifact identity is malformed: ${path}`);
     const metadata = await assertSafeProtectedPath(root, path);
     if (!metadata.isFile()) throw new Error(`Builder sealed artifact is not a regular file: ${path}`);
+    assertSingleLinkedFile(metadata, `Builder sealed artifact has multiple hard links: ${path}`);
     if (await hashFile(join(root, path)) !== sha256) throw new Error(`Builder sealed artifact was replaced: ${path}`);
     files.set(path, { sha256, source: "sealed-artifact" });
     if (files.size > maximumProtectedFiles) throw new Error("Builder protected inputs exceed the file limit.");
@@ -123,6 +164,7 @@ export async function assertProtectedInputsReadOnly(root: string, inputs: Builde
   for (const input of inputs.files) {
     const metadata = await assertSafeProtectedPath(root, input.path);
     if (!metadata.isFile()) throw new Error(`Builder protected input is not a regular file: ${input.path}`);
+    assertSingleLinkedFile(metadata, `Builder protected input has multiple hard links: ${input.path}`);
     if ((metadata.mode & 0o222) !== 0) throw new Error(`Builder protected input is mutable: ${input.path}`);
     if (await hashFile(join(root, input.path)) !== input.sha256) throw new Error(`Builder protected input was replaced: ${input.path}`);
     const parent = await lstat(dirname(join(root, input.path)));
@@ -138,6 +180,7 @@ async function materializeReadOnlyProtectedInputs(root: string, inputs: BuilderP
     if (!metadata.isFile() || await hashFile(join(root, input.path)) !== input.sha256) {
       throw new Error(`Builder protected input was replaced while materializing: ${input.path}`);
     }
+    assertSingleLinkedFile(metadata, `Builder protected input has multiple hard links: ${input.path}`);
     await chmod(join(root, input.path), 0o444);
   }
   const parents = new Set(inputs.files.flatMap((input) => protectedParents(root, input.path)));
@@ -195,6 +238,9 @@ async function assertSafeTargets(root: string, files: readonly string[]): Promis
         if (current === join(root, file) && !metadata.isFile()) {
           throw new Error(`Builder write allowlist target is not a regular file: ${file}`);
         }
+        if (current === join(root, file)) {
+          assertSingleLinkedFile(metadata, `Builder write allowlist target has multiple hard links: ${file}`);
+        }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         if (current !== join(root, file)) throw new Error(`Builder write allowlist parent does not exist: ${file}`);
@@ -236,27 +282,288 @@ async function hashFile(path: string): Promise<string> {
   return createHash("sha256").update(await readFile(path)).digest("hex");
 }
 
-async function importAllowedFiles(workspace: string, root: string, files: readonly string[]): Promise<void> {
-  await assertSafeTargets(workspace, files);
-  await assertSafeTargets(root, files);
+function assertSingleLinkedFile(metadata: Stats, message: string): void {
+  if (metadata.nlink !== 1) throw new Error(message);
+}
+
+function pathIdentity(metadata: Stats): PathIdentity {
+  return { device: metadata.dev, inode: metadata.ino };
+}
+
+function fileIdentity(metadata: Stats): FileIdentity {
+  return { ...pathIdentity(metadata), size: metadata.size, modifiedAtMs: metadata.mtimeMs };
+}
+
+function samePathIdentity(left: PathIdentity, right: PathIdentity): boolean {
+  return left.device === right.device && left.inode === right.inode;
+}
+
+function sameFileIdentity(left: FileIdentity | undefined, right: FileIdentity | undefined): boolean {
+  return left === undefined || right === undefined
+    ? left === right
+    : samePathIdentity(left, right) && left.size === right.size && left.modifiedAtMs === right.modifiedAtMs;
+}
+
+async function capturePathConfinement(root: string, files: readonly string[]): Promise<PathConfinementSnapshot> {
+  const rootMetadata = await lstat(root);
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory()) throw new Error("Builder repository root is not a confined directory.");
+  const parents = new Map<string, PathIdentity>();
+  const targets = new Map<string, FileIdentity | undefined>();
   for (const file of files) {
-    const source = join(workspace, file);
-    const target = join(root, file);
+    assertExactRepositoryFile(file);
+    let current = root;
+    for (const part of file.split("/").slice(0, -1)) {
+      current = join(current, part);
+      const metadata = await lstat(current);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+        throw new Error(`Builder write allowlist parent is not a confined directory: ${file}`);
+      }
+      parents.set(relative(root, current), pathIdentity(metadata));
+    }
     try {
-      const metadata = await lstat(source);
+      const metadata = await lstat(join(root, file));
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        throw new Error(`Builder write allowlist target is not a regular file: ${file}`);
+      }
+      assertSingleLinkedFile(metadata, `Builder write allowlist target has multiple hard links: ${file}`);
+      targets.set(file, fileIdentity(metadata));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      targets.set(file, undefined);
+    }
+  }
+  return { root: pathIdentity(rootMetadata), parents, targets };
+}
+
+async function assertPathConfinement(
+  root: string,
+  files: readonly string[],
+  snapshot: PathConfinementSnapshot,
+  requireUnchangedTargets: boolean,
+): Promise<void> {
+  const rootMetadata = await lstat(root);
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory() || !samePathIdentity(snapshot.root, pathIdentity(rootMetadata))) {
+    throw new Error("Builder repository root was replaced.");
+  }
+  for (const file of files) {
+    let current = root;
+    for (const part of file.split("/").slice(0, -1)) {
+      current = join(current, part);
+      const path = relative(root, current);
+      const expected = snapshot.parents.get(path);
+      const metadata = await lstat(current);
+      if (expected === undefined || metadata.isSymbolicLink() || !metadata.isDirectory()
+        || !samePathIdentity(expected, pathIdentity(metadata))) {
+        throw new Error(`Builder write allowlist parent was replaced: ${file}`);
+      }
+    }
+    let actual: FileIdentity | undefined;
+    try {
+      const metadata = await lstat(join(root, file));
       if (metadata.isSymbolicLink() || !metadata.isFile()) {
         throw new Error(`Builder produced an unsupported allowed-file target: ${file}`);
       }
-      const temporary = join(dirname(target), `.daily-improver-builder-${randomUUID()}.tmp`);
-      try {
-        await copyFile(source, temporary);
-        await rename(temporary, target);
-      } finally {
-        await rm(temporary, { force: true });
-      }
+      assertSingleLinkedFile(metadata, `Builder write allowlist target has multiple hard links: ${file}`);
+      actual = fileIdentity(metadata);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      await rm(target, { force: true });
     }
+    if (requireUnchangedTargets && !sameFileIdentity(snapshot.targets.get(file), actual)) {
+      throw new Error(`Builder source checkout target changed during isolated execution: ${file}`);
+    }
+  }
+}
+
+async function stageAllowedFiles(
+  workspace: string,
+  temporary: string,
+  files: readonly string[],
+  confinement: PathConfinementSnapshot,
+): Promise<readonly StagedAllowedFile[]> {
+  const staging = join(temporary, "approved-files");
+  await mkdir(staging);
+  const stagingParentIdentity = pathIdentity(await lstat(staging));
+  const staged: StagedAllowedFile[] = [];
+  for (const file of files) {
+    await assertPathConfinement(workspace, [file], confinement, false);
+    const source = join(workspace, file);
+    let sourceHandle;
+    try {
+      sourceHandle = await open(source, constants.O_RDONLY | constants.O_NOFOLLOW);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        staged.push({ path: file });
+        continue;
+      }
+      throw error;
+    }
+    const stagedPath = join(staging, randomUUID());
+    const destinationHandle = await open(stagedPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+    try {
+      const openedMetadata = await sourceHandle.stat();
+      if (!openedMetadata.isFile()) throw new Error(`Builder produced an unsupported allowed-file target: ${file}`);
+      assertSingleLinkedFile(openedMetadata, `Builder write allowlist target has multiple hard links: ${file}`);
+      const openedIdentity = fileIdentity(openedMetadata);
+      const pathMetadata = await lstat(source);
+      if (!sameFileIdentity(openedIdentity, fileIdentity(pathMetadata))) {
+        throw new Error(`Builder write allowlist target changed while staging: ${file}`);
+      }
+      const sha256 = await copyOpenedFile(sourceHandle, destinationHandle, openedMetadata.size, file);
+      await destinationHandle.chmod(openedMetadata.mode & 0o777);
+      await destinationHandle.sync();
+      await assertPathConfinement(workspace, [file], confinement, false);
+      const finalPathMetadata = await lstat(source);
+      const finalOpenedMetadata = await sourceHandle.stat();
+      if (!sameFileIdentity(openedIdentity, fileIdentity(finalPathMetadata))
+        || !sameFileIdentity(openedIdentity, fileIdentity(finalOpenedMetadata))) {
+        throw new Error(`Builder write allowlist target changed while staging: ${file}`);
+      }
+      const stagedMetadata = await destinationHandle.stat();
+      staged.push({
+        path: file,
+        stagedPath,
+        stagedIdentity: fileIdentity(stagedMetadata),
+        stagedParentIdentity: stagingParentIdentity,
+        sha256,
+        mode: openedMetadata.mode & 0o777,
+        workspaceIdentity: openedIdentity,
+      });
+    } finally {
+      await Promise.allSettled([sourceHandle.close(), destinationHandle.close()]);
+    }
+  }
+  return staged;
+}
+
+async function copyOpenedFile(
+  source: Awaited<ReturnType<typeof open>>,
+  destination: Awaited<ReturnType<typeof open>>,
+  size: number,
+  path: string,
+): Promise<string> {
+  const buffer = Buffer.allocUnsafe(64 * 1_024);
+  const hash = createHash("sha256");
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(buffer.length, size - offset);
+    const { bytesRead } = await source.read(buffer, 0, length, offset);
+    if (bytesRead === 0) throw new Error(`Builder write allowlist target changed while staging: ${path}`);
+    hash.update(buffer.subarray(0, bytesRead));
+    let written = 0;
+    while (written < bytesRead) {
+      const result = await destination.write(buffer, written, bytesRead - written, offset + written);
+      written += result.bytesWritten;
+    }
+    offset += bytesRead;
+  }
+  return hash.digest("hex");
+}
+
+async function assertStagedWorkspaceTarget(
+  workspace: string,
+  staged: StagedAllowedFile,
+  confinement: PathConfinementSnapshot,
+): Promise<void> {
+  await assertPathConfinement(workspace, [staged.path], confinement, false);
+  let actual: FileIdentity | undefined;
+  try { actual = fileIdentity(await lstat(join(workspace, staged.path))); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (!sameFileIdentity(staged.workspaceIdentity, actual)) {
+    throw new Error(`Builder write allowlist target changed before import: ${staged.path}`);
+  }
+}
+
+async function importAllowedFiles(
+  workspace: string,
+  root: string,
+  files: readonly StagedAllowedFile[],
+  workspaceConfinement: PathConfinementSnapshot,
+  sourceConfinement: PathConfinementSnapshot,
+): Promise<void> {
+  for (const file of files) {
+    await assertStagedWorkspaceTarget(workspace, file, workspaceConfinement);
+    await assertPathConfinement(root, [file.path], sourceConfinement, true);
+    const target = join(root, file.path);
+    if (file.stagedPath === undefined) {
+      await assertStagedWorkspaceTarget(workspace, file, workspaceConfinement);
+      await assertPathConfinement(root, [file.path], sourceConfinement, true);
+      try { await unlink(target); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      continue;
+    }
+    if (file.stagedIdentity === undefined || file.stagedParentIdentity === undefined
+      || file.sha256 === undefined || file.mode === undefined) {
+      throw new Error(`Builder staged allowed-file identity is incomplete: ${file.path}`);
+    }
+    const temporary = join(dirname(target), `.daily-improver-builder-${randomUUID()}.tmp`);
+    try {
+      await assertTrustedStagedFile(file);
+      await copyStagedAllowedFile(file, temporary);
+      await assertTrustedStagedFile(file);
+      if (await hashFile(temporary) !== file.sha256) {
+        throw new Error(`Builder staged allowed file changed during import: ${file.path}`);
+      }
+      await assertStagedWorkspaceTarget(workspace, file, workspaceConfinement);
+      await assertPathConfinement(root, [file.path], sourceConfinement, true);
+      await rename(temporary, target);
+      await assertPathConfinement(root, [file.path], await capturePathConfinement(root, [file.path]), true);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+  }
+}
+
+async function assertTrustedStagedFile(file: StagedAllowedFile): Promise<void> {
+  if (file.stagedPath === undefined || file.stagedIdentity === undefined
+    || file.stagedParentIdentity === undefined || file.sha256 === undefined) {
+    throw new Error(`Builder staged allowed-file identity is incomplete: ${file.path}`);
+  }
+  const parent = await lstat(dirname(file.stagedPath));
+  if (parent.isSymbolicLink() || !parent.isDirectory()
+    || !samePathIdentity(file.stagedParentIdentity, pathIdentity(parent))) {
+    throw new Error(`Builder staged allowed-file parent was replaced: ${file.path}`);
+  }
+  const metadata = await lstat(file.stagedPath);
+  if (metadata.isSymbolicLink() || !metadata.isFile()
+    || !sameFileIdentity(file.stagedIdentity, fileIdentity(metadata))) {
+    throw new Error(`Builder staged allowed file was replaced: ${file.path}`);
+  }
+  assertSingleLinkedFile(metadata, `Builder staged allowed file has multiple hard links: ${file.path}`);
+  if (await hashFile(file.stagedPath) !== file.sha256) {
+    throw new Error(`Builder staged allowed file was replaced: ${file.path}`);
+  }
+}
+
+async function copyStagedAllowedFile(file: StagedAllowedFile, target: string): Promise<void> {
+  if (file.stagedPath === undefined || file.stagedIdentity === undefined
+    || file.sha256 === undefined || file.mode === undefined) {
+    throw new Error(`Builder staged allowed-file identity is incomplete: ${file.path}`);
+  }
+  const source = await open(file.stagedPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  let destination;
+  try {
+    const sourceMetadata = await source.stat();
+    if (!sourceMetadata.isFile() || !sameFileIdentity(file.stagedIdentity, fileIdentity(sourceMetadata))) {
+      throw new Error(`Builder staged allowed file was replaced: ${file.path}`);
+    }
+    assertSingleLinkedFile(sourceMetadata, `Builder staged allowed file has multiple hard links: ${file.path}`);
+    destination = await open(
+      target,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      file.mode,
+    );
+    const digest = await copyOpenedFile(source, destination, sourceMetadata.size, file.path);
+    await destination.chmod(file.mode);
+    await destination.sync();
+    const finalSourceMetadata = await source.stat();
+    if (digest !== file.sha256 || !sameFileIdentity(file.stagedIdentity, fileIdentity(finalSourceMetadata))) {
+      throw new Error(`Builder staged allowed file changed during import: ${file.path}`);
+    }
+  } finally {
+    await Promise.allSettled([source.close(), ...(destination === undefined ? [] : [destination.close()])]);
   }
 }

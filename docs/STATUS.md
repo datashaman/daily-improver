@@ -4,23 +4,23 @@ Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: Command-backed builders reject package-manager execution before dependency installation unless the trusted runner explicitly approves it.
-- Current checkpoint commit: `feat: block builder dependency installation`.
+- Last completed milestone: Builder imports are confined against traversal, links, parent replacement, and staged-file TOCTOU replacement.
+- Current checkpoint commit: `feat: confine builder filesystem paths`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1E — Builder isolation.
 - Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, and separately default to package-manager denial through runner-owned executable interception. Exact trusted policies may approve either boundary independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Exact next task
 
-Prevent symlink and path-traversal escapes in the builder.
+Limit builder CPU, memory, disk, output, and wall-clock duration.
 
 ## Acceptance criteria for the next task
 
-- Reject pre-existing and builder-created symlinks, hard links, traversal paths, and parent replacements that could escape the disposable workspace or redirect an approved import.
-- Revalidate every allowlisted target and its parent chain after builder execution and immediately before import.
-- Prevent time-of-check/time-of-use replacement from turning an approved regular-file write into an out-of-scope write.
-- Prove deterministic failure without modifying the source checkout or any external target.
-- Keep path-confinement behavior language-neutral and preserve protected-input immutability, command environment and dependency/network policies, response validation, cost accounting, diff limits, and independent verification.
+- Enforce exact trusted runner-owned CPU, memory, disk, output, and wall-clock limits before command-backed builder execution.
+- Reject missing, malformed, unsupported, extended, or repository/model-controlled limit decisions before the builder runs.
+- Terminate a builder deterministically when any enforced limit is exceeded and classify the exhausted resource without retaining unbounded output.
+- Prove that child processes cannot outlive or bypass the bounded builder execution.
+- Keep resource enforcement language-neutral and preserve filesystem confinement, protected-input immutability, command environment and dependency/network policies, response validation, cost accounting, diff limits, and independent verification.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -50,6 +50,7 @@ Prevent symlink and path-traversal escapes in the builder.
 - The local runner creates an isolated daily worktree and branch.
 - Specification removes configured protected scopes before producing the builder write allowlist. The runner accepts only a non-empty, unique, bounded collection of exact repository-relative production files, rejects absolute paths, traversal, wildcards, protected overlap, non-regular targets, missing parents, and symlink crossings before builder invocation, and passes the narrowed allowlist to the builder request.
 - The builder executes against a disposable repository copy without Git metadata. A language-neutral `builder-protected-inputs/v1` snapshot expands only trusted protected patterns and sealed artifact identities, rejects missing, mutable, replaced, non-regular, excessive, malformed, or symlink-crossing inputs, and materializes tests, specifications, policies, workflows, and migrations plus their parent directories read-only. The builder can read them, but write, replace, rename, and delete attempts fail; identities and permissions are checked again before only approved regular-file changes or deletions are atomically imported. The established response, manifest, diff, semantic, and verification gates still run independently.
+- Builder production targets and protected inputs must also have exactly one hard link. The runner snapshots the disposable root, every allowlisted parent chain, and the unchanged source-checkout targets by device/inode identity; builder-created links and parent replacements fail closed. Approved bytes are copied from an opened regular file into identity- and SHA-256-bound trusted staging. Protected inputs, the workspace target and parent chain, the staged file, and the source checkout are revalidated immediately before each atomic import. Deterministic symlink, hard-link, parent-replacement, traversal, and synchronized TOCTOU proofs reject without changing the source checkout or external sentinels.
 - Command-backed agents receive an exact PATH-only runner environment plus their current stage and repository-contained specification path through a non-login shell. Missing, malformed, extended, relative, or oversized runtime configuration fails before execution, and deterministic sentinel credentials prove that test, analysis, manifest, control-plane, GitHub, and unrelated model secrets cannot cross into the builder while required commands still execute.
 - Command-backed builders default to exact `builder-network-policy/v1` outbound denial supplied only at the runner construction boundary. macOS uses a deny-network sandbox and Linux uses a fresh user/network namespace; each invocation first proves a live runner-owned loopback endpoint is reachable normally and unreachable inside isolation. Unsupported, missing, or ineffective isolation fails before the builder, while only an exact trusted runner policy can approve outbound access. The deterministic builder proof still reads protected inputs and imports one approved production write while its connection attempt fails.
 - Command-backed builders separately default to exact `builder-dependency-installation-policy/v1` denial supplied only at construction. A temporary runner-owned PATH layer rejects Composer, JavaScript, Python, Ruby, Rust, Go, JVM, and .NET package-manager entry points before the real executable runs. Direct, PATH-resolved shell-indirect, explicit-path, and command-level PATH-bypass cases fail closed, ordinary commands still run, and only exact trusted approval lifts the dependency gate independently of network policy.
@@ -84,16 +85,17 @@ Prevent symlink and path-traversal escapes in the builder.
 
 ## Last verification
 
-Verified on 2026-07-18 for the builder dependency-installation slice:
+Verified on 2026-07-18 for the builder path-confinement slice:
 
-- Focused command-agent and builder-filesystem tests: 9 tests passed.
-- `npm test`: 237 tests passed; both live model proofs remained excluded.
+- Focused builder-filesystem tests: 8 tests passed.
+- Focused local-runner and command-agent tests: 8 tests passed.
+- `npm test`: 240 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- The local container image built successfully with the dependency-installation gate and existing Linux `unshare` network mechanism.
-- Deterministic examples prove default denial, exact trusted approval, malformed-policy rejection, direct and indirect interception before package-manager execution, bypass rejection, ordinary command execution, and preservation of the existing network boundary.
+- The local container image built successfully with path confinement plus the established dependency-installation and Linux `unshare` network gates.
+- Deterministic examples reject textual traversal, pre-existing and builder-created symbolic links and hard links, parent-directory replacement, protected-input hard links, and a synchronized post-staging replacement while preserving the source checkout and external sentinels.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.

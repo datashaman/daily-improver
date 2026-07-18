@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createServer } from "node:net";
@@ -96,6 +96,99 @@ test("rejects protected, non-file, missing-parent, and symlink-escaping allowlis
   assert.equal(await readFile(join(outside, "escaped.ts"), "utf8"), "outside\n");
 });
 
+test("rejects pre-existing and builder-created hard links without changing either linked target", async () => {
+  const preExistingRoot = await fixtureRepository();
+  const preExistingExternal = join(preExistingRoot, "../pre-existing-external.ts");
+  await writeFile(preExistingExternal, "external unchanged\n");
+  await rm(join(preExistingRoot, "src/Service.ts"));
+  await link(preExistingExternal, join(preExistingRoot, "src/Service.ts"));
+  let preExistingCalled = false;
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(preExistingRoot, "../sandboxes")).execute(
+      fixtureContext(preExistingRoot),
+      await fixtureProtection(preExistingRoot),
+      async () => { preExistingCalled = true; },
+    ),
+    /multiple hard links/,
+  );
+  assert.equal(preExistingCalled, false);
+  assert.equal(await readFile(preExistingExternal, "utf8"), "external unchanged\n");
+
+  const builderRoot = await fixtureRepository();
+  const builderExternal = join(builderRoot, "../builder-external.ts");
+  await writeFile(builderExternal, "builder external unchanged\n");
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(builderRoot, "../sandboxes")).execute(
+      fixtureContext(builderRoot),
+      await fixtureProtection(builderRoot),
+      async (isolated) => {
+        const allowed = join(isolated.repository, "src/Service.ts");
+        await rm(allowed);
+        await link(builderExternal, allowed);
+      },
+    ),
+    /multiple hard links/,
+  );
+  assert.equal(await readFile(builderExternal, "utf8"), "builder external unchanged\n");
+  assert.equal(await readFile(join(builderRoot, "src/Service.ts"), "utf8"), "original\n");
+});
+
+test("rejects builder-created symlinks and parent replacements without importing a change", async () => {
+  const symlinkRoot = await fixtureRepository();
+  const external = join(symlinkRoot, "../symlink-external.ts");
+  await writeFile(external, "symlink external unchanged\n");
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(symlinkRoot, "../sandboxes")).execute(
+      fixtureContext(symlinkRoot),
+      await fixtureProtection(symlinkRoot),
+      async (isolated) => {
+        const allowed = join(isolated.repository, "src/Service.ts");
+        await rm(allowed);
+        await symlink(external, allowed);
+      },
+    ),
+    /unsupported allowed-file target/,
+  );
+  assert.equal(await readFile(external, "utf8"), "symlink external unchanged\n");
+  assert.equal(await readFile(join(symlinkRoot, "src/Service.ts"), "utf8"), "original\n");
+
+  const parentRoot = await fixtureRepository();
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(parentRoot, "../sandboxes")).execute(
+      fixtureContext(parentRoot),
+      await fixtureProtection(parentRoot),
+      async (isolated) => {
+        await rename(join(isolated.repository, "src"), join(isolated.repository, "replaced-src"));
+        await mkdir(join(isolated.repository, "src"));
+        await writeFile(join(isolated.repository, "src/Service.ts"), "redirected\n");
+      },
+    ),
+    /parent was replaced/,
+  );
+  assert.equal(await readFile(join(parentRoot, "src/Service.ts"), "utf8"), "original\n");
+});
+
+test("revalidates the staged target immediately before import and rejects a TOCTOU replacement", async () => {
+  const root = await fixtureRepository();
+  const external = join(root, "../toctou-external.ts");
+  await writeFile(external, "TOCTOU external unchanged\n");
+  const filesystem = new IsolatedBuilderFilesystem(join(root, "../sandboxes"), {
+    beforeImport: async (workspace) => {
+      const allowed = join(workspace, "src/Service.ts");
+      await rm(allowed);
+      await symlink(external, allowed);
+    },
+  });
+  await assert.rejects(
+    filesystem.execute(fixtureContext(root), await fixtureProtection(root), async (isolated) => {
+      await writeFile(join(isolated.repository, "src/Service.ts"), "approved but raced\n");
+    }),
+    /unsupported allowed-file target/,
+  );
+  assert.equal(await readFile(external, "utf8"), "TOCTOU external unchanged\n");
+  assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
+});
+
 test("rejects missing, mutable, replaced, non-regular, and symlink-crossing protected inputs before builder execution", async () => {
   const root = await fixtureRepository();
   const protection = await fixtureProtection(root);
@@ -133,6 +226,23 @@ test("rejects missing, mutable, replaced, non-regular, and symlink-crossing prot
     /symbolic link/,
   );
   assert.equal(called, false);
+
+  const hardLinkedRoot = await fixtureRepository();
+  const protectedExternal = join(hardLinkedRoot, "../protected-hard-link.txt");
+  await writeFile(protectedExternal, "protected external unchanged\n");
+  await rm(join(hardLinkedRoot, "tests/Service.test.ts"));
+  await link(protectedExternal, join(hardLinkedRoot, "tests/Service.test.ts"));
+  let hardLinkedCalled = false;
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(hardLinkedRoot, "../sandboxes")).execute(
+      fixtureContext(hardLinkedRoot),
+      await fixtureProtection(hardLinkedRoot),
+      async () => { hardLinkedCalled = true; },
+    ),
+    /multiple hard links/,
+  );
+  assert.equal(hardLinkedCalled, false);
+  assert.equal(await readFile(protectedExternal, "utf8"), "protected external unchanged\n");
 });
 
 test("denies builder connections while preserving protected reads and one approved production write", async () => {
