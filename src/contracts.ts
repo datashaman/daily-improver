@@ -42,6 +42,7 @@ export interface RepositoryAdapter {
   discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]>;
   classifyFailure?(output: string): string;
   inspectGeneratedTestQuality?(request: GeneratedTestQualityInspectionRequest): Promise<AdapterGeneratedTestQualityInspection | undefined>;
+  readonly targetedMutationInventorySemantics?: readonly string[];
   prepareTargetedMutation?(root: string, targets: readonly string[]): Promise<TargetedMutationPlan>;
   inspectTargetedMutation?(root: string, plan: TargetedMutationPlan, execution: TargetedMutationExecution): Promise<TargetedMutationResult>;
 }

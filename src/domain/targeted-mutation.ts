@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
 export const targetedMutationPlanSchemaVersion = "targeted-mutation-plan/v1" as const;
-export const targetedMutationResultSchemaVersion = "targeted-mutation-result/v1" as const;
+export const targetedMutationResultSchemaVersion = "targeted-mutation-result/v2" as const;
+export const targetedMutationScoreComparisonSchemaVersion = "targeted-mutation-score-comparison/v1" as const;
 
 const maximumTargets = 64;
 const maximumCommandParts = 64;
@@ -34,6 +35,8 @@ export interface TargetedMutationResult {
   readonly mode: "targeted";
   readonly targets: readonly string[];
   readonly outcome: "completed";
+  readonly inventorySemantics: string;
+  readonly inventorySha256: string;
   readonly mutants: {
     readonly total: number;
     readonly killed: number;
@@ -44,6 +47,24 @@ export interface TargetedMutationResult {
   readonly stdoutSha256: string;
   readonly stderrSha256: string;
   readonly reportSha256: string;
+}
+
+export interface TargetedMutationScoreComparison {
+  readonly schemaVersion: typeof targetedMutationScoreComparisonSchemaVersion;
+  readonly adapter: string;
+  readonly tool: string;
+  readonly mode: "targeted";
+  readonly targets: readonly string[];
+  readonly inventorySemantics: string;
+  readonly baseline: TargetedMutationScore;
+  readonly current: TargetedMutationScore;
+  readonly outcome: "improved";
+}
+
+export interface TargetedMutationScore {
+  readonly mutants: TargetedMutationResult["mutants"];
+  readonly scoreBasisPoints: number;
+  readonly inventorySha256: string;
 }
 
 export function assertTargetedMutationPlan(value: unknown, expectedTargets: readonly string[]): TargetedMutationPlan {
@@ -74,7 +95,7 @@ export function assertTargetedMutationPlan(value: unknown, expectedTargets: read
 }
 
 export function assertTargetedMutationResult(value: unknown, plan: TargetedMutationPlan): TargetedMutationResult {
-  const result = exactRecord(value, ["adapter", "durationMs", "mode", "mutants", "outcome", "reportSha256", "schemaVersion", "stderrSha256", "stdoutSha256", "targets", "tool"], "Targeted mutation result");
+  const result = exactRecord(value, ["adapter", "durationMs", "inventorySemantics", "inventorySha256", "mode", "mutants", "outcome", "reportSha256", "schemaVersion", "stderrSha256", "stdoutSha256", "targets", "tool"], "Targeted mutation result");
   if (result.schemaVersion !== targetedMutationResultSchemaVersion || result.mode !== "targeted" || result.outcome !== "completed") {
     throw new Error("Targeted mutation result uses an unsupported schema, mode, or outcome.");
   }
@@ -86,11 +107,14 @@ export function assertTargetedMutationResult(value: unknown, plan: TargetedMutat
   const killed = boundedCount(mutants.killed, "killed");
   const escaped = boundedCount(mutants.escaped, "escaped");
   const notCovered = boundedCount(mutants.notCovered, "not-covered");
-  if (killed + escaped + notCovered > total) throw new Error("Targeted mutation counts are inconsistent.");
+  if (total === 0) throw new Error("Targeted mutation result has a zero-mutant inventory.");
+  if (killed + escaped + notCovered !== total) throw new Error("Targeted mutation counts are inconsistent or incomplete.");
   if (!Number.isInteger(result.durationMs) || (result.durationMs as number) < 0 || (result.durationMs as number) > plan.timeoutMs) throw new Error("Targeted mutation duration is malformed or excessive.");
   const stdoutSha256 = hash(result.stdoutSha256, "stdout");
   const stderrSha256 = hash(result.stderrSha256, "stderr");
   const reportSha256 = hash(result.reportSha256, "report");
+  const inventorySemantics = boundedSchemaIdentity(result.inventorySemantics, "inventory semantics");
+  const inventorySha256 = hash(result.inventorySha256, "inventory");
   return Object.freeze({
     schemaVersion: targetedMutationResultSchemaVersion,
     adapter: plan.adapter,
@@ -98,11 +122,66 @@ export function assertTargetedMutationResult(value: unknown, plan: TargetedMutat
     mode: "targeted",
     targets: Object.freeze(targets),
     outcome: "completed",
+    inventorySemantics,
+    inventorySha256,
     mutants: Object.freeze({ total, killed, escaped, notCovered }),
     durationMs: result.durationMs as number,
     stdoutSha256,
     stderrSha256,
     reportSha256,
+  });
+}
+
+export function compareTargetedMutationScores(
+  baselineValue: unknown,
+  currentValue: unknown,
+): TargetedMutationScoreComparison {
+  const baseline = comparableResult(baselineValue, "baseline");
+  const current = comparableResult(currentValue, "current");
+  if (baseline.adapter !== current.adapter || baseline.tool !== current.tool || baseline.mode !== current.mode
+    || JSON.stringify(baseline.targets) !== JSON.stringify(current.targets)) {
+    throw new Error("Targeted mutation score results are incomparable across adapter, tool, mode, or targets.");
+  }
+  if (baseline.inventorySemantics !== current.inventorySemantics) {
+    throw new Error("Targeted mutation score results use incomparable inventory semantics.");
+  }
+  if (current.mutants.killed * baseline.mutants.total <= baseline.mutants.killed * current.mutants.total) {
+    throw new Error("Targeted mutation score regressed or did not improve.");
+  }
+  return Object.freeze({
+    schemaVersion: targetedMutationScoreComparisonSchemaVersion,
+    adapter: baseline.adapter,
+    tool: baseline.tool,
+    mode: "targeted",
+    targets: baseline.targets,
+    inventorySemantics: baseline.inventorySemantics,
+    baseline: score(baseline),
+    current: score(current),
+    outcome: "improved",
+  });
+}
+
+function comparableResult(value: unknown, label: string): TargetedMutationResult {
+  const record = exactRecord(value, ["adapter", "durationMs", "inventorySemantics", "inventorySha256", "mode", "mutants", "outcome", "reportSha256", "schemaVersion", "stderrSha256", "stdoutSha256", "targets", "tool"], `Targeted mutation ${label} result`);
+  const targets = exactTargets(record.targets, `${label} result targets`);
+  const plan: TargetedMutationPlan = {
+    schemaVersion: targetedMutationPlanSchemaVersion,
+    adapter: boundedIdentity(record.adapter, `${label} adapter`),
+    tool: boundedIdentity(record.tool, `${label} tool`),
+    mode: "targeted",
+    targets,
+    command: ["comparison-only"],
+    timeoutMs: maximumTimeoutMs,
+    reportArtifact: "comparison-only.json",
+  };
+  return assertTargetedMutationResult(record, plan);
+}
+
+function score(result: TargetedMutationResult): TargetedMutationScore {
+  return Object.freeze({
+    mutants: result.mutants,
+    scoreBasisPoints: Math.round((result.mutants.killed * 10_000) / result.mutants.total),
+    inventorySha256: result.inventorySha256,
   });
 }
 
@@ -126,6 +205,13 @@ function repositoryPath(value: unknown, name: string): string {
 
 function boundedIdentity(value: unknown, name: string): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(value)) throw new Error(`Targeted mutation ${name} is malformed.`);
+  return value;
+}
+
+function boundedSchemaIdentity(value: unknown, name: string): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\/v[1-9][0-9]{0,5}$/u.test(value)) {
+    throw new Error(`Targeted mutation ${name} is malformed.`);
+  }
   return value;
 }
 

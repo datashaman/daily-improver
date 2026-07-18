@@ -10,6 +10,7 @@ const configurationLimitBytes = 512 * 1024;
 const configurationArtifact = ".daily-improver/verifier-targeted-infection.json";
 const reportArtifact = ".daily-improver/verifier-targeted-infection-report.json";
 const configurationNames = ["infection.json5", "infection.json", "infection.json5.dist", "infection.json.dist"] as const;
+const inventorySemantics = "php-infection-mutator-location/v1";
 
 export async function preparePhpTargetedMutation(root: string, targets: readonly string[]): Promise<TargetedMutationPlan> {
   const composer = exactRecord(JSON.parse(await readFile(join(root, "composer.json"), "utf8")), "Composer manifest");
@@ -85,22 +86,28 @@ export async function inspectPhpTargetedMutation(
       || killed + escaped + notCovered + errors + syntaxErrors + timeouts !== total) {
       throw new Error("Targeted Infection statistics do not match its bounded mutation inventory.");
     }
+    const inventory: string[] = [];
     for (const row of [...killedRows, ...escapedRows, ...uncoveredRows, ...errorRows, ...syntaxErrorRows, ...timeoutRows]) {
       const mutation = exactRecord(row.value, `Targeted Infection ${row.status} mutation`);
       const mutator = exactRecord(mutation.mutator, `Targeted Infection ${row.status} mutator`);
       const file = mutationFile(root, mutator.originalFilePath);
       if (!plan.targets.includes(file)) throw new Error("Targeted Infection output escaped the exact changed production targets.");
+      const mutatorName = mutationIdentity(mutator.mutatorName, "mutator name");
+      const originalStartLine = mutationLine(mutator.originalStartLine);
+      inventory.push(JSON.stringify([file, originalStartLine, mutatorName]));
     }
     if (errors !== 0 || syntaxErrors !== 0 || timeouts !== 0) throw new Error("Targeted Infection reported an incomplete mutation run.");
     if (killed + escaped + notCovered > total) throw new Error("Targeted Infection statistics are inconsistent.");
     if (execution.exitCode !== 0 && escaped === 0 && notCovered === 0) throw new Error("Targeted Infection command failed without a bounded mutation outcome.");
     return {
-      schemaVersion: "targeted-mutation-result/v1",
+      schemaVersion: "targeted-mutation-result/v2",
       adapter: "php",
       tool: "infection",
       mode: "targeted",
       targets: plan.targets,
       outcome: "completed",
+      inventorySemantics,
+      inventorySha256: targetedMutationOutputHash(JSON.stringify([inventorySemantics, ...inventory.sort()])),
       mutants: { total, killed, escaped, notCovered },
       durationMs: execution.durationMs,
       stdoutSha256: targetedMutationOutputHash(execution.stdout),
@@ -206,6 +213,20 @@ function optionalPackageMap(value: unknown): Readonly<Record<string, string>> {
 
 function count(value: unknown, name: string): number {
   if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 100_000) throw new Error(`Targeted Infection ${name} count is malformed or excessive.`);
+  return value as number;
+}
+
+function mutationIdentity(value: unknown, name: string): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._\\/-]{0,255}$/u.test(value)) {
+    throw new Error(`Targeted Infection ${name} is malformed.`);
+  }
+  return value;
+}
+
+function mutationLine(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 10_000_000) {
+    throw new Error("Targeted Infection mutation line is malformed.");
+  }
   return value as number;
 }
 

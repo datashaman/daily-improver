@@ -203,7 +203,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Validate all artifact signatures and hashes.
 - [x] Run repository commands in a clean environment.
 - [x] Run targeted mutation testing against changed production files.
-- [ ] Compare mutation score to baseline.
+- [x] Compare mutation score to baseline.
 - [ ] Compare static-analysis findings to baseline.
 - [ ] Compare public API surfaces with an ecosystem tool.
 - [ ] Detect new ignored static-analysis findings.
@@ -511,7 +511,7 @@ The recent and next commit-sized milestones are:
 40. [x] `feat: isolate verifier command environments`
 41. [x] `feat: run targeted verifier mutation testing`
 
-The immediate next task is Phase 1F: compare the targeted mutation score to its baseline. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: compare static-analysis findings to baseline. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

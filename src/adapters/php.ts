@@ -48,6 +48,7 @@ type PackageMap = Readonly<Record<string, string>>;
 
 export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
+  readonly targetedMutationInventorySemantics = ["php-infection-mutator-location/v1"] as const;
 
   constructor(
     private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner(),

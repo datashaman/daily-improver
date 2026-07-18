@@ -7,6 +7,7 @@ import { inspectPhpTargetedMutation, preparePhpTargetedMutation } from "../src/a
 import {
   assertTargetedMutationPlan,
   assertTargetedMutationResult,
+  compareTargetedMutationScores,
   type TargetedMutationPlan,
 } from "../src/domain/targeted-mutation.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
@@ -28,12 +29,14 @@ const plan = {
 test("validates one exact bounded language-neutral targeted-mutation plan and result", () => {
   const validated = assertTargetedMutationPlan(plan, [target]);
   const result = assertTargetedMutationResult({
-    schemaVersion: "targeted-mutation-result/v1",
+    schemaVersion: "targeted-mutation-result/v2",
     adapter: "php",
     tool: "infection",
     mode: "targeted",
     targets: [target],
     outcome: "completed",
+    inventorySemantics: "php-infection-mutator-location/v1",
+    inventorySha256: "d".repeat(64),
     mutants: { total: 4, killed: 3, escaped: 1, notCovered: 0 },
     durationMs: 100,
     stdoutSha256: "a".repeat(64),
@@ -59,22 +62,47 @@ test("rejects missing, extended, unsupported, escaped, untargeted, and excessive
 test("rejects malformed, extended, unsupported, untargeted, and excessive mutation outputs", () => {
   const validated = assertTargetedMutationPlan(plan, [target]);
   const result = {
-    schemaVersion: "targeted-mutation-result/v1",
+    schemaVersion: "targeted-mutation-result/v2",
     adapter: "php",
     tool: "infection",
     mode: "targeted",
     targets: [target],
     outcome: "completed",
+    inventorySemantics: "php-infection-mutator-location/v1",
+    inventorySha256: "d".repeat(64),
     mutants: { total: 1, killed: 1, escaped: 0, notCovered: 0 },
     durationMs: 100,
     stdoutSha256: "a".repeat(64), stderrSha256: "b".repeat(64), reportSha256: "c".repeat(64),
   } as const;
   assert.throws(() => assertTargetedMutationResult({ ...result, extra: true }, validated), /extended/);
-  assert.throws(() => assertTargetedMutationResult({ ...result, schemaVersion: "targeted-mutation-result/v2" }, validated), /unsupported/);
+  assert.throws(() => assertTargetedMutationResult({ ...result, schemaVersion: "targeted-mutation-result/v1" }, validated), /unsupported/);
   assert.throws(() => assertTargetedMutationResult({ ...result, targets: ["src/Other.php"] }, validated), /untargeted/);
   assert.throws(() => assertTargetedMutationResult({ ...result, mutants: { ...result.mutants, total: 100_001 } }, validated), /excessive/);
   assert.throws(() => assertTargetedMutationResult({ ...result, mutants: { ...result.mutants, killed: 2 } }, validated), /inconsistent/);
+  assert.throws(() => assertTargetedMutationResult({ ...result, mutants: { ...result.mutants, total: 2 } }, validated), /inconsistent or incomplete/);
   assert.throws(() => assertTargetedMutationResult({ ...result, reportSha256: "raw-output" }, validated), /identity/);
+});
+
+test("compares only exact completed comparable mutation inventories and requires an improved score", () => {
+  const baseline = mutationResult({ total: 1, killed: 0, escaped: 1, notCovered: 0 }, "a");
+  const current = mutationResult({ total: 1, killed: 1, escaped: 0, notCovered: 0 }, "b");
+  const comparison = compareTargetedMutationScores(baseline, current);
+  assert.deepEqual(comparison.baseline, { mutants: baseline.mutants, scoreBasisPoints: 0, inventorySha256: "a".repeat(64) });
+  assert.deepEqual(comparison.current, { mutants: current.mutants, scoreBasisPoints: 10_000, inventorySha256: "b".repeat(64) });
+  assert.equal(comparison.outcome, "improved");
+  assert.equal(JSON.stringify(comparison).includes("source"), false);
+
+  assert.throws(() => compareTargetedMutationScores(undefined, current), /malformed/);
+  assert.throws(() => compareTargetedMutationScores(baseline, undefined), /malformed/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, extra: true }, current), /extended/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, schemaVersion: "targeted-mutation-result/v1" }, current), /unsupported/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, targets: ["../escaped.php"] }, current), /escaped/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, adapter: "other" }, current), /incomparable/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, tool: "other" }, current), /incomparable/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, inventorySemantics: "other/v1" }, current), /incomparable inventory semantics/);
+  assert.throws(() => compareTargetedMutationScores({ ...baseline, mutants: { ...baseline.mutants, total: 0 } }, current), /zero-mutant/);
+  assert.throws(() => compareTargetedMutationScores(current, baseline), /regressed or did not improve/);
+  assert.throws(() => compareTargetedMutationScores(current, current), /regressed or did not improve/);
 });
 
 test("PHP adapter runs Infection against only the changed MoneyAllocator target in a clean verifier command environment", async () => {
@@ -87,7 +115,8 @@ test("PHP adapter runs Infection against only the changed MoneyAllocator target 
   const execution = await runVerifierCommand(runner, createVerifierCommandEnvironmentDecision(process.env), prepared.command, root, prepared.timeoutMs);
   const result = assertTargetedMutationResult(await inspectPhpTargetedMutation(root, prepared, execution), prepared);
   assert.deepEqual(result.targets, [target]);
-  assert.deepEqual(result.mutants, { total: 1, killed: 1, escaped: 0, notCovered: 0 });
+  assert.deepEqual(result.mutants, { total: 1, killed: 0, escaped: 1, notCovered: 0 });
+  assert.equal(result.inventorySemantics, "php-infection-mutator-location/v1");
   await assert.rejects(readFile(join(root, prepared.reportArtifact)), /ENOENT/);
 });
 
@@ -146,4 +175,25 @@ test("rejects any tracked or untracked checkout change made by the targeted muta
 
 function execution() {
   return { exitCode: 0, durationMs: 1, stdout: "", stderr: "" };
+}
+
+function mutationResult(
+  mutants: { readonly total: number; readonly killed: number; readonly escaped: number; readonly notCovered: number },
+  inventoryHash: string,
+) {
+  return {
+    schemaVersion: "targeted-mutation-result/v2" as const,
+    adapter: "php",
+    tool: "infection",
+    mode: "targeted" as const,
+    targets: [target],
+    outcome: "completed" as const,
+    inventorySemantics: "php-infection-mutator-location/v1",
+    inventorySha256: inventoryHash.repeat(64),
+    mutants,
+    durationMs: 100,
+    stdoutSha256: "c".repeat(64),
+    stderrSha256: "d".repeat(64),
+    reportSha256: "e".repeat(64),
+  };
 }

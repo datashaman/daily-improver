@@ -30,6 +30,8 @@ if (!is_string($reportPath)) {
 }
 
 $targeted = $filter === 'app/Domain/MoneyAllocator.php';
+$fixed = str_contains(file_get_contents('app/Domain/MoneyAllocator.php') ?: '', '$remainder = $total % $parts');
+$killed = $targeted && $fixed;
 $mutation = [
     'mutator' => [
         'mutatorName' => 'Arithmetic/RemainderAllocation',
@@ -40,20 +42,20 @@ $mutation = [
 $report = [
     'stats' => [
         'totalMutantsCount' => 1,
-        'killedCount' => $targeted ? 1 : 0,
-        'escapedCount' => $targeted ? 0 : 1,
+        'killedCount' => $killed ? 1 : 0,
+        'escapedCount' => $killed ? 0 : 1,
         'notCoveredCount' => 0,
         'errorCount' => 0,
         'syntaxErrorCount' => 0,
         'timeOutCount' => 0,
     ],
-    'escaped' => $targeted ? [] : [$mutation],
-    'killed' => $targeted ? [$mutation] : [],
+    'escaped' => $killed ? [] : [$mutation],
+    'killed' => $killed ? [$mutation] : [],
     'uncovered' => [],
     'errored' => [],
     'syntaxErrors' => [],
     'timeouted' => [],
 ];
 file_put_contents($reportPath, json_encode($report, JSON_THROW_ON_ERROR));
-fwrite(STDOUT, $targeted ? "Targeted mutation killed.\n" : "One escaped mutant. Mutation score recorded.\n");
-exit($targeted ? 0 : 1);
+fwrite(STDOUT, $killed ? "Targeted mutation killed.\n" : "One escaped mutant. Mutation score recorded.\n");
+exit($killed ? 0 : 1);

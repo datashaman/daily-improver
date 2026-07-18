@@ -443,9 +443,13 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
   const verification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verification.json`], repository));
   assert.match(verification.stdout, /"schemaVersion": "verification-report\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v2"/);
+  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-score-comparison\/v1"/);
   assert.match(verification.stdout, /"targets": \[\s+"app\/Domain\/MoneyAllocator.php"/);
   assert.match(verification.stdout, /"killed": 1/);
+  assert.match(verification.stdout, /"scoreBasisPoints": 0/);
+  assert.match(verification.stdout, /"scoreBasisPoints": 10000/);
+  assert.match(verification.stdout, /"outcome": "improved"/);
   assert.doesNotMatch(verification.stdout, /originalSourceCode|mutatedSourceCode|processOutput/);
   assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
   assert.match(verification.stdout, /"command": "php tests\/run.php"/);
