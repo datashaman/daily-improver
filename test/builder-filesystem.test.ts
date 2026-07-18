@@ -18,12 +18,15 @@ import type { ImprovementSpec } from "../src/domain/model.js";
 test("derives an exact language-neutral production allowlist and imports only approved writes", async () => {
   const root = await fixtureRepository();
   const context = fixtureContext(root);
+  let capturedChanges: readonly { readonly path: string; readonly change: string }[] = [];
   assert.deepEqual(deriveBuilderWriteAllowlist(context), {
     schemaVersion: "builder-write-allowlist/v1",
     files: ["src/Service.ts"],
   });
 
-  await new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(context, await fixtureProtection(root), async (isolated) => {
+  await new IsolatedBuilderFilesystem(join(root, "../sandboxes"), {
+    afterStateCapture: async ({ changes }) => { capturedChanges = changes.changes; },
+  }).execute(context, await fixtureProtection(root), async (isolated) => {
     assert.notEqual(isolated.repository, root);
     assert.deepEqual(isolated.spec.allowedFiles, ["src/Service.ts"]);
     for (const path of [
@@ -49,6 +52,29 @@ test("derives an exact language-neutral production allowlist and imports only ap
   assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "approved\n");
   assert.equal(await readFile(join(root, "tests/Service.test.ts"), "utf8"), "sealed test\n");
   assert.equal(await readFile(join(root, "README.md"), "utf8"), "original readme\n");
+  assert.deepEqual(capturedChanges.map(({ path, change }) => ({ path, change })), [
+    { path: "README.md", change: "modified" },
+    { path: "src/Service.ts", change: "modified" },
+  ]);
+});
+
+test("captures post-builder filesystem state before propagating a builder failure", async () => {
+  const root = await fixtureRepository();
+  let capturedChanges: readonly { readonly path: string; readonly change: string }[] = [];
+  const filesystem = new IsolatedBuilderFilesystem(join(root, "../sandboxes"), {
+    afterStateCapture: async ({ changes }) => { capturedChanges = changes.changes; },
+  });
+  await assert.rejects(
+    filesystem.execute(fixtureContext(root), await fixtureProtection(root), async (isolated) => {
+      await writeFile(join(isolated.repository, "src/Service.ts"), "failed builder write\n");
+      throw new Error("deliberate builder failure");
+    }),
+    /deliberate builder failure/,
+  );
+  assert.deepEqual(capturedChanges.map(({ path, change }) => ({ path, change })), [
+    { path: "src/Service.ts", change: "modified" },
+  ]);
+  assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
 });
 
 test("rejects malformed, traversing, absolute, wildcard, duplicate, and unbounded allowlists before builder execution", async () => {

@@ -186,7 +186,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 - [x] Block dependency installation unless explicitly approved.
 - [x] Prevent symlink and path-traversal escapes.
 - [x] Limit CPU, memory, disk, output, and wall-clock duration.
-- [ ] Capture filesystem state before and after execution.
+- [x] Capture filesystem state before and after execution.
 - [ ] Fail immediately when protected content changes.
 - [ ] Prevent commits, pushes, and PR operations inside the builder.
 - [ ] Prevent generated output from altering the verifier.
@@ -503,8 +503,9 @@ The recent and next commit-sized milestones are:
 32. [x] `feat: block builder dependency installation`
 33. [x] `feat: confine builder filesystem paths`
 34. [x] `feat: bound builder resource consumption`
+35. [x] `feat: capture builder filesystem state`
 
-The immediate next task is Phase 1E: capture filesystem state before and after builder execution. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: fail immediately when protected content changes. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

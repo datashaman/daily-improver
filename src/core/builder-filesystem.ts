@@ -4,6 +4,11 @@ import { chmod, cp, glob, lstat, mkdir, mkdtemp, open, readFile, realpath, renam
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { minimatch } from "minimatch";
 import type { AgentContext, BuilderExecution } from "../agents/agent-provider.js";
+import {
+  BuilderFilesystemStateCapturer,
+  deriveBuilderFilesystemChangeSet,
+} from "./builder-filesystem-state.js";
+import type { BuilderFilesystemChangeSet, BuilderFilesystemState } from "./builder-filesystem-state.js";
 
 const maximumPathLength = 1_024;
 const maximumProtectedFiles = 10_000;
@@ -55,6 +60,13 @@ interface StagedAllowedFile {
 
 interface BuilderFilesystemSynchronization {
   readonly beforeImport?: (workspace: string) => Promise<void>;
+  readonly afterStateCapture?: (capture: BuilderFilesystemExecutionState) => Promise<void>;
+}
+
+export interface BuilderFilesystemExecutionState {
+  readonly before: BuilderFilesystemState;
+  readonly after: BuilderFilesystemState;
+  readonly changes: BuilderFilesystemChangeSet;
 }
 
 export function deriveBuilderWriteAllowlist(context: AgentContext): BuilderWriteAllowlist {
@@ -80,6 +92,7 @@ export class IsolatedBuilderFilesystem {
   constructor(
     private readonly workspaceBase: string,
     private readonly synchronization: BuilderFilesystemSynchronization = {},
+    private readonly stateCapturer = new BuilderFilesystemStateCapturer(),
   ) {}
 
   async execute(
@@ -111,7 +124,20 @@ export class IsolatedBuilderFilesystem {
         specPath: join(workspace, specPath),
         spec: { ...context.spec, allowedFiles: allowlist.files },
       };
-      const result = await build(isolatedContext);
+      const before = await this.stateCapturer.capture(workspace);
+      let result: BuilderExecution | void = undefined;
+      let buildFailed = false;
+      let buildFailure: unknown;
+      try {
+        result = await build(isolatedContext);
+      } catch (error) {
+        buildFailed = true;
+        buildFailure = error;
+      }
+      const after = await this.stateCapturer.capture(workspace);
+      const changes = deriveBuilderFilesystemChangeSet(before, after);
+      await this.synchronization.afterStateCapture?.({ before, after, changes });
+      if (buildFailed) throw buildFailure;
       await assertProtectedInputsReadOnly(workspace, protectedInputs);
       await assertPathConfinement(workspace, allowlist.files, workspaceConfinement, false);
       const staged = await stageAllowedFiles(workspace, temporary, allowlist.files, workspaceConfinement);
