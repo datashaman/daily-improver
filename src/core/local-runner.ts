@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cp, mkdir, readFile, rm } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../agents/agent-provider.js";
 import type { AdapterGeneratedTestQualityInspection } from "../contracts.js";
 import { loadConfig } from "../config.js";
@@ -34,6 +34,7 @@ import {
   type TestCommandOutcome,
 } from "../domain/generated-test-lifecycle.js";
 import { IsolatedBuilderFilesystem } from "./builder-filesystem.js";
+import { FreshVerifierWorkspace } from "./fresh-verifier-workspace.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -274,18 +275,33 @@ export class LocalImprovementRunner {
         async (context) => await this.agents.build(context),
       );
       await persistAgentExecution(isolated.path, "build", builderExecution);
-      await this.runner.run(["git", "add", "-N", "."], isolated.path);
-      const verification = await this.stages.verify(isolated.path, verifierInputs, this.manifestKey);
-      const verificationAttempts = await runLifecycleAttempts(this.runner, isolated.path, test.command, changedTests, "verification");
-      const verificationLifecycle = decideGeneratedTestLifecycle({
-        phase: "verification",
-        command: test.command,
-        testSha256: await hashFiles(isolated.path, changedTests),
-        attempts: verificationAttempts.outcomes,
-        expectedExit: "zero",
-        baseline: baselineLifecycle,
-      });
-      await writeArtifact(isolated.path, "generated-test-verification-lifecycle.json", verificationLifecycle);
+      const verifier = await new FreshVerifierWorkspace(this.workspaceBase, this.runner).create(
+        repository,
+        isolated.path,
+        verifierInputs,
+      );
+      let verification: Awaited<ReturnType<PipelineStages["verify"]>>;
+      try {
+        await verifier.assertReady();
+        verification = await this.stages.verify(verifier.path, verifierInputs, this.manifestKey);
+        const verificationAttempts = await runLifecycleAttempts(this.runner, verifier.path, test.command, changedTests, "verification");
+        const verificationLifecycle = decideGeneratedTestLifecycle({
+          phase: "verification",
+          command: test.command,
+          testSha256: await hashFiles(verifier.path, changedTests),
+          attempts: verificationAttempts.outcomes,
+          expectedExit: "zero",
+          baseline: baselineLifecycle,
+        });
+        const verificationLifecyclePath = relative(
+          verifier.path,
+          await writeArtifact(verifier.path, "generated-test-verification-lifecycle.json", verificationLifecycle),
+        );
+        await verifier.copyOutputTo(verifierInputs.outputArtifact, isolated.path, verifierInputs.outputArtifact);
+        await verifier.copyOutputTo(verificationLifecyclePath, isolated.path, verificationLifecyclePath);
+      } finally {
+        await verifier.cleanup();
+      }
       const publication = await this.stages.publicationRequest(isolated.path);
       await this.runner.run(["git", "add", "."], isolated.path);
       const commit = await this.runner.run(["git", "commit", "-m", `fix: ${spec.title}`], isolated.path);
@@ -322,6 +338,7 @@ async function runLifecycleAttempts(
   firstAttemptEnvironment: Readonly<Record<string, string>> = {},
 ): Promise<{ readonly results: readonly Awaited<ReturnType<CommandRunner["run"]>>[]; readonly outcomes: readonly TestCommandOutcome[] }> {
   const reportPath = join(root, ".daily-improver", "generated-test-lifecycle-report.json");
+  await mkdir(dirname(reportPath), { recursive: true });
   const results = [];
   const outcomes: TestCommandOutcome[] = [];
   for (let index = 0; index < 3; index++) {

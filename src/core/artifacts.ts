@@ -62,10 +62,29 @@ export async function createTestManifest(root: string, key: string): Promise<Tes
 }
 
 export async function verifyTestManifest(root: string, manifest: TestManifest, key: string): Promise<boolean> {
+  return await verifyTestManifestFiles(root, manifest, key, Object.keys(manifest.files));
+}
+
+export async function verifyVerifierTestManifest(root: string, manifest: TestManifest, key: string): Promise<boolean> {
+  return await verifyTestManifestFiles(root, manifest, key, verifierManifestFilePaths(manifest));
+}
+
+export function verifierManifestFilePaths(manifest: TestManifest): readonly string[] {
+  return Object.keys(manifest.files).filter((path) => !path.endsWith("-agent-rationale.json"));
+}
+
+async function verifyTestManifestFiles(
+  root: string,
+  manifest: TestManifest,
+  key: string,
+  paths: readonly string[],
+): Promise<boolean> {
   const expected = createHmac("sha256", key).update(stablePayload(manifest.files, manifest.generatedAt)).digest();
   const actual = Buffer.from(manifest.signature, "hex");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
-  for (const [path, hash] of Object.entries(manifest.files)) {
+  for (const path of paths) {
+    const hash = manifest.files[path];
+    if (!hash) return false;
     let content: Buffer;
     try { content = await readFile(join(root, path)); }
     catch { return false; }

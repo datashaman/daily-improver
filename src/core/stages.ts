@@ -4,7 +4,7 @@ import { relative } from "node:path";
 import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../contracts.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { AdapterRegistry } from "./adapter-registry.js";
-import { createTestManifest, readArtifact, runDirectory, verifyTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
+import { createTestManifest, readArtifact, runDirectory, verifierManifestFilePaths, verifyVerifierTestManifest, writeArtifact, type AnalysisArtifact, type TestManifest } from "./artifacts.js";
 import { DiffGuard } from "./diff-guard.js";
 import { SourceSafetyInspector } from "./source-safety.js";
 import { selectCandidatesByScope } from "./candidate-scope.js";
@@ -151,10 +151,9 @@ export class PipelineStages {
       await readArtifact<TestManifest>(root, "test-manifest.json"),
     );
     await assertVerifierExecutionInputs(root, inputs, this.runner);
-    if (!(await verifyTestManifest(root, inputs.manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
-    const trustedPaths = new Set(Object.keys(inputs.manifest.files));
+    if (!(await verifyVerifierTestManifest(root, inputs.manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
+    const trustedPaths = new Set(verifierManifestFilePaths(inputs.manifest));
     trustedPaths.add(relative(root, `${runDirectory(root)}/test-manifest.json`));
-    for (const path of inputs.trustedArtifacts) trustedPaths.add(path);
     const diff = await new DiffGuard(this.runner).inspect(
       root,
       inputs.expectedBaseSha,

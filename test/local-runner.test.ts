@@ -174,6 +174,24 @@ if ($failures !== [] && $attempt % 2 === 1) {`,
 }
 
 class VerifierTamperingAgent extends ProvingAgent {
+  override async generateTests(context: AgentContext): Promise<TestAgentExecution> {
+    const execution = await super.generateTests(context);
+    await appendFile(
+      join(context.repository, "tests", "Property", "MoneyAllocatorInvariantTest.php"),
+      `
+if (getenv('DAILY_IMPROVER_TEST_LIFECYCLE_PHASE') === 'verification'
+    && glob(dirname(__DIR__, 2) . '/.ai/runs/*/*-agent-rationale.json') !== []) {
+    throw new RuntimeException('Model rationale reached the verifier.');
+}
+if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR__, 2) . '/verifier-command')) {
+    throw new RuntimeException('Builder-only filesystem state reached the verifier.');
+}
+`,
+      "utf8",
+    );
+    return execution;
+  }
+
   override async build(context: AgentContext): Promise<BuilderExecution> {
     const execution = await super.build(context);
     await writeFile(join(context.repository, "verification.json"), JSON.stringify({ passed: true, checks: [] }));

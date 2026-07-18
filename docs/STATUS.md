@@ -4,8 +4,8 @@ Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: Phase 1E is complete; generated output cannot alter the independent verifier's sealed execution inputs or output routing.
-- Current checkpoint commit: `feat: seal verifier execution inputs`.
+- Last completed milestone: The first Phase 1F slice is complete; verification executes in a runner-owned fresh checkout at the sealed expected main SHA.
+- Current checkpoint commit: `feat: verify from a fresh checkout`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1F — Production verifier.
 - Current state: Phase 1A through Phase 1E are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. The disposable copy is captured immediately before and after every successful or failed builder execution as exact `builder-filesystem-state/v1` values. Streamed hashes and bounded metadata describe regular files, directories, symbolic links, and unsupported types without retaining contents; `builder-filesystem-change-set/v1` exhaustively reports additions, modifications, deletions, and type changes inside and outside the write allowlist. Repeated stable walks fail closed on unreadable, excessive, malformed, traversing, or changing state. Immediately after capture, the runner binds every protected SHA-256 identity to the captured baseline, expands its repository-relative parents, and rejects every addition, modification, deletion, or type change at or below those paths before retaining a successful result, propagating a builder failure, staging, or importing. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. Verifier execution inputs are captured before generated code, sealed before the builder, and revalidated before independent command execution and atomic report publication. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
@@ -14,16 +14,18 @@ Every command-backed builder now always denies Git and GitHub CLI publication to
 
 Verifier execution now derives one integrity-bound `verifier-execution-inputs/v1` value from state captured before generated code runs and the manifest sealed before the builder. It fixes the exact expected commit SHA, specification and trusted repository-configuration identities, commands, protected-path policy, runner-owned builder artifact paths, PATH-only runtime, manifest artifact and sealed file identities, and output destination. Verification revalidates those inputs immediately before use, runs through absolute non-login `/bin/sh` without ambient credentials, and atomically replaces the fixed report destination without following a pre-existing symlink. Builder response fields and untrusted implementation notes cannot change verifier commands, policies, executable resolution, credentials, baseline identity, sealed inputs, trusted paths, or output routing. The adversarial local proof retains an ordinary approved production edit while fake commands, PATH, base SHA, manifest identity, pre-populated report, and redirected output remain non-authoritative.
 
+The verifier now runs in a new runner-owned clone rather than the generation or builder-import worktree. The source `HEAD` must still equal the sealed SHA and resolve to exactly one commit before cloning and immediately before command execution. The clone starts clean and detached at that SHA; only exact specification-approved production file states, verifier-relevant signed-manifest files, and the signed manifest artifact cross through bounded regular-file, hash, containment, and symlink checks. Builder-only files, caches, runtime reports, builder Git state, build-agent artifacts, and test/build model rationale remain absent. Verification plus the three post-change lifecycle attempts run in the clean checkout, and only the trusted verification report and lifecycle decision return for publication.
+
 ## Exact next task
 
-Verify from a fresh checkout based on the expected main SHA.
+Confirm main has not advanced before publication.
 
 ## Acceptance criteria for the next task
 
-- Create verification in a new runner-owned checkout resolved from the already sealed expected main SHA, never in the builder or test-generation workspace.
-- Export and apply only the bounded approved production patch plus sealed generated tests and artifacts; do not copy untracked builder workspace state, Git metadata, caches, runtime reports, or model output into the verifier.
-- Reject a missing, advanced, mismatched, non-commit, or ambiguously resolved baseline before verifier commands run.
-- Prove the clean verifier sees the intended approved edit and sealed tests while builder-only files, processes, environment, and filesystem state are absent.
+- Immediately before publication authorization, resolve the trusted main reference and require it to equal the expected SHA already bound into `verifier-execution-inputs/v1` and `verification-report/v1`.
+- Reject missing, advanced, rewound, mismatched, non-commit, or ambiguously resolved main state before completing the daily claim, committing publication output, or emitting a draft-PR request.
+- Bind the checked main identity and decision time into a bounded trusted publication authorization artifact without repository paths, source, credentials, or model output.
+- Prove an advancement after successful fresh-checkout verification prevents publication while unchanged main still permits the established verified draft request.
 - Preserve the language-neutral sealed verifier-input boundary, builder isolation, response validation, cost accounting, diff limits, semantic gates, and fail-closed verification.
 - `npm run checkpoint` passes.
 
@@ -63,6 +65,7 @@ Verify from a fresh checkout based on the expected main SHA.
 - The complete change set is checked immediately against the exact trusted `builder-protected-inputs/v1` file identities and their expanded repository-relative parents. A protected addition, modification, deletion, or type change fails before result handling or import for successful and failing builders; deterministic chmod-and-replacement proofs retain no source contents and import no production change.
 - Every command-backed builder unconditionally prepends runner-owned Git and GitHub CLI denial entry points. Direct, PATH-resolved, explicit-path, shell-indirect, and command-level PATH-bypass attempts fail before the real tools run even when network and dependency policies allow their capabilities; ordinary allowlisted production edits still import and external-operation sentinels remain untouched.
 - Verifier execution is captured before generated code and sealed before the builder as exact `verifier-execution-inputs/v1`. Its integrity-bound expected commit SHA, specification and configuration identities, commands, protected policy, exact PATH-only environment, manifest identity, fixed runner artifact paths, and atomic output destination are revalidated before use. An adversarial builder response can claim replacement commands, executable paths, credentials, base and manifest identities, a pre-populated passing report, or redirected output, but those values remain untrusted rationale while the ordinary allowlisted edit reaches the real independent command and a bound `verification-report/v1`.
+- Fresh verification clones only from the trusted source repository after its exact `HEAD` is proven equal to the sealed expected SHA, checks out that commit detached, and transfers only approved production states plus verifier-relevant signed inputs. Missing, advanced, mismatched, blob-valued, or ambiguously resolved baselines stop before cloning or verifier commands. Builder-only files, caches, copied Git state, build-agent artifacts, and model rationale do not cross; the deterministic verifier still sees the intended MoneyAllocator edit and generated property test.
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
@@ -94,16 +97,17 @@ Verify from a fresh checkout based on the expected main SHA.
 
 ## Last verification
 
-Verified on 2026-07-18 for the sealed verifier-execution-input slice:
+Verified on 2026-07-18 for the fresh-checkout verifier slice:
 
-- Focused adversarial local-runner tests: 2 tests passed.
-- `npm test`: 255 tests passed; both live model proofs remained excluded.
+- Fresh verifier boundary tests: 2 tests passed, covering clean bounded transfer plus missing, advanced, non-commit, and ambiguous baseline rejection.
+- Focused adversarial local-runner proof passed.
+- `npm test`: 258 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- The deterministic adversarial example lets the approved MoneyAllocator production edit reach verification while builder-supplied fake commands, executable resolution, credentials, base and manifest identities, passing report, and output destination remain untrusted and cannot replace the real `php tests/run.php` result.
-- The container image was not rebuilt because CLI production dependencies and runtime packaging did not change.
+- The deterministic adversarial example lets the approved MoneyAllocator production edit and sealed test reach the fresh verifier while builder-supplied fake commands, executable resolution, credentials, base and manifest identities, passing report, output destination, builder filesystem state, build artifacts, and model rationale remain absent or non-authoritative.
+- `docker build -t daily-improver:local .` passed for the changed CLI runtime behavior.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
