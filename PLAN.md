@@ -183,7 +183,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 - [x] Make sealed tests, specifications, policies, workflows, and migrations read-only.
 - [x] Remove test-agent and analysis-agent credentials from the builder environment.
 - [x] Disable outbound networking by default.
-- [ ] Block dependency installation unless explicitly approved.
+- [x] Block dependency installation unless explicitly approved.
 - [ ] Prevent symlink and path-traversal escapes.
 - [ ] Limit CPU, memory, disk, output, and wall-clock duration.
 - [ ] Capture filesystem state before and after execution.
@@ -500,8 +500,9 @@ The recent and next commit-sized milestones are:
 29. [x] `feat: make builder protected inputs read-only`
 30. [x] `feat: isolate command agent environments`
 31. [x] `feat: deny builder outbound networking`
+32. [x] `feat: block builder dependency installation`
 
-The immediate next task is Phase 1E: block dependency installation unless explicitly approved. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: prevent symlink and path-traversal escapes. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

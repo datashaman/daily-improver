@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -8,6 +8,7 @@ import {
   createCommandAgentRuntimeEnvironment,
 } from "../src/agents/command-agent-provider.js";
 import type { BuilderNetworkIsolation } from "../src/agents/builder-network-isolation.js";
+import { builderPackageManagerExecutablesByEcosystem } from "../src/agents/builder-dependency-installation.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import type { CommandAgentRuntimeEnvironment } from "../src/agents/command-agent-provider.js";
 import type { AgentContext } from "../src/agents/agent-provider.js";
@@ -82,6 +83,91 @@ test("builder networking defaults to denial and requires an exact trusted runner
     buildCommand: "true",
     runtimeEnvironment,
     builderNetworkPolicy: { schemaVersion: "builder-network-policy/v1", outbound: "allow", repositoryOverride: true } as never,
+  });
+  await assert.rejects(malformed.build(fixtureContext(root, specPath)), /exact trusted runner-owned value/);
+});
+
+test("builder dependency installation defaults to denial and requires exact trusted approval", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-command-dependency-policy-"));
+  const bin = join(root, "runner-bin");
+  const specPath = join(root, ".ai", "spec.json");
+  await mkdir(bin, { recursive: true });
+  await mkdir(dirname(specPath), { recursive: true });
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(specPath, "{}\n");
+  const fakeNpm = join(bin, "npm");
+  await writeFile(fakeNpm, "#!/bin/sh\nprintf executed > src/package-manager-executed\n", { mode: 0o700 });
+  await chmod(fakeNpm, 0o700);
+  const runtimeEnvironment = createCommandAgentRuntimeEnvironment({ PATH: `${bin}:${process.env.PATH}` });
+  const networkAllowed = { schemaVersion: "builder-network-policy/v1", outbound: "allow" } as const;
+  assert.deepEqual(Object.keys(builderPackageManagerExecutablesByEcosystem), [
+    "php", "javascript", "python", "ruby", "rust", "go", "jvm", "dotnet",
+  ]);
+  for (const executable of ["composer", "npm", "pnpm", "yarn", "pip", "poetry", "uv", "bundle", "cargo", "go", "mvn", "gradle", "dotnet"]) {
+    assert.ok(Object.values(builderPackageManagerExecutablesByEcosystem).flat().includes(executable as never), executable);
+  }
+
+  for (const command of ["npm install", "sh .ai/indirect-install.sh"]) {
+    await writeFile(join(root, ".ai", "indirect-install.sh"), "npm install\n");
+    const denied = new CommandAgentProvider({
+      testCommand: "true",
+      buildCommand: command,
+      runtimeEnvironment,
+      builderNetworkPolicy: networkAllowed,
+    });
+    await assert.rejects(denied.build(fixtureContext(root, specPath)), /dependency installation is denied/);
+    await assert.rejects(readFile(join(root, "src", "package-manager-executed")), /ENOENT/);
+  }
+
+  const absolute = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: `${fakeNpm} install`,
+    runtimeEnvironment,
+    builderNetworkPolicy: networkAllowed,
+  });
+  await assert.rejects(absolute.build(fixtureContext(root, specPath)), /resolved through the trusted runner PATH/);
+  await assert.rejects(readFile(join(root, "src", "package-manager-executed")), /ENOENT/);
+
+  const pathBypass = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: `PATH=${bin} npm install`,
+    runtimeEnvironment,
+    builderNetworkPolicy: networkAllowed,
+  });
+  await assert.rejects(pathBypass.build(fixtureContext(root, specPath)), /may not replace PATH/);
+
+  const ordinary = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "printf ordinary > src/build-agent.env",
+    runtimeEnvironment,
+    builderNetworkPolicy: networkAllowed,
+  });
+  await ordinary.build(fixtureContext(root, specPath));
+  assert.equal(await readFile(join(root, "src", "build-agent.env"), "utf8"), "ordinary");
+
+  const approved = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "npm install",
+    runtimeEnvironment,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: {
+      schemaVersion: "builder-dependency-installation-policy/v1",
+      installation: "allow",
+    },
+  });
+  await approved.build(fixtureContext(root, specPath));
+  assert.equal(await readFile(join(root, "src", "package-manager-executed"), "utf8"), "executed");
+
+  const malformed = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "printf unsafe > src/build-agent.env",
+    runtimeEnvironment,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: {
+      schemaVersion: "builder-dependency-installation-policy/v1",
+      installation: "allow",
+      repositoryOverride: true,
+    } as never,
   });
   await assert.rejects(malformed.build(fixtureContext(root, specPath)), /exact trusted runner-owned value/);
 });

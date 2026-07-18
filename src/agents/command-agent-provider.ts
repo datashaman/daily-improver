@@ -6,6 +6,15 @@ import {
   validateBuilderNetworkPolicy,
 } from "./builder-network-isolation.js";
 import type { BuilderNetworkIsolation, BuilderNetworkPolicy } from "./builder-network-isolation.js";
+import {
+  PackageManagerBuilderDependencyIsolation,
+  validateBuilderDependencyInstallationPolicy,
+} from "./builder-dependency-installation.js";
+import type {
+  BuilderCommandExecutor,
+  BuilderDependencyInstallationIsolation,
+  BuilderDependencyInstallationPolicy,
+} from "./builder-dependency-installation.js";
 
 const maximumPathEnvironmentLength = 8_192;
 const maximumSpecificationPathLength = 4_096;
@@ -19,6 +28,7 @@ export interface CommandAgentOptions {
   readonly buildCommand: string;
   readonly runtimeEnvironment: CommandAgentRuntimeEnvironment;
   readonly builderNetworkPolicy?: BuilderNetworkPolicy;
+  readonly builderDependencyInstallationPolicy?: BuilderDependencyInstallationPolicy;
 }
 
 export function createCommandAgentRuntimeEnvironment(
@@ -37,6 +47,7 @@ export class CommandAgentProvider implements AgentProvider {
     private readonly options: CommandAgentOptions,
     private readonly runner = new CommandRunner(),
     private readonly builderNetworkIsolation: BuilderNetworkIsolation = new PlatformBuilderNetworkIsolation(),
+    private readonly builderDependencyInstallationIsolation: BuilderDependencyInstallationIsolation = new PackageManagerBuilderDependencyIsolation(),
   ) {}
 
   async generateTests(context: AgentContext): Promise<void> {
@@ -56,9 +67,22 @@ export class CommandAgentProvider implements AgentProvider {
       DAILY_IMPROVER_SPEC_PATH: context.specPath,
     };
     const commandArguments = ["/bin/sh", "-c", command];
-    const result = stage === "build" && validateBuilderNetworkPolicy(this.options.builderNetworkPolicy).outbound === "deny"
-      ? await this.builderNetworkIsolation.run(commandArguments, context.repository, 20 * 60_000, agentEnvironment)
-      : await this.runner.runWithExactEnvironment(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
+    let execute: BuilderCommandExecutor = async (nextCommand, cwd, timeoutMs, environment) =>
+      await this.runner.runWithExactEnvironment(nextCommand, cwd, timeoutMs, environment);
+    if (stage === "build" && validateBuilderNetworkPolicy(this.options.builderNetworkPolicy).outbound === "deny") {
+      execute = async (nextCommand, cwd, timeoutMs, environment) =>
+        await this.builderNetworkIsolation.run(nextCommand, cwd, timeoutMs, environment);
+    }
+    const result = stage === "build"
+      && validateBuilderDependencyInstallationPolicy(this.options.builderDependencyInstallationPolicy).installation === "deny"
+      ? await this.builderDependencyInstallationIsolation.run(
+        commandArguments,
+        context.repository,
+        20 * 60_000,
+        agentEnvironment,
+        execute,
+      )
+      : await execute(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
     if (result.exitCode !== 0) {
       throw new Error(`${stage} agent failed: ${(result.stderr || result.stdout).trim()}`);
     }
