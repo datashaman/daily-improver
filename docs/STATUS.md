@@ -4,8 +4,8 @@ Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: The second Phase 1F slice is complete; publication rechecks trusted main against the independently verified SHA.
-- Current checkpoint commit: `feat: recheck main before publication`.
+- Last completed milestone: The third Phase 1F slice is complete; publication commits only from a runner-owned clean checkout containing the identity-bound verified patch.
+- Current checkpoint commit: `feat: publish from trusted checkout`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1F — Production verifier.
 - Current state: Phase 1A through Phase 1E are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. The disposable copy is captured immediately before and after every successful or failed builder execution as exact `builder-filesystem-state/v1` values. Streamed hashes and bounded metadata describe regular files, directories, symbolic links, and unsupported types without retaining contents; `builder-filesystem-change-set/v1` exhaustively reports additions, modifications, deletions, and type changes inside and outside the write allowlist. Repeated stable walks fail closed on unreadable, excessive, malformed, traversing, or changing state. Immediately after capture, the runner binds every protected SHA-256 identity to the captured baseline, expands its repository-relative parents, and rejects every addition, modification, deletion, or type change at or below those paths before retaining a successful result, propagating a builder failure, staging, or importing. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. Verifier execution inputs are captured before generated code, sealed before the builder, and revalidated before independent command execution and atomic report publication. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
@@ -18,16 +18,18 @@ The verifier now runs in a new runner-owned clone rather than the generation or 
 
 Immediately before publication authorization, the runner now resolves its bounded trusted main reference to exactly one commit, proves the object is a commit, and requires it to equal `expectedBaseSha` from the trusted `verification-report/v1`. Missing, advanced, rewound, mismatched, blob-valued, and ambiguous state fails before daily-claim completion, publication commit, or draft-request emission. Accepted checks produce exact bounded `publication-authorization/v1` evidence containing only expected and checked commit identities, the sealed verifier-input identity, outcome, and decision time. It retains no repository path, source, credentials, or model output.
 
+After successful fresh verification and lifecycle proof, the runner now creates a second clean checkout at the verified SHA and records `verified-publication-patch/v1` over the exact approved production states, verifier-relevant sealed files, signed manifest, verification report, and lifecycle decision. Regular files are bound by SHA-256 and mode, approved deletions are explicit, and report/lifecycle identities are bound separately. Missing, additional, changed, non-regular, symlinked, traversing, overlapping, and identity-mismatched inputs fail before staging. Only the bounded patch plus trusted publication authorization, request, and daily-claim transition can be committed. The generation worktree is removed before the requested branch is updated, so builder Git state, caches, build artifacts, model rationale, and other unverified workspace changes cannot enter the publication commit.
+
 ## Exact next task
 
-Apply the patch without reusing the builder workspace.
+Validate all artifact signatures and hashes.
 
 ## Acceptance criteria for the next task
 
-- Materialize the independently verified change for publication from a runner-owned clean checkout or equivalent trusted staging area, never by committing the builder-import workspace.
-- Apply only the exact verified production and sealed artifact states bound to the successful verifier inputs and report.
-- Reject missing, additional, changed, non-regular, symlinked, traversing, or identity-mismatched patch inputs before changing the publication branch.
-- Prove builder-only files, Git state, caches, model rationale, and unverified workspace changes cannot enter the publication commit while the established MoneyAllocator fix and sealed proof artifacts still do.
+- Inventory every artifact consumed by verification and publication and give each external contract an explicit supported schema and integrity check.
+- Authenticate signed artifacts with runner-owned key material and validate every retained SHA-256 binding immediately before use.
+- Reject missing, malformed, extended, unsupported, stale, mismatched, non-regular, symlinked, traversing, or ambiguously addressed artifacts before verifier commands, claim completion, commit creation, or request emission.
+- Prove a valid MoneyAllocator flow still publishes while tampered manifests, reports, lifecycle decisions, patch manifests, and publication inputs fail closed.
 - Preserve the language-neutral sealed verifier-input boundary, builder isolation, response validation, cost accounting, diff limits, semantic gates, and fail-closed verification.
 - `npm run checkpoint` passes.
 
@@ -85,6 +87,7 @@ Apply the patch without reusing the builder workspace.
 - Verification enforces commands, allowlists, diff limits, protected paths, and semantic source checks.
 - A successful run creates a verified commit and draft-PR request artifact.
 - Publication re-resolves trusted main after fresh verification, fails closed if it moved or cannot resolve uniquely to the verified commit, and retains one source-free `publication-authorization/v1` decision before completing the daily claim or emitting a request.
+- Publication materializes `verified-publication-patch/v1` in a second runner-owned clean checkout, stages only its exact identity-bound production/sealed/report/lifecycle states plus trusted publisher artifacts, and updates the requested branch only after removing the builder-import worktree.
 
 ## Known placeholders
 
@@ -100,11 +103,12 @@ Apply the patch without reusing the builder workspace.
 
 ## Last verification
 
-Verified on 2026-07-18 for the publication main-recheck slice:
+Verified on 2026-07-18 for the trusted publication-checkout slice:
 
-- Publication authorization tests: 3 tests passed, covering unchanged authorization; advanced, rewound, missing, non-commit, and ambiguous rejection; and no claim completion or request emission after advancement.
-- The focused end-to-end local-runner proof passed and retained the bounded authorization artifact in the verified commit.
-- `npm test`: 261 tests passed; both live model proofs remained excluded.
+- Trusted publication workspace tests: 3 tests passed, covering exact materialization and branch publication plus additional, missing, changed, non-regular, symlinked, traversing, and identity-mismatched rejection.
+- The focused end-to-end local-runner proof passed and retained the MoneyAllocator production fix, sealed proof inputs, verification outputs, authorization, request, and bounded publication-patch artifact while excluding builder usage, rationale, caches, and fake verifier state.
+- The adversarial builder/verifier proof passed with builder-supplied commands, output routing, report, credentials, Git state, model rationale, and extra filesystem state absent or non-authoritative at publication.
+- `npm test`: 264 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.

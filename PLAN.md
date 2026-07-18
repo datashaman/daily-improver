@@ -199,7 +199,7 @@ Goal: authorize publication only from a clean, independent environment.
 
 - [x] Verify from a fresh checkout based on the expected main SHA.
 - [x] Confirm main has not advanced before publication.
-- [ ] Apply the patch without reusing the builder workspace.
+- [x] Apply the patch without reusing the builder workspace.
 - [ ] Validate all artifact signatures and hashes.
 - [ ] Run repository commands in a clean environment.
 - [ ] Run targeted mutation testing against changed production files.
@@ -506,8 +506,9 @@ The recent and next commit-sized milestones are:
 35. [x] `feat: capture builder filesystem state`
 36. [x] `feat: reject builder protected changes`
 37. [x] `feat: deny builder repository publication`
+38. [x] `feat: publish from trusted checkout`
 
-The immediate next task is Phase 1F: apply the patch without reusing the builder workspace. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: validate all artifact signatures and hashes. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

@@ -185,7 +185,7 @@ export class PipelineStages {
     }
     const passed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
     const report = {
-      schemaVersion: "verification-report/v1",
+      schemaVersion: "verification-report/v1" as const,
       passed,
       expectedBaseSha: inputs.expectedBaseSha,
       verifierInputsSha256: inputs.integritySha256,

@@ -35,6 +35,7 @@ import {
 } from "../domain/generated-test-lifecycle.js";
 import { IsolatedBuilderFilesystem } from "./builder-filesystem.js";
 import { FreshVerifierWorkspace } from "./fresh-verifier-workspace.js";
+import { TrustedPublicationWorkspace, type TrustedPublicationWorkspaceHandle } from "./trusted-publication-workspace.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -61,6 +62,7 @@ export class LocalImprovementRunner {
     const slug = slugify(spec.title).slice(0, 42);
     const branch = `ai/daily/${date}-${slug}`;
     const isolated = await new GitWorkspaceManager(this.workspaceBase, this.runner).create(repository, `${date}-${slug}`, branch);
+    let isolatedCleaned = false;
     try {
       await cp(runDirectory(repository), runDirectory(isolated.path), { recursive: true });
       const specPath = join(runDirectory(isolated.path), "spec.json");
@@ -281,6 +283,7 @@ export class LocalImprovementRunner {
         verifierInputs,
       );
       let verification: Awaited<ReturnType<PipelineStages["verify"]>>;
+      let publicationWorkspace: TrustedPublicationWorkspaceHandle | undefined;
       try {
         await verifier.assertReady();
         verification = await this.stages.verify(verifier.path, verifierInputs, this.manifestKey);
@@ -297,33 +300,43 @@ export class LocalImprovementRunner {
           verifier.path,
           await writeArtifact(verifier.path, "generated-test-verification-lifecycle.json", verificationLifecycle),
         );
-        await verifier.copyOutputTo(verifierInputs.outputArtifact, isolated.path, verifierInputs.outputArtifact);
-        await verifier.copyOutputTo(verificationLifecyclePath, isolated.path, verificationLifecyclePath);
+        publicationWorkspace = await new TrustedPublicationWorkspace(this.workspaceBase, this.runner).create(
+          repository,
+          verifier.path,
+          verifierInputs,
+          verification,
+          verificationLifecyclePath,
+        );
       } finally {
         await verifier.cleanup();
       }
-      const publication = await this.stages.publicationRequest(isolated.path, {
-        repository,
-        reference: "HEAD",
-      });
-      await this.runner.run(["git", "add", "."], isolated.path);
-      const commit = await this.runner.run(["git", "commit", "-m", `fix: ${spec.title}`], isolated.path);
-      if (commit.exitCode !== 0) throw new Error(`Unable to commit verified improvement: ${commit.stderr.trim()}`);
-      return {
-        branch: isolated.branch,
-        candidate: analysis.candidates[0]?.id ?? "unknown",
-        baselineTestFailed: baseline.exitCode !== 0,
-        baselineProofSatisfied: true,
-        verificationPassed: verification.passed,
-        publication,
-      };
+      if (!publicationWorkspace) throw new Error("Trusted publication workspace was not created.");
+      try {
+        const publication = await this.stages.publicationRequest(publicationWorkspace.path, {
+          repository,
+          reference: "HEAD",
+        });
+        await isolated.cleanup();
+        isolatedCleaned = true;
+        await publicationWorkspace.commitToBranch(repository, branch, `fix: ${spec.title}`);
+        return {
+          branch,
+          candidate: analysis.candidates[0]?.id ?? "unknown",
+          baselineTestFailed: baseline.exitCode !== 0,
+          baselineProofSatisfied: true,
+          verificationPassed: verification.passed,
+          publication,
+        };
+      } finally {
+        await publicationWorkspace.cleanup();
+      }
     } catch (error) {
       if (error instanceof NewlyFlakyGeneratedTestError) {
         await this.stages.quarantine(repository, analysis.candidates[0]?.id ?? "unknown", error.phase, error.reason);
       }
       throw error;
     } finally {
-      await isolated.cleanup();
+      if (!isolatedCleaned) await isolated.cleanup();
     }
   }
 

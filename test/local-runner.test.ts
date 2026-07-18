@@ -310,16 +310,10 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(result.publication.body, /Infection escaped mutation/);
   const fixedSource = await expectSuccess(shell.run(["git", "show", `${result.branch}:app/Domain/MoneyAllocator.php`], repository));
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
-  const usageArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository));
-  assert.match(usageArtifact.stdout, /"model": "fixture-model-v1"/);
-  assert.match(usageArtifact.stdout, /"schemaVersion": "agent-usage\/v4"/);
-  assert.match(usageArtifact.stdout, /"budgetDecision"/);
-  assert.match(usageArtifact.stdout, /"requestAttempts"/);
-  assert.match(usageArtifact.stdout, /"routingDecision"/);
-  assert.match(usageArtifact.stdout, /"complexity": "lower"/);
-  assert.match(usageArtifact.stdout, /"classification": "completed"/);
-  const rationaleArtifact = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
-  assert.match(rationaleArtifact.stdout, /"trust": "untrusted-model-output"/);
+  const usageArtifact = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository);
+  assert.notEqual(usageArtifact.exitCode, 0);
+  const rationaleArtifact = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
+  assert.notEqual(rationaleArtifact.exitCode, 0);
   const specification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/spec.json`], repository));
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
@@ -359,6 +353,12 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(publicationAuthorization.stdout, /"checkedMainSha": "[a-f0-9]{40}"/);
   assert.match(publicationAuthorization.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
   assert.doesNotMatch(publicationAuthorization.stdout, /repository|source|credential|model/i);
+  const publicationPatch = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verified-publication-patch.json`], repository));
+  assert.match(publicationPatch.stdout, /"schemaVersion": "verified-publication-patch\/v1"/);
+  assert.match(publicationPatch.stdout, /"verificationReportSha256": "[a-f0-9]{64}"/);
+  assert.match(publicationPatch.stdout, /"verificationLifecycleSha256": "[a-f0-9]{64}"/);
+  assert.match(publicationPatch.stdout, /"path": "app\/Domain\/MoneyAllocator.php"/);
+  assert.doesNotMatch(publicationPatch.stdout, /build-agent|model|rationale|cache/);
   const openPrDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/open-pull-request-limit-decision.json`], repository));
   assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
   assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
@@ -413,9 +413,8 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.notEqual(rootPrepopulation.exitCode, 0);
   const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
   assert.notEqual(fakeExecutable.exitCode, 0);
-  const rationale = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
-  assert.match(rationale.stdout, /"verificationCommands": \[\]/);
-  assert.match(rationale.stdout, /"outputArtifact": "verification.json"/);
+  const rationale = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
+  assert.notEqual(rationale.exitCode, 0);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 
