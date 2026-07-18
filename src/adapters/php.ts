@@ -14,6 +14,7 @@ import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersio
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
 import { inspectPhpTargetedMutation, preparePhpTargetedMutation } from "./php-targeted-mutation.js";
 import { inspectPhpVerifierStaticAnalysis, preparePhpVerifierStaticAnalysis } from "./php-verifier-static-analysis.js";
+import { inspectPhpStaticAnalysisIgnoredFindings, preparePhpStaticAnalysisIgnoredFindings } from "./php-static-analysis-ignored-findings.js";
 import { inspectPhpPublicApiSurface, preparePhpPublicApiSurface } from "./php-public-api-surface.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
@@ -52,6 +53,7 @@ export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
   readonly targetedMutationInventorySemantics = ["php-infection-mutator-location/v1"] as const;
   readonly staticAnalysisFindingIdentitySemantics = ["php-static-analysis-path-rule-message/v1"] as const;
+  readonly staticAnalysisIgnoredFindingIdentitySemantics = ["php-static-analysis-ignore-inventory/v1"] as const;
   readonly publicApiSymbolIdentitySemantics = ["phpprobe-public-symbol-id-fingerprint/v1"] as const;
 
   constructor(
@@ -228,6 +230,14 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async inspectVerifierStaticAnalysis(root: string, plan: Parameters<typeof inspectPhpVerifierStaticAnalysis>[1], execution: Parameters<typeof inspectPhpVerifierStaticAnalysis>[2]) {
     return await inspectPhpVerifierStaticAnalysis(root, plan, execution);
+  }
+
+  async prepareStaticAnalysisIgnoredFindings(root: string) {
+    return await preparePhpStaticAnalysisIgnoredFindings(root);
+  }
+
+  async inspectStaticAnalysisIgnoredFindings(root: string, plan: Parameters<typeof inspectPhpStaticAnalysisIgnoredFindings>[1]) {
+    return await inspectPhpStaticAnalysisIgnoredFindings(root, plan);
   }
 
   async preparePublicApiSurface(root: string) {

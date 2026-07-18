@@ -30,6 +30,13 @@ import { assertVerifierExecutionStateUnchanged, captureVerifierExecutionState } 
 import { createVerifierBaselineWorkspace } from "./verifier-baseline-workspace.js";
 import { assertStaticAnalysisPlan, assertStaticAnalysisResult, compareStaticAnalysisFindings, type StaticAnalysisFindingsComparison, type StaticAnalysisResult } from "../domain/static-analysis-findings.js";
 import { assertPublicApiSurfacePlan, assertPublicApiSurfaceResult, comparePublicApiSurfaces, type PublicApiSurfaceComparison, type PublicApiSurfaceResult } from "../domain/public-api-surface.js";
+import {
+  assertStaticAnalysisIgnoredFindingsPlan,
+  assertStaticAnalysisIgnoredFindingsResult,
+  compareStaticAnalysisIgnoredFindings,
+  type StaticAnalysisIgnoredFindingsComparison,
+  type StaticAnalysisIgnoredFindingsResult,
+} from "../domain/static-analysis-ignored-findings.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -197,6 +204,8 @@ export class PipelineStages {
     let targetedMutationComparison: TargetedMutationScoreComparison | undefined;
     let staticAnalysis: StaticAnalysisResult | undefined;
     let staticAnalysisComparison: StaticAnalysisFindingsComparison | undefined;
+    let staticAnalysisIgnoredFindings: StaticAnalysisIgnoredFindingsResult | undefined;
+    let staticAnalysisIgnoredFindingsComparison: StaticAnalysisIgnoredFindingsComparison | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -216,6 +225,18 @@ export class PipelineStages {
         const baselineStaticAnalysis = await executeVerifierStaticAnalysis(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         staticAnalysis = await executeVerifierStaticAnalysis(root, currentAdapter, inputs, key, this.runner);
         staticAnalysisComparison = compareStaticAnalysisFindings(baselineStaticAnalysis, staticAnalysis);
+        const baselineStaticAnalysisIgnoredFindings = await executeStaticAnalysisIgnoredFindings(
+          baselineWorkspace.path,
+          baselineAdapter,
+          inputs,
+          key,
+          this.runner,
+        );
+        staticAnalysisIgnoredFindings = await executeStaticAnalysisIgnoredFindings(root, currentAdapter, inputs, key, this.runner);
+        staticAnalysisIgnoredFindingsComparison = compareStaticAnalysisIgnoredFindings(
+          baselineStaticAnalysisIgnoredFindings,
+          staticAnalysisIgnoredFindings,
+        );
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -239,6 +260,8 @@ export class PipelineStages {
     const passed = ordinaryVerificationPassed
       && staticAnalysis !== undefined
       && staticAnalysisComparison !== undefined
+      && staticAnalysisIgnoredFindings !== undefined
+      && staticAnalysisIgnoredFindingsComparison !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -252,6 +275,8 @@ export class PipelineStages {
       checks,
       ...(staticAnalysis ? { staticAnalysis } : {}),
       ...(staticAnalysisComparison ? { staticAnalysisComparison } : {}),
+      ...(staticAnalysisIgnoredFindings ? { staticAnalysisIgnoredFindings } : {}),
+      ...(staticAnalysisIgnoredFindingsComparison ? { staticAnalysisIgnoredFindingsComparison } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -361,6 +386,36 @@ async function executeVerifierStaticAnalysis(
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Static-analysis execution changed a sealed verifier input.");
+  }
+  return result;
+}
+
+async function executeStaticAnalysisIgnoredFindings(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<StaticAnalysisIgnoredFindingsResult> {
+  if (!adapter.prepareStaticAnalysisIgnoredFindings || !adapter.inspectStaticAnalysisIgnoredFindings) {
+    throw new Error("Static-analysis ignored-finding inspection is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertStaticAnalysisIgnoredFindingsPlan(await adapter.prepareStaticAnalysisIgnoredFindings(root));
+  const result = assertStaticAnalysisIgnoredFindingsResult(
+    await adapter.inspectStaticAnalysisIgnoredFindings(root, plan),
+    plan,
+  );
+  if (!Array.isArray(adapter.staticAnalysisIgnoredFindingIdentitySemantics)
+    || adapter.staticAnalysisIgnoredFindingIdentitySemantics.length < 1
+    || adapter.staticAnalysisIgnoredFindingIdentitySemantics.length > 16
+    || !adapter.staticAnalysisIgnoredFindingIdentitySemantics.includes(result.ignoredFindingIdentitySemantics)) {
+    throw new Error("Static-analysis ignored-findings result uses unsupported adapter identity semantics.");
+  }
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Static-analysis ignored-finding inspection changed a sealed verifier input.");
   }
   return result;
 }

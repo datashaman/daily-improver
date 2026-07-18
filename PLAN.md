@@ -206,7 +206,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Compare mutation score to baseline.
 - [x] Compare static-analysis findings to baseline.
 - [x] Compare public API surfaces with an ecosystem tool.
-- [ ] Detect new ignored static-analysis findings.
+- [x] Detect new ignored static-analysis findings.
 - [ ] Detect broad exception swallowing.
 - [ ] Detect weakened validation.
 - [ ] Detect deleted, skipped, or weakened tests.
@@ -512,8 +512,9 @@ The recent and next commit-sized milestones are:
 41. [x] `feat: run targeted verifier mutation testing`
 42. [x] `feat: compare verifier static analysis to baseline`
 43. [x] `feat: compare verifier public API to baseline`
+44. [x] `feat: detect new ignored static-analysis findings`
 
-The immediate next task is Phase 1F: detect new ignored static-analysis findings. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: detect broad exception swallowing. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

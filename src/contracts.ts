@@ -26,6 +26,10 @@ import type {
   PublicApiSurfacePlan,
   PublicApiSurfaceResult,
 } from "./domain/public-api-surface.js";
+import type {
+  StaticAnalysisIgnoredFindingsPlan,
+  StaticAnalysisIgnoredFindingsResult,
+} from "./domain/static-analysis-ignored-findings.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -58,6 +62,9 @@ export interface RepositoryAdapter {
   readonly staticAnalysisFindingIdentitySemantics?: readonly string[];
   prepareVerifierStaticAnalysis?(root: string): Promise<StaticAnalysisPlan>;
   inspectVerifierStaticAnalysis?(root: string, plan: StaticAnalysisPlan, execution: StaticAnalysisExecution): Promise<StaticAnalysisResult>;
+  readonly staticAnalysisIgnoredFindingIdentitySemantics?: readonly string[];
+  prepareStaticAnalysisIgnoredFindings?(root: string): Promise<StaticAnalysisIgnoredFindingsPlan>;
+  inspectStaticAnalysisIgnoredFindings?(root: string, plan: StaticAnalysisIgnoredFindingsPlan): Promise<StaticAnalysisIgnoredFindingsResult>;
   readonly publicApiSymbolIdentitySemantics?: readonly string[];
   preparePublicApiSurface?(root: string): Promise<PublicApiSurfacePlan>;
   inspectPublicApiSurface?(root: string, plan: PublicApiSurfacePlan, execution: PublicApiSurfaceExecution): Promise<PublicApiSurfaceResult>;
