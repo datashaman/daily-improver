@@ -14,6 +14,7 @@ import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersio
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
 import { inspectPhpTargetedMutation, preparePhpTargetedMutation } from "./php-targeted-mutation.js";
 import { inspectPhpVerifierStaticAnalysis, preparePhpVerifierStaticAnalysis } from "./php-verifier-static-analysis.js";
+import { inspectPhpPublicApiSurface, preparePhpPublicApiSurface } from "./php-public-api-surface.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
@@ -51,6 +52,7 @@ export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
   readonly targetedMutationInventorySemantics = ["php-infection-mutator-location/v1"] as const;
   readonly staticAnalysisFindingIdentitySemantics = ["php-static-analysis-path-rule-message/v1"] as const;
+  readonly publicApiSymbolIdentitySemantics = ["phpprobe-public-symbol-id-fingerprint/v1"] as const;
 
   constructor(
     private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner(),
@@ -226,6 +228,14 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async inspectVerifierStaticAnalysis(root: string, plan: Parameters<typeof inspectPhpVerifierStaticAnalysis>[1], execution: Parameters<typeof inspectPhpVerifierStaticAnalysis>[2]) {
     return await inspectPhpVerifierStaticAnalysis(root, plan, execution);
+  }
+
+  async preparePublicApiSurface(root: string) {
+    return await preparePhpPublicApiSurface(root);
+  }
+
+  async inspectPublicApiSurface(root: string, plan: Parameters<typeof inspectPhpPublicApiSurface>[1], execution: Parameters<typeof inspectPhpPublicApiSurface>[2]) {
+    return await inspectPhpPublicApiSurface(root, plan, execution);
   }
 }
 

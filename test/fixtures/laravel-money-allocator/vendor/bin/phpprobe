@@ -1,0 +1,59 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+if (($argv[1] ?? '') !== 'api' || !in_array('--public-only', $argv, true) || !in_array('--format=json', $argv, true)) {
+    fwrite(STDERR, "Unsupported PHPProbe invocation.\n");
+    exit(2);
+}
+
+$source = file_get_contents('app/Domain/MoneyAllocator.php');
+if (!is_string($source)) {
+    fwrite(STDERR, "Public API source is unavailable.\n");
+    exit(2);
+}
+
+preg_match('/public\s+function\s+allocate\s*\(([^)]*)\)\s*:\s*([^\s{]+)/u', $source, $signature);
+if (!isset($signature[1], $signature[2])) {
+    fwrite(STDERR, "Public API signature is malformed.\n");
+    exit(2);
+}
+
+$symbols = [
+    [
+        'id' => 'class App\\Domain\\MoneyAllocator',
+        'kind' => 'class',
+        'name' => 'App\\Domain\\MoneyAllocator',
+        'file' => 'app/Domain/MoneyAllocator.php',
+        'line' => 7,
+        'modifiers' => ['final'],
+        'extends' => '',
+        'implements' => [],
+        'members' => [],
+        'fingerprint' => hash('sha256', 'final class App\\Domain\\MoneyAllocator'),
+    ],
+    [
+        'id' => 'method App\\Domain\\MoneyAllocator::allocate()',
+        'kind' => 'method',
+        'name' => 'allocate',
+        'file' => 'app/Domain/MoneyAllocator.php',
+        'line' => 12,
+        'modifiers' => ['public'],
+        'fingerprint' => hash('sha256', preg_replace('/\s+/u', '', $signature[1]) . ':' . $signature[2]),
+    ],
+];
+
+fwrite(STDOUT, json_encode([
+    'snapshot' => [
+        'version' => 1,
+        'generated_at' => '2026-07-18T00:00:00+00:00',
+        'symbols' => $symbols,
+    ],
+    'baseline' => ['version' => 1, 'generated_at' => '', 'symbols' => []],
+    'changed' => false,
+    'changes' => ['added' => [], 'removed' => [], 'changed' => []],
+    'classifications' => ['added' => [], 'removed' => [], 'changed' => []],
+    'impact' => ['breaking' => 0, 'additive' => 0, 'internal' => 0],
+], JSON_THROW_ON_ERROR));
+exit(0);

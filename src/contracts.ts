@@ -21,6 +21,11 @@ import type {
   StaticAnalysisPlan,
   StaticAnalysisResult,
 } from "./domain/static-analysis-findings.js";
+import type {
+  PublicApiSurfaceExecution,
+  PublicApiSurfacePlan,
+  PublicApiSurfaceResult,
+} from "./domain/public-api-surface.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -53,6 +58,9 @@ export interface RepositoryAdapter {
   readonly staticAnalysisFindingIdentitySemantics?: readonly string[];
   prepareVerifierStaticAnalysis?(root: string): Promise<StaticAnalysisPlan>;
   inspectVerifierStaticAnalysis?(root: string, plan: StaticAnalysisPlan, execution: StaticAnalysisExecution): Promise<StaticAnalysisResult>;
+  readonly publicApiSymbolIdentitySemantics?: readonly string[];
+  preparePublicApiSurface?(root: string): Promise<PublicApiSurfacePlan>;
+  inspectPublicApiSurface?(root: string, plan: PublicApiSurfacePlan, execution: PublicApiSurfaceExecution): Promise<PublicApiSurfaceResult>;
 }
 
 export interface RunStore {

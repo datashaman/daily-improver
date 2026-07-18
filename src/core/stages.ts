@@ -29,6 +29,7 @@ import { assertTargetedMutationPlan, assertTargetedMutationResult, compareTarget
 import { assertVerifierExecutionStateUnchanged, captureVerifierExecutionState } from "./verifier-execution-state.js";
 import { createVerifierBaselineWorkspace } from "./verifier-baseline-workspace.js";
 import { assertStaticAnalysisPlan, assertStaticAnalysisResult, compareStaticAnalysisFindings, type StaticAnalysisFindingsComparison, type StaticAnalysisResult } from "../domain/static-analysis-findings.js";
+import { assertPublicApiSurfacePlan, assertPublicApiSurfaceResult, comparePublicApiSurfaces, type PublicApiSurfaceComparison, type PublicApiSurfaceResult } from "../domain/public-api-surface.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -196,6 +197,8 @@ export class PipelineStages {
     let targetedMutationComparison: TargetedMutationScoreComparison | undefined;
     let staticAnalysis: StaticAnalysisResult | undefined;
     let staticAnalysisComparison: StaticAnalysisFindingsComparison | undefined;
+    let publicApiSurface: PublicApiSurfaceResult | undefined;
+    let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
       throw new Error("Full verifier mutation testing is unsupported; use the exact targeted mode.");
     }
@@ -213,6 +216,9 @@ export class PipelineStages {
         const baselineStaticAnalysis = await executeVerifierStaticAnalysis(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         staticAnalysis = await executeVerifierStaticAnalysis(root, currentAdapter, inputs, key, this.runner);
         staticAnalysisComparison = compareStaticAnalysisFindings(baselineStaticAnalysis, staticAnalysis);
+        const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
+        publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
+        publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
         if (inputs.mutationMode === "targeted") {
           const targets = changedProductionTargets(diff.files, inputs.specification.allowedFiles);
           const baselineMutation = await executeTargetedMutation(
@@ -233,6 +239,8 @@ export class PipelineStages {
     const passed = ordinaryVerificationPassed
       && staticAnalysis !== undefined
       && staticAnalysisComparison !== undefined
+      && publicApiSurface !== undefined
+      && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
     const report = {
       schemaVersion: "verification-report/v1" as const,
@@ -244,6 +252,8 @@ export class PipelineStages {
       checks,
       ...(staticAnalysis ? { staticAnalysis } : {}),
       ...(staticAnalysisComparison ? { staticAnalysisComparison } : {}),
+      ...(publicApiSurface ? { publicApiSurface } : {}),
+      ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
       ...(targetedMutationComparison ? { targetedMutationComparison } : {}),
       verifiedAt: this.clock.now().toISOString(),
@@ -351,6 +361,34 @@ async function executeVerifierStaticAnalysis(
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Static-analysis execution changed a sealed verifier input.");
+  }
+  return result;
+}
+
+async function executePublicApiSurface(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<PublicApiSurfaceResult> {
+  if (!adapter.preparePublicApiSurface || !adapter.inspectPublicApiSurface) {
+    throw new Error("Public-API analysis is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertPublicApiSurfacePlan(await adapter.preparePublicApiSurface(root));
+  const execution = await runVerifierCommand(runner, inputs.commandEnvironment, plan.command, root, plan.timeoutMs);
+  const result = assertPublicApiSurfaceResult(await adapter.inspectPublicApiSurface(root, plan, execution), plan);
+  if (!Array.isArray(adapter.publicApiSymbolIdentitySemantics)
+    || adapter.publicApiSymbolIdentitySemantics.length < 1
+    || adapter.publicApiSymbolIdentitySemantics.length > 16
+    || !adapter.publicApiSymbolIdentitySemantics.includes(result.symbolIdentitySemantics)) {
+    throw new Error("Public-API result uses unsupported adapter symbol-identity semantics.");
+  }
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Public-API execution changed a sealed verifier input.");
   }
   return result;
 }
