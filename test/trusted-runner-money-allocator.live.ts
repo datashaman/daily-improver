@@ -192,7 +192,10 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     await expectSuccess(shell.run(["git", "add", "-N", "."], live.workspace));
     const verification = await app.stages.verify(live.workspace, verifierInputs, manifestKey);
     assert.equal(verification.passed, true);
-    const publication = await app.stages.publicationRequest(live.workspace);
+    const publication = await app.stages.publicationRequest(live.workspace, {
+      repository: live.workspace,
+      reference: "HEAD",
+    });
     assert.equal(publication.draft, true);
     await assertSanitizedArtifacts(live.workspace, live.sensitiveValues);
     assert.equal(testExecution.routingDecision?.stage, "test");

@@ -30,7 +30,10 @@ async function main(): Promise<void> {
   if (command === "test") return print(await app.stages.protectTests(root));
   if (command === "build") return print(await app.stages.build(root));
   if (command === "verify") return print(await app.stages.verify(root));
-  if (command === "publish") return print(await app.stages.publicationRequest(root));
+  if (command === "publish") return print(await app.stages.publicationRequest(root, {
+    repository: root,
+    reference: process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main",
+  }));
   if (command === "run") {
     const testCommand = requiredEnvironment("DAILY_IMPROVER_TEST_AGENT_COMMAND");
     const buildCommand = requiredEnvironment("DAILY_IMPROVER_BUILDER_COMMAND");

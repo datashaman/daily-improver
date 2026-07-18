@@ -302,7 +302,10 @@ export class LocalImprovementRunner {
       } finally {
         await verifier.cleanup();
       }
-      const publication = await this.stages.publicationRequest(isolated.path);
+      const publication = await this.stages.publicationRequest(isolated.path, {
+        repository,
+        reference: "HEAD",
+      });
       await this.runner.run(["git", "add", "."], isolated.path);
       const commit = await this.runner.run(["git", "commit", "-m", `fix: ${spec.title}`], isolated.path);
       if (commit.exitCode !== 0) throw new Error(`Unable to commit verified improvement: ${commit.stderr.trim()}`);

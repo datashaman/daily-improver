@@ -22,6 +22,12 @@ import {
   type VerifierExecutionPreparation,
   type VerifierRuntimeEnvironment,
 } from "./verifier-execution-inputs.js";
+import { authorizePublication, type PublicationVerificationBinding } from "./publication-authorization.js";
+
+export interface PublicationMainContext {
+  readonly repository: string;
+  readonly reference: string;
+}
 
 export class PipelineStages {
   constructor(
@@ -193,17 +199,21 @@ export class PipelineStages {
     return report;
   }
 
-  async publicationRequest(root: string): Promise<{ title: string; body: string; draft: boolean; labels: readonly string[] }> {
+  async publicationRequest(
+    root: string,
+    main: PublicationMainContext,
+  ): Promise<{ title: string; body: string; draft: boolean; labels: readonly string[] }> {
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
-    const verification = await readArtifact<{ passed: boolean; checks: readonly { command: string; exitCode: number }[] }>(root, "verification.json");
+    const verification = await readArtifact<PublicationVerificationBinding & { readonly checks: readonly { command: string; exitCode: number }[] }>(root, "verification.json");
     const testPlan = await optionalArtifact<{
       schemaVersion?: string;
       improvementIntent?: { readonly intent?: string };
       baseline?: { readonly outcome?: string };
       propertyInvariants?: readonly string[];
     }>(root, "test-plan.json");
-    if (!verification.passed) throw new Error("Cannot publish an unverified improvement.");
+    const decidedAt = this.clock.now().toISOString();
+    const authorization = await authorizePublication(main.repository, main.reference, verification, decidedAt, this.runner);
     const request = {
       title: spec.title,
       body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${baselineSummary(testPlan)}${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
@@ -211,8 +221,9 @@ export class PipelineStages {
       labels: config.pull_request.labels,
     };
     const dailyDecision = await readArtifact<DailyImprovementDecision>(root, "daily-improvement-decision.json");
-    const completed = await this.requiredDailyImprovements().complete(dailyDecision, this.clock.now().toISOString());
+    const completed = await this.requiredDailyImprovements().complete(dailyDecision, decidedAt);
     await writeArtifact(root, "daily-improvement-decision.json", completed);
+    await writeArtifact(root, "publication-authorization.json", authorization);
     await writeArtifact(root, "publication-request.json", request);
     return request;
   }

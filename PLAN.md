@@ -198,7 +198,7 @@ Exit gate: the builder cannot modify protected files even when explicitly instru
 Goal: authorize publication only from a clean, independent environment.
 
 - [x] Verify from a fresh checkout based on the expected main SHA.
-- [ ] Confirm main has not advanced before publication.
+- [x] Confirm main has not advanced before publication.
 - [ ] Apply the patch without reusing the builder workspace.
 - [ ] Validate all artifact signatures and hashes.
 - [ ] Run repository commands in a clean environment.
@@ -507,7 +507,7 @@ The recent and next commit-sized milestones are:
 36. [x] `feat: reject builder protected changes`
 37. [x] `feat: deny builder repository publication`
 
-The immediate next task is Phase 1F: confirm main has not advanced before publication. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: apply the patch without reusing the builder workspace. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

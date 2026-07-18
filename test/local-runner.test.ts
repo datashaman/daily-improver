@@ -353,6 +353,12 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   const dailyDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/daily-improvement-decision.json`], repository));
   assert.match(dailyDecision.stdout, /"schemaVersion": "daily-improvement-decision\/v1"/);
   assert.match(dailyDecision.stdout, /"outcome": "completed"/);
+  const publicationAuthorization = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/publication-authorization.json`], repository));
+  assert.match(publicationAuthorization.stdout, /"schemaVersion": "publication-authorization\/v1"/);
+  assert.match(publicationAuthorization.stdout, /"outcome": "authorized"/);
+  assert.match(publicationAuthorization.stdout, /"checkedMainSha": "[a-f0-9]{40}"/);
+  assert.match(publicationAuthorization.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
+  assert.doesNotMatch(publicationAuthorization.stdout, /repository|source|credential|model/i);
   const openPrDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/open-pull-request-limit-decision.json`], repository));
   assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
   assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
