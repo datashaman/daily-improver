@@ -268,6 +268,7 @@ export class LocalImprovementRunner {
       };
       const builderExecution = await new IsolatedBuilderFilesystem(this.workspaceBase).execute(
         builderContext,
+        { trustedPatterns: config.protected_paths, sealedFiles: manifest.files },
         async (context) => await this.agents.build(context),
       );
       const trustedBuilderArtifacts = await persistAgentExecution(isolated.path, "build", builderExecution);

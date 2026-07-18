@@ -180,7 +180,7 @@ Exit gate: generated tests demonstrate an observable difference between defectiv
 Goal: prevent unauthorized changes rather than only detecting them afterward.
 
 - [x] Give the builder a strict filesystem allowlist.
-- [ ] Make sealed tests, specifications, policies, workflows, and migrations read-only.
+- [x] Make sealed tests, specifications, policies, workflows, and migrations read-only.
 - [ ] Remove test-agent and analysis-agent credentials from the builder environment.
 - [ ] Disable outbound networking by default.
 - [ ] Block dependency installation unless explicitly approved.
@@ -496,8 +496,10 @@ The recent and next commit-sized milestones are:
 25. [x] `feat: inspect generated Pest test quality`
 26. [x] `feat: inspect generated PHPUnit test quality`
 27. [x] `feat: inspect generated Eris property tests`
+28. [x] `feat: confine builder writes to approved files`
+29. [x] `feat: make builder protected inputs read-only`
 
-The immediate next task is Phase 1E: give the builder a strict filesystem allowlist. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: remove test-agent and analysis-agent credentials from the builder environment. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

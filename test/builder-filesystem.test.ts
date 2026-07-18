@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import type { AgentContext } from "../src/agents/agent-provider.js";
-import { deriveBuilderWriteAllowlist, IsolatedBuilderFilesystem } from "../src/core/builder-filesystem.js";
+import {
+  assertProtectedInputsReadOnly,
+  deriveBuilderProtectedInputs,
+  deriveBuilderWriteAllowlist,
+  IsolatedBuilderFilesystem,
+} from "../src/core/builder-filesystem.js";
 import type { ImprovementSpec } from "../src/domain/model.js";
 
 test("derives an exact language-neutral production allowlist and imports only approved writes", async () => {
@@ -15,11 +21,26 @@ test("derives an exact language-neutral production allowlist and imports only ap
     files: ["src/Service.ts"],
   });
 
-  await new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(context, async (isolated) => {
+  await new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(context, await fixtureProtection(root), async (isolated) => {
     assert.notEqual(isolated.repository, root);
     assert.deepEqual(isolated.spec.allowedFiles, ["src/Service.ts"]);
+    for (const path of [
+      "tests/Service.test.ts",
+      ".ai/runs/2026-07-18/spec.json",
+      ".ai/policies/safety.md",
+      ".github/workflows/daily.yml",
+      "database/migrations/001_create_records.php",
+    ]) {
+      const protectedPath = join(isolated.repository, path);
+      const content = await readFile(protectedPath, "utf8");
+      assert.ok(content.length > 0, path);
+      await assert.rejects(writeFile(protectedPath, `${content}modified\n`), /EACCES|EPERM/, path);
+    }
+    const protectedTest = join(isolated.repository, "tests/Service.test.ts");
+    await assert.rejects(rename(protectedTest, `${protectedTest}.renamed`), /EACCES|EPERM/);
+    await assert.rejects(rm(protectedTest), /EACCES|EPERM/);
+    await assert.rejects(writeFile(`${protectedTest}.replacement`, "replacement\n"), /EACCES|EPERM/);
     await writeFile(join(isolated.repository, "src/Service.ts"), "approved\n");
-    await writeFile(join(isolated.repository, "tests/Service.test.ts"), "builder changed protected test\n");
     await writeFile(join(isolated.repository, "README.md"), "builder changed unrelated file\n");
   });
 
@@ -34,7 +55,7 @@ test("rejects malformed, traversing, absolute, wildcard, duplicate, and unbounde
   for (const path of invalid) {
     let called = false;
     await assert.rejects(
-      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, [path]), async () => { called = true; }),
+      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, [path]), await fixtureProtection(root), async () => { called = true; }),
       /Builder write allowlist/,
     );
     assert.equal(called, false, path);
@@ -54,7 +75,7 @@ test("rejects protected, non-file, missing-parent, and symlink-escaping allowlis
   for (const [path, message] of [["src", /regular file/], ["missing/Service.ts", /parent does not exist/]] as const) {
     let invalidTargetCalled = false;
     await assert.rejects(
-      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, [path]), async () => { invalidTargetCalled = true; }),
+      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, [path]), await fixtureProtection(root), async () => { invalidTargetCalled = true; }),
       message,
     );
     assert.equal(invalidTargetCalled, false, path);
@@ -66,11 +87,50 @@ test("rejects protected, non-file, missing-parent, and symlink-escaping allowlis
   await symlink(outside, join(root, "linked"));
   let called = false;
   await assert.rejects(
-    new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, ["linked/escaped.ts"]), async () => { called = true; }),
+    new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root, ["linked/escaped.ts"]), await fixtureProtection(root), async () => { called = true; }),
     /symbolic link/,
   );
   assert.equal(called, false);
   assert.equal(await readFile(join(outside, "escaped.ts"), "utf8"), "outside\n");
+});
+
+test("rejects missing, mutable, replaced, non-regular, and symlink-crossing protected inputs before builder execution", async () => {
+  const root = await fixtureRepository();
+  const protection = await fixtureProtection(root);
+  const inputs = await deriveBuilderProtectedInputs(root, protection);
+  await assert.rejects(assertProtectedInputsReadOnly(root, inputs), /mutable/);
+
+  for (const [path, hash, message] of [
+    ["tests/missing.test.ts", "0".repeat(64), /missing/],
+    ["tests/Service.test.ts", "0".repeat(64), /replaced/],
+    ["tests", "0".repeat(64), /regular file/],
+  ] as const) {
+    let called = false;
+    await assert.rejects(
+      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(
+        fixtureContext(root),
+        { trustedPatterns: [], sealedFiles: { [path]: hash } },
+        async () => { called = true; },
+      ),
+      message,
+    );
+    assert.equal(called, false, path);
+  }
+
+  const outside = join(root, "../protected-outside");
+  await mkdir(outside, { recursive: true });
+  await writeFile(join(outside, "sealed.txt"), "sealed\n");
+  await symlink(outside, join(root, "tests/linked"));
+  let called = false;
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(
+      fixtureContext(root),
+      { trustedPatterns: [], sealedFiles: { "tests/linked/sealed.txt": await sha256(join(outside, "sealed.txt")) } },
+      async () => { called = true; },
+    ),
+    /symbolic link/,
+  );
+  assert.equal(called, false);
 });
 
 async function fixtureRepository(): Promise<string> {
@@ -80,11 +140,28 @@ async function fixtureRepository(): Promise<string> {
     ["tests/Service.test.ts", "sealed test\n"],
     ["README.md", "original readme\n"],
     [".ai/runs/2026-07-18/spec.json", "{}\n"],
+    [".ai/policies/safety.md", "deny unsafe changes\n"],
+    [".github/workflows/daily.yml", "name: daily\n"],
+    ["database/migrations/001_create_records.php", "<?php\n"],
   ] as const) {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), content);
   }
   return root;
+}
+
+async function fixtureProtection(root: string) {
+  return {
+    trustedPatterns: [".ai/policies/**", ".github/workflows/**", "database/migrations/**"],
+    sealedFiles: {
+      "tests/Service.test.ts": await sha256(join(root, "tests/Service.test.ts")),
+      ".ai/runs/2026-07-18/spec.json": await sha256(join(root, ".ai/runs/2026-07-18/spec.json")),
+    },
+  } as const;
+}
+
+async function sha256(path: string): Promise<string> {
+  return createHash("sha256").update(await readFile(path)).digest("hex");
 }
 
 function fixtureContext(root: string, allowedFiles: readonly string[] = ["src/Service.ts"]): AgentContext {
