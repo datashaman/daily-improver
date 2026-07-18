@@ -181,7 +181,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 
 - [x] Give the builder a strict filesystem allowlist.
 - [x] Make sealed tests, specifications, policies, workflows, and migrations read-only.
-- [ ] Remove test-agent and analysis-agent credentials from the builder environment.
+- [x] Remove test-agent and analysis-agent credentials from the builder environment.
 - [ ] Disable outbound networking by default.
 - [ ] Block dependency installation unless explicitly approved.
 - [ ] Prevent symlink and path-traversal escapes.

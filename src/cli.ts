@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { createApplication } from "./app.js";
-import { CommandAgentProvider } from "./agents/command-agent-provider.js";
+import { CommandAgentProvider, createCommandAgentRuntimeEnvironment } from "./agents/command-agent-provider.js";
 import { LocalImprovementRunner } from "./core/local-runner.js";
 
 async function main(): Promise<void> {
@@ -34,7 +34,11 @@ async function main(): Promise<void> {
     const testCommand = requiredEnvironment("DAILY_IMPROVER_TEST_AGENT_COMMAND");
     const buildCommand = requiredEnvironment("DAILY_IMPROVER_BUILDER_COMMAND");
     const manifestKey = requiredEnvironment("DAILY_IMPROVER_MANIFEST_KEY");
-    const agents = new CommandAgentProvider({ testCommand, buildCommand });
+    const agents = new CommandAgentProvider({
+      testCommand,
+      buildCommand,
+      runtimeEnvironment: createCommandAgentRuntimeEnvironment(process.env),
+    });
     return print(await new LocalImprovementRunner(
       app.stages,
       agents,
