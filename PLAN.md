@@ -185,7 +185,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 - [x] Disable outbound networking by default.
 - [x] Block dependency installation unless explicitly approved.
 - [x] Prevent symlink and path-traversal escapes.
-- [ ] Limit CPU, memory, disk, output, and wall-clock duration.
+- [x] Limit CPU, memory, disk, output, and wall-clock duration.
 - [ ] Capture filesystem state before and after execution.
 - [ ] Fail immediately when protected content changes.
 - [ ] Prevent commits, pushes, and PR operations inside the builder.
@@ -502,8 +502,9 @@ The recent and next commit-sized milestones are:
 31. [x] `feat: deny builder outbound networking`
 32. [x] `feat: block builder dependency installation`
 33. [x] `feat: confine builder filesystem paths`
+34. [x] `feat: bound builder resource consumption`
 
-The immediate next task is Phase 1E: limit builder CPU, memory, disk, output, and wall-clock duration. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: capture filesystem state before and after builder execution. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

@@ -2,24 +2,19 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { CommandResult } from "../infra/command-runner.js";
+import type { CommandExecutionLimits } from "../infra/command-runner.js";
+import type { BuilderCommandExecutor } from "./builder-resource-limits.js";
 
 export interface BuilderDependencyInstallationPolicy {
   readonly schemaVersion: "builder-dependency-installation-policy/v1";
   readonly installation: "deny" | "allow";
 }
 
-export type BuilderCommandExecutor = (
-  command: readonly string[],
-  cwd: string,
-  timeoutMs: number,
-  environment: Readonly<Record<string, string>>,
-) => Promise<CommandResult>;
-
 export interface BuilderDependencyInstallationIsolation {
   run(
     command: readonly string[],
     cwd: string,
-    timeoutMs: number,
+    limits: CommandExecutionLimits,
     environment: Readonly<Record<string, string>>,
     execute: BuilderCommandExecutor,
   ): Promise<CommandResult>;
@@ -63,7 +58,7 @@ export class PackageManagerBuilderDependencyIsolation implements BuilderDependen
   async run(
     command: readonly string[],
     cwd: string,
-    timeoutMs: number,
+    limits: CommandExecutionLimits,
     environment: Readonly<Record<string, string>>,
     execute: BuilderCommandExecutor,
   ): Promise<CommandResult> {
@@ -75,7 +70,7 @@ export class PackageManagerBuilderDependencyIsolation implements BuilderDependen
         await writeFile(path, "#!/bin/sh\nprintf '%s\\n' 'Builder dependency installation is denied by trusted runner policy.' >&2\nexit 126\n", { mode: 0o500 });
         await chmod(path, 0o500);
       }
-      return await execute(command, cwd, timeoutMs, {
+      return await execute(command, cwd, limits, {
         ...environment,
         PATH: `${shimDirectory}:${environment.PATH}`,
       });

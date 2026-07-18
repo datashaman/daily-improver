@@ -13,6 +13,16 @@ import { CommandRunner } from "../src/infra/command-runner.js";
 import type { CommandAgentRuntimeEnvironment } from "../src/agents/command-agent-provider.js";
 import type { AgentContext } from "../src/agents/agent-provider.js";
 import type { ImprovementSpec } from "../src/domain/model.js";
+import type { CommandExecutionLimits } from "../src/infra/command-runner.js";
+
+const builderResourceLimits = {
+  schemaVersion: "builder-resource-limits/v1",
+  cpuTimeMs: 5_000,
+  memoryBytes: 256 * 1024 * 1024,
+  diskBytes: 16 * 1024 * 1024,
+  outputBytes: 64 * 1024,
+  wallClockMs: 10_000,
+} as const;
 
 test("command-backed stages receive only runner runtime and exact stage inputs", async () => {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-command-agent-"));
@@ -36,6 +46,7 @@ test("command-backed stages receive only runner runtime and exact stage inputs",
     testCommand: "env > tests/test-agent.env",
     buildCommand: "env > src/build-agent.env",
     runtimeEnvironment: createCommandAgentRuntimeEnvironment(sentinelEnvironment),
+    builderResourceLimits,
   }, new CommandRunner(), networkIsolation);
   const context = fixtureContext(root, specPath);
 
@@ -66,13 +77,14 @@ test("builder networking defaults to denial and requires an exact trusted runner
   };
   const runtimeEnvironment = createCommandAgentRuntimeEnvironment(process.env);
 
-  const denied = new CommandAgentProvider({ testCommand: "true", buildCommand: "true", runtimeEnvironment }, new CommandRunner(), rejectingIsolation);
+  const denied = new CommandAgentProvider({ testCommand: "true", buildCommand: "true", runtimeEnvironment, builderResourceLimits }, new CommandRunner(), rejectingIsolation);
   await assert.rejects(denied.build(fixtureContext(root, specPath)), /network isolation invoked/);
 
   const approved = new CommandAgentProvider({
     testCommand: "true",
     buildCommand: "printf approved > src/build-agent.env",
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: { schemaVersion: "builder-network-policy/v1", outbound: "allow" },
   }, new CommandRunner(), rejectingIsolation);
   await approved.build(fixtureContext(root, specPath));
@@ -82,6 +94,7 @@ test("builder networking defaults to denial and requires an exact trusted runner
     testCommand: "true",
     buildCommand: "true",
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: { schemaVersion: "builder-network-policy/v1", outbound: "allow", repositoryOverride: true } as never,
   });
   await assert.rejects(malformed.build(fixtureContext(root, specPath)), /exact trusted runner-owned value/);
@@ -113,6 +126,7 @@ test("builder dependency installation defaults to denial and requires exact trus
       testCommand: "true",
       buildCommand: command,
       runtimeEnvironment,
+      builderResourceLimits,
       builderNetworkPolicy: networkAllowed,
     });
     await assert.rejects(denied.build(fixtureContext(root, specPath)), /dependency installation is denied/);
@@ -123,6 +137,7 @@ test("builder dependency installation defaults to denial and requires exact trus
     testCommand: "true",
     buildCommand: `${fakeNpm} install`,
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: networkAllowed,
   });
   await assert.rejects(absolute.build(fixtureContext(root, specPath)), /resolved through the trusted runner PATH/);
@@ -132,6 +147,7 @@ test("builder dependency installation defaults to denial and requires exact trus
     testCommand: "true",
     buildCommand: `PATH=${bin} npm install`,
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: networkAllowed,
   });
   await assert.rejects(pathBypass.build(fixtureContext(root, specPath)), /may not replace PATH/);
@@ -140,6 +156,7 @@ test("builder dependency installation defaults to denial and requires exact trus
     testCommand: "true",
     buildCommand: "printf ordinary > src/build-agent.env",
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: networkAllowed,
   });
   await ordinary.build(fixtureContext(root, specPath));
@@ -149,6 +166,7 @@ test("builder dependency installation defaults to denial and requires exact trus
     testCommand: "true",
     buildCommand: "npm install",
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: networkAllowed,
     builderDependencyInstallationPolicy: {
       schemaVersion: "builder-dependency-installation-policy/v1",
@@ -162,6 +180,7 @@ test("builder dependency installation defaults to denial and requires exact trus
     testCommand: "true",
     buildCommand: "printf unsafe > src/build-agent.env",
     runtimeEnvironment,
+    builderResourceLimits,
     builderNetworkPolicy: networkAllowed,
     builderDependencyInstallationPolicy: {
       schemaVersion: "builder-dependency-installation-policy/v1",
@@ -181,6 +200,7 @@ test("command-backed agents fail closed without an exact safe runtime", async ()
     testCommand: "true",
     buildCommand: "true",
     runtimeEnvironment: { PATH: process.env.PATH ?? "/usr/bin", EXTRA: "unsafe" } as CommandAgentRuntimeEnvironment,
+    builderResourceLimits,
   });
   await assert.rejects(provider.build(fixtureContext(root, join(root, "..", "spec.json"))), /exact runner-owned runtime environment/);
 });
@@ -229,10 +249,10 @@ class RecordingNetworkIsolation implements BuilderNetworkIsolation {
   async run(
     command: readonly string[],
     cwd: string,
-    timeoutMs: number,
+    limits: CommandExecutionLimits,
     environment: Readonly<Record<string, string>>,
   ) {
     this.invocations += 1;
-    return await this.runner.runWithExactEnvironment(command, cwd, timeoutMs, environment);
+    return await this.runner.runBoundedWithExactEnvironment(command, cwd, limits, environment);
   }
 }

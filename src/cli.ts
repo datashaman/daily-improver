@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { createApplication } from "./app.js";
 import { CommandAgentProvider, createCommandAgentRuntimeEnvironment } from "./agents/command-agent-provider.js";
 import { LocalImprovementRunner } from "./core/local-runner.js";
+import { defaultBuilderResourceLimits } from "./agents/builder-resource-limits.js";
 
 async function main(): Promise<void> {
   const [command = "help", path = "."] = process.argv.slice(2);
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
       testCommand,
       buildCommand,
       runtimeEnvironment: createCommandAgentRuntimeEnvironment(process.env),
+      builderResourceLimits: defaultBuilderResourceLimits,
     });
     return print(await new LocalImprovementRunner(
       app.stages,

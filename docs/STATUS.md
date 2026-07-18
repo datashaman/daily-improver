@@ -4,23 +4,23 @@ Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: Builder imports are confined against traversal, links, parent replacement, and staged-file TOCTOU replacement.
-- Current checkpoint commit: `feat: confine builder filesystem paths`.
+- Last completed milestone: Command-backed builders have exact fail-closed CPU, memory, disk, output, and wall-clock limits with complete process-group termination.
+- Current checkpoint commit: `feat: bound builder resource consumption`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1E — Builder isolation.
-- Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, and separately default to package-manager denial through runner-owned executable interception. Exact trusted policies may approve either boundary independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
+- Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Exact next task
 
-Limit builder CPU, memory, disk, output, and wall-clock duration.
+Capture filesystem state before and after builder execution.
 
 ## Acceptance criteria for the next task
 
-- Enforce exact trusted runner-owned CPU, memory, disk, output, and wall-clock limits before command-backed builder execution.
-- Reject missing, malformed, unsupported, extended, or repository/model-controlled limit decisions before the builder runs.
-- Terminate a builder deterministically when any enforced limit is exceeded and classify the exhausted resource without retaining unbounded output.
-- Prove that child processes cannot outlive or bypass the bounded builder execution.
-- Keep resource enforcement language-neutral and preserve filesystem confinement, protected-input immutability, command environment and dependency/network policies, response validation, cost accounting, diff limits, and independent verification.
+- Capture exact bounded, versioned filesystem state immediately before and after builder execution in the disposable copy.
+- Describe regular files, directories, symbolic links, and unsupported entry types deterministically without retaining source contents.
+- Derive a complete bounded change set for additions, modifications, deletions, and type changes, including paths outside the builder write allowlist.
+- Reject unreadable, excessive, malformed, traversing, or unstable filesystem state fail closed.
+- Keep state capture language-neutral and preserve resource limits, path confinement, protected-input immutability, command environment and dependency/network policies, response validation, cost accounting, diff limits, and independent verification.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -54,6 +54,7 @@ Limit builder CPU, memory, disk, output, and wall-clock duration.
 - Command-backed agents receive an exact PATH-only runner environment plus their current stage and repository-contained specification path through a non-login shell. Missing, malformed, extended, relative, or oversized runtime configuration fails before execution, and deterministic sentinel credentials prove that test, analysis, manifest, control-plane, GitHub, and unrelated model secrets cannot cross into the builder while required commands still execute.
 - Command-backed builders default to exact `builder-network-policy/v1` outbound denial supplied only at the runner construction boundary. macOS uses a deny-network sandbox and Linux uses a fresh user/network namespace; each invocation first proves a live runner-owned loopback endpoint is reachable normally and unreachable inside isolation. Unsupported, missing, or ineffective isolation fails before the builder, while only an exact trusted runner policy can approve outbound access. The deterministic builder proof still reads protected inputs and imports one approved production write while its connection attempt fails.
 - Command-backed builders separately default to exact `builder-dependency-installation-policy/v1` denial supplied only at construction. A temporary runner-owned PATH layer rejects Composer, JavaScript, Python, Ruby, Rust, Go, JVM, and .NET package-manager entry points before the real executable runs. Direct, PATH-resolved shell-indirect, explicit-path, and command-level PATH-bypass cases fail closed, ordinary commands still run, and only exact trusted approval lifts the dependency gate independently of network policy.
+- Command-backed builders require exact `builder-resource-limits/v1` CPU, aggregate resident-memory, repository disk-growth, combined-output, and wall-clock limits from the runner construction boundary. Unix hard CPU/file-size limits, process-group accounting, bounded byte capture, and repository growth monitoring enforce the decision. Any exhaustion terminates the complete group with forced-kill escalation and reports only `cpu`, `memory`, `disk`, `output`, or `wall-clock`; missing, malformed, extended, unsupported, or out-of-bounds decisions fail before builder execution.
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
@@ -85,17 +86,16 @@ Limit builder CPU, memory, disk, output, and wall-clock duration.
 
 ## Last verification
 
-Verified on 2026-07-18 for the builder path-confinement slice:
+Verified on 2026-07-18 for the builder resource-limit slice:
 
-- Focused builder-filesystem tests: 8 tests passed.
-- Focused local-runner and command-agent tests: 8 tests passed.
-- `npm test`: 240 tests passed; both live model proofs remained excluded.
+- Focused resource, command-agent, and builder-filesystem tests: 18 tests passed.
+- `npm test`: 246 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- The local container image built successfully with path confinement plus the established dependency-installation and Linux `unshare` network gates.
-- Deterministic examples reject textual traversal, pre-existing and builder-created symbolic links and hard links, parent-directory replacement, protected-input hard links, and a synchronized post-staging replacement while preserving the source checkout and external sentinels.
+- The local container image built successfully with production `procps` process accounting plus the established dependency-installation and Linux `unshare` network gates; all six focused resource-limit proofs also passed inside that Linux image.
+- Deterministic macOS and Linux examples classify CPU, aggregate resident memory, disk, bounded combined output, and wall-clock exhaustion, and prove a background child cannot outlive the terminated builder process group.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.

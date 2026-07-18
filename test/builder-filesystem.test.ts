@@ -270,6 +270,14 @@ test("denies builder connections while preserving protected reads and one approv
     testCommand: "true",
     buildCommand: `${process.execPath} .ai/builder-network-proof.cjs`,
     runtimeEnvironment: createCommandAgentRuntimeEnvironment(process.env),
+    builderResourceLimits: {
+      schemaVersion: "builder-resource-limits/v1",
+      cpuTimeMs: 5_000,
+      memoryBytes: 256 * 1024 * 1024,
+      diskBytes: 16 * 1024 * 1024,
+      outputBytes: 64 * 1024,
+      wallClockMs: 10_000,
+    },
   });
 
   try {

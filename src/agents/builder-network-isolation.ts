@@ -1,6 +1,6 @@
 import { createServer } from "node:net";
 import { platform } from "node:os";
-import type { CommandResult } from "../infra/command-runner.js";
+import type { CommandExecutionLimits, CommandResult } from "../infra/command-runner.js";
 import { CommandRunner } from "../infra/command-runner.js";
 
 export interface BuilderNetworkPolicy {
@@ -12,7 +12,7 @@ export interface BuilderNetworkIsolation {
   run(
     command: readonly string[],
     cwd: string,
-    timeoutMs: number,
+    limits: CommandExecutionLimits,
     environment: Readonly<Record<string, string>>,
   ): Promise<CommandResult>;
 }
@@ -37,12 +37,12 @@ export class PlatformBuilderNetworkIsolation implements BuilderNetworkIsolation 
   async run(
     command: readonly string[],
     cwd: string,
-    timeoutMs: number,
+    limits: CommandExecutionLimits,
     environment: Readonly<Record<string, string>>,
   ): Promise<CommandResult> {
     const wrap = this.wrapper();
     await verifyNetworkDenial(wrap, cwd, environment, this.runner);
-    return await this.runner.runWithExactEnvironment(wrap(command), cwd, timeoutMs, environment);
+    return await this.runner.runBoundedWithExactEnvironment(wrap(command), cwd, limits, environment);
   }
 
   private wrapper(): (command: readonly string[]) => readonly string[] {

@@ -11,10 +11,18 @@ import {
   validateBuilderDependencyInstallationPolicy,
 } from "./builder-dependency-installation.js";
 import type {
-  BuilderCommandExecutor,
   BuilderDependencyInstallationIsolation,
   BuilderDependencyInstallationPolicy,
 } from "./builder-dependency-installation.js";
+import {
+  PlatformBuilderResourceIsolation,
+  validateBuilderResourceLimits,
+} from "./builder-resource-limits.js";
+import type {
+  BuilderCommandExecutor,
+  BuilderResourceIsolation,
+  BuilderResourceLimits,
+} from "./builder-resource-limits.js";
 
 const maximumPathEnvironmentLength = 8_192;
 const maximumSpecificationPathLength = 4_096;
@@ -29,6 +37,7 @@ export interface CommandAgentOptions {
   readonly runtimeEnvironment: CommandAgentRuntimeEnvironment;
   readonly builderNetworkPolicy?: BuilderNetworkPolicy;
   readonly builderDependencyInstallationPolicy?: BuilderDependencyInstallationPolicy;
+  readonly builderResourceLimits: BuilderResourceLimits;
 }
 
 export function createCommandAgentRuntimeEnvironment(
@@ -48,6 +57,7 @@ export class CommandAgentProvider implements AgentProvider {
     private readonly runner = new CommandRunner(),
     private readonly builderNetworkIsolation: BuilderNetworkIsolation = new PlatformBuilderNetworkIsolation(),
     private readonly builderDependencyInstallationIsolation: BuilderDependencyInstallationIsolation = new PackageManagerBuilderDependencyIsolation(),
+    private readonly builderResourceIsolation: BuilderResourceIsolation = new PlatformBuilderResourceIsolation(),
   ) {}
 
   async generateTests(context: AgentContext): Promise<void> {
@@ -67,22 +77,28 @@ export class CommandAgentProvider implements AgentProvider {
       DAILY_IMPROVER_SPEC_PATH: context.specPath,
     };
     const commandArguments = ["/bin/sh", "-c", command];
-    let execute: BuilderCommandExecutor = async (nextCommand, cwd, timeoutMs, environment) =>
-      await this.runner.runWithExactEnvironment(nextCommand, cwd, timeoutMs, environment);
+    let execute: BuilderCommandExecutor = async (nextCommand, cwd, limits, environment) =>
+      await this.runner.runBoundedWithExactEnvironment(nextCommand, cwd, limits, environment);
     if (stage === "build" && validateBuilderNetworkPolicy(this.options.builderNetworkPolicy).outbound === "deny") {
-      execute = async (nextCommand, cwd, timeoutMs, environment) =>
-        await this.builderNetworkIsolation.run(nextCommand, cwd, timeoutMs, environment);
+      execute = async (nextCommand, cwd, limits, environment) =>
+        await this.builderNetworkIsolation.run(nextCommand, cwd, limits, environment);
     }
-    const result = stage === "build"
-      && validateBuilderDependencyInstallationPolicy(this.options.builderDependencyInstallationPolicy).installation === "deny"
-      ? await this.builderDependencyInstallationIsolation.run(
-        commandArguments,
-        context.repository,
-        20 * 60_000,
-        agentEnvironment,
-        execute,
-      )
-      : await execute(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
+    let result;
+    if (stage === "build") {
+      const resourceLimits = validateBuilderResourceLimits(this.options.builderResourceLimits);
+      const executeWithResources: BuilderCommandExecutor = async (nextCommand, cwd, _limits, environment) =>
+        await this.builderResourceIsolation.run(nextCommand, cwd, resourceLimits, environment, execute);
+      result = validateBuilderDependencyInstallationPolicy(this.options.builderDependencyInstallationPolicy).installation === "deny"
+        ? await this.builderDependencyInstallationIsolation.run(
+          commandArguments, context.repository, resourceLimits, agentEnvironment, executeWithResources,
+        )
+        : await executeWithResources(commandArguments, context.repository, resourceLimits, agentEnvironment);
+    } else {
+      result = await this.runner.runWithExactEnvironment(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
+    }
+    if (result.resourceExhausted) {
+      throw new Error(`build agent exhausted its ${result.resourceExhausted} resource limit.`);
+    }
     if (result.exitCode !== 0) {
       throw new Error(`${stage} agent failed: ${(result.stderr || result.stdout).trim()}`);
     }
