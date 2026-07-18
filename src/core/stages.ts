@@ -1,5 +1,6 @@
 import { loadConfig } from "../config.js";
 import type { DailyImprovementDecision, ImprovementSpec } from "../domain/model.js";
+import { createHash } from "node:crypto";
 import { relative } from "node:path";
 import type { Clock, DailyImprovementStore, OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../contracts.js";
 import { CommandRunner } from "../infra/command-runner.js";
@@ -23,6 +24,8 @@ import {
   type VerifierRuntimeEnvironment,
 } from "./verifier-execution-inputs.js";
 import { authorizePublication, type PublicationVerificationBinding } from "./publication-authorization.js";
+import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
+import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -195,6 +198,7 @@ export class PipelineStages {
       verifiedAt: this.clock.now().toISOString(),
     };
     await writeVerificationOutput(root, inputs.outputArtifact, report);
+    await signArtifact(root, inputs.outputArtifact, "verification-report/v1", key, this.clock.now());
     if (!passed) throw new Error(`Verification failed: ${[...diff.violations, ...sourceSafety.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
     return report;
   }
@@ -202,10 +206,17 @@ export class PipelineStages {
   async publicationRequest(
     root: string,
     main: PublicationMainContext,
+    artifactKey?: string,
   ): Promise<{ title: string; body: string; draft: boolean; labels: readonly string[] }> {
+    const key = artifactKey ?? requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
+    const verificationPath = relative(root, `${runDirectory(root)}/verification.json`);
+    const lifecyclePath = relative(root, `${runDirectory(root)}/generated-test-verification-lifecycle.json`);
+    const patchPath = relative(root, `${runDirectory(root)}/verified-publication-patch.json`);
+    const now = this.clock.now();
+    const authenticated = await verifyPublicationInputs(root, verificationPath, lifecyclePath, patchPath, key, now);
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
-    const verification = await readArtifact<PublicationVerificationBinding & { readonly checks: readonly { command: string; exitCode: number }[] }>(root, "verification.json");
+    const verification = JSON.parse(authenticated.reportBytes.toString("utf8")) as PublicationVerificationBinding & { readonly checks: readonly { command: string; exitCode: number }[] };
     const testPlan = await optionalArtifact<{
       schemaVersion?: string;
       improvementIntent?: { readonly intent?: string };
@@ -220,11 +231,15 @@ export class PipelineStages {
       draft: config.pull_request.draft,
       labels: config.pull_request.labels,
     };
+    await verifyPublicationInputs(root, verificationPath, lifecyclePath, patchPath, key, now);
     const dailyDecision = await readArtifact<DailyImprovementDecision>(root, "daily-improvement-decision.json");
     const completed = await this.requiredDailyImprovements().complete(dailyDecision, decidedAt);
     await writeArtifact(root, "daily-improvement-decision.json", completed);
     await writeArtifact(root, "publication-authorization.json", authorization);
-    await writeArtifact(root, "publication-request.json", request);
+    await writeArtifact(root, "publication-request.json", { schemaVersion: "publication-request/v1", ...request });
+    await signArtifact(root, relative(root, `${runDirectory(root)}/daily-improvement-decision.json`), "daily-improvement-decision/v1", key, now);
+    await signArtifact(root, relative(root, `${runDirectory(root)}/publication-authorization.json`), "publication-authorization/v1", key, now);
+    await signArtifact(root, relative(root, `${runDirectory(root)}/publication-request.json`), "publication-request/v1", key, now);
     return request;
   }
 
@@ -285,4 +300,34 @@ function requiredSecret(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required for this isolated stage.`);
   return value;
+}
+
+function sha256(value: Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function verifyPublicationInputs(
+  root: string,
+  verificationPath: string,
+  lifecyclePath: string,
+  patchPath: string,
+  key: string,
+  now: Date,
+): Promise<{ readonly reportBytes: Buffer; readonly lifecycleBytes: Buffer; readonly patch: VerifiedPublicationPatch }> {
+  const reportBytes = await verifyArtifact(root, verificationPath, "verification-report/v1", key, now);
+  const lifecycleBytes = await verifyArtifact(root, lifecyclePath, "generated-test-lifecycle-decision/v1", key, now);
+  const patchBytes = await verifyArtifact(root, patchPath, "verified-publication-patch/v1", key, now);
+  const patch = JSON.parse(patchBytes.toString("utf8")) as VerifiedPublicationPatch;
+  if (patch.verificationReportSha256 !== sha256(reportBytes)
+    || patch.verificationLifecycleSha256 !== sha256(lifecycleBytes)) {
+    throw new Error("Authenticated publication patch does not bind the required verifier artifacts.");
+  }
+  await assertVerifiedPublicationPatchMaterialized(
+    root,
+    patch,
+    verificationPath,
+    lifecyclePath,
+    relative(root, `${runDirectory(root)}/daily-improvement-decision.json`),
+  );
+  return { reportBytes, lifecycleBytes, patch };
 }

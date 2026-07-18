@@ -7,10 +7,12 @@ import test from "node:test";
 import { TrustedPublicationWorkspace } from "../src/core/trusted-publication-workspace.js";
 import type { VerifierExecutionInputs } from "../src/core/verifier-execution-inputs.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
+import { createTestManifest } from "../src/core/artifacts.js";
+import { signArtifact } from "../src/core/artifact-authentication.js";
 
 test("publishes only identity-bound verified production and sealed artifact states", async () => {
   const fixture = await createFixture();
-  const workspace = await new TrustedPublicationWorkspace(join(fixture.sandbox, "publication"), fixture.runner).create(
+  const workspace = await new TrustedPublicationWorkspace(join(fixture.sandbox, "publication"), fixture.runner, fixture.key).create(
     fixture.repository,
     fixture.verified,
     fixture.inputs,
@@ -25,9 +27,7 @@ test("publishes only identity-bound verified production and sealed artifact stat
     await assert.rejects(readFile(join(workspace.path, fixture.runRoot, "build-agent-rationale.json")), /ENOENT/);
     await git(fixture.runner, workspace.path, ["config", "user.email", "improver@example.test"]);
     await git(fixture.runner, workspace.path, ["config", "user.name", "Daily Improver Test"]);
-    await writeFile(join(workspace.path, fixture.runRoot, "daily-improvement-decision.json"), "{\"outcome\":\"completed\"}\n");
-    await writeFile(join(workspace.path, fixture.runRoot, "publication-authorization.json"), "{\"outcome\":\"authorized\"}\n");
-    await writeFile(join(workspace.path, fixture.runRoot, "publication-request.json"), "{\"draft\":true}\n");
+    await writePublisherArtifacts(workspace.path, fixture.runRoot, fixture.key);
     const commit = await workspace.commitToBranch(fixture.repository, "ai/daily/trusted", "fix: trusted value");
     const branchCommit = (await fixture.runner.run(["git", "rev-parse", "ai/daily/trusted"], fixture.repository)).stdout.trim();
     assert.equal(branchCommit, commit);
@@ -41,11 +41,55 @@ test("publishes only identity-bound verified production and sealed artifact stat
   }
 });
 
+test("rejects tampered manifests, verifier outputs, lifecycle decisions, and publisher inputs", async () => {
+  const manifest = await createFixture();
+  await writeFile(join(manifest.verified, manifest.runRoot, "test-manifest.json"), "{}\n");
+  await assert.rejects(
+    new TrustedPublicationWorkspace(join(manifest.sandbox, "publication"), manifest.runner, manifest.key).create(
+      manifest.repository, manifest.verified, manifest.inputs, manifest.report, manifest.lifecyclePath,
+    ),
+    /manifest|identity changed/,
+  );
+
+  const report = await createFixture();
+  await writeFile(join(report.verified, report.runRoot, "verification.json"), '{"schemaVersion":"verification-report/v1","passed":false}\n');
+  await assert.rejects(
+    new TrustedPublicationWorkspace(join(report.sandbox, "publication"), report.runner, report.key).create(
+      report.repository, report.verified, report.inputs, report.report, report.lifecyclePath,
+    ),
+    /identity changed/,
+  );
+
+  const lifecycle = await createFixture();
+  await writeFile(join(lifecycle.verified, lifecycle.lifecyclePath), '{"schemaVersion":"generated-test-lifecycle-decision/v1","outcome":"rejected"}\n');
+  await assert.rejects(
+    new TrustedPublicationWorkspace(join(lifecycle.sandbox, "publication"), lifecycle.runner, lifecycle.key).create(
+      lifecycle.repository, lifecycle.verified, lifecycle.inputs, lifecycle.report, lifecycle.lifecyclePath,
+    ),
+    /identity changed/,
+  );
+
+  const publication = await createFixture();
+  const workspace = await new TrustedPublicationWorkspace(join(publication.sandbox, "publication"), publication.runner, publication.key).create(
+    publication.repository, publication.verified, publication.inputs, publication.report, publication.lifecyclePath,
+  );
+  try {
+    await writePublisherArtifacts(workspace.path, publication.runRoot, publication.key);
+    await writeFile(join(workspace.path, publication.runRoot, "publication-request.json"), '{"schemaVersion":"publication-request/v1","draft":false}\n');
+    await assert.rejects(
+      workspace.commitToBranch(publication.repository, "ai/daily/tampered-input", "fix: tampered input"),
+      /identity changed/,
+    );
+  } finally {
+    await workspace.cleanup();
+  }
+});
+
 test("rejects additional and identity-mismatched verified inputs before publication staging", async () => {
   const additional = await createFixture();
   await writeFile(join(additional.verified, "builder-only.txt"), "unverified\n");
   await assert.rejects(
-    new TrustedPublicationWorkspace(join(additional.sandbox, "publication"), additional.runner).create(
+    new TrustedPublicationWorkspace(join(additional.sandbox, "publication"), additional.runner, additional.key).create(
       additional.repository, additional.verified, additional.inputs, additional.report, additional.lifecyclePath,
     ),
     /additional or unverified path/,
@@ -54,14 +98,14 @@ test("rejects additional and identity-mismatched verified inputs before publicat
   const changed = await createFixture();
   await writeFile(join(changed.verified, "tests", "generated.php"), "<?php assert(false);\n");
   await assert.rejects(
-    new TrustedPublicationWorkspace(join(changed.sandbox, "publication"), changed.runner).create(
+    new TrustedPublicationWorkspace(join(changed.sandbox, "publication"), changed.runner, changed.key).create(
       changed.repository, changed.verified, changed.inputs, changed.report, changed.lifecyclePath,
     ),
-    /identity changed/,
+    /manifest authentication failed/,
   );
 
   const patchTampering = await createFixture();
-  const workspace = await new TrustedPublicationWorkspace(join(patchTampering.sandbox, "publication"), patchTampering.runner).create(
+  const workspace = await new TrustedPublicationWorkspace(join(patchTampering.sandbox, "publication"), patchTampering.runner, patchTampering.key).create(
     patchTampering.repository, patchTampering.verified, patchTampering.inputs, patchTampering.report, patchTampering.lifecyclePath,
   );
   try {
@@ -84,10 +128,10 @@ test("rejects missing, symlinked, and traversing patch inputs before changing a 
     manifest: { ...missing.inputs.manifest, files: { ...missing.inputs.manifest.files, "tests/missing.php": "0".repeat(64) } },
   };
   await assert.rejects(
-    new TrustedPublicationWorkspace(join(missing.sandbox, "publication"), missing.runner).create(
+    new TrustedPublicationWorkspace(join(missing.sandbox, "publication"), missing.runner, missing.key).create(
       missing.repository, missing.verified, missingInputs, missing.report, missing.lifecyclePath,
     ),
-    /ENOENT/,
+    /manifest authentication failed/,
   );
 
   const linked = await createFixture();
@@ -98,7 +142,7 @@ test("rejects missing, symlinked, and traversing patch inputs before changing a 
     specification: { ...linked.inputs.specification, allowedFiles: ["src/linked.php"] },
   };
   await assert.rejects(
-    new TrustedPublicationWorkspace(join(linked.sandbox, "publication"), linked.runner).create(
+    new TrustedPublicationWorkspace(join(linked.sandbox, "publication"), linked.runner, linked.key).create(
       linked.repository, linked.verified, linkedInputs, linked.report, linked.lifecyclePath,
     ),
     /not a regular file/,
@@ -110,7 +154,7 @@ test("rejects missing, symlinked, and traversing patch inputs before changing a 
     specification: { ...traversing.inputs.specification, allowedFiles: ["../outside.php"] },
   };
   await assert.rejects(
-    new TrustedPublicationWorkspace(join(traversing.sandbox, "publication"), traversing.runner).create(
+    new TrustedPublicationWorkspace(join(traversing.sandbox, "publication"), traversing.runner, traversing.key).create(
       traversing.repository, traversing.verified, traversingInputs, traversing.report, traversing.lifecyclePath,
     ),
     /path is malformed/,
@@ -123,6 +167,7 @@ async function createFixture() {
   const verified = join(sandbox, "verified");
   const runner = new CommandRunner();
   const runRoot = ".ai/runs/2026-07-18";
+  const key = "ephemeral-publication-artifact-key";
   await mkdir(join(repository, "src"), { recursive: true });
   await mkdir(join(repository, "tests"), { recursive: true });
   await writeFile(join(repository, "src", "value.php"), "<?php return 1;\n");
@@ -139,12 +184,7 @@ async function createFixture() {
   await mkdir(join(verified, runRoot), { recursive: true });
   await writeFile(join(verified, runRoot, "spec.json"), "{\"title\":\"trusted\"}\n");
   await writeFile(join(verified, runRoot, "daily-improvement-decision.json"), "{\"outcome\":\"claimed\"}\n");
-  const manifestFiles = {
-    "tests/generated.php": sha256(await readFile(join(verified, "tests", "generated.php"))),
-    [`${runRoot}/spec.json`]: sha256(await readFile(join(verified, runRoot, "spec.json"))),
-    [`${runRoot}/daily-improvement-decision.json`]: sha256(await readFile(join(verified, runRoot, "daily-improvement-decision.json"))),
-  };
-  const manifest = { schema: 1 as const, generatedAt: "2026-07-18T00:00:00.000Z", files: manifestFiles, signature: "a".repeat(64) };
+  const manifest = await createTestManifest(verified, key);
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(join(verified, runRoot, "test-manifest.json"), manifestBytes);
   const report = {
@@ -154,8 +194,10 @@ async function createFixture() {
     verifierInputsSha256: "c".repeat(64),
   };
   await writeFile(join(verified, runRoot, "verification.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await signArtifact(verified, `${runRoot}/verification.json`, "verification-report/v1", key);
   const lifecyclePath = `${runRoot}/generated-test-verification-lifecycle.json`;
   await writeFile(join(verified, lifecyclePath), "{\"schemaVersion\":\"generated-test-lifecycle-decision/v1\"}\n");
+  await signArtifact(verified, lifecyclePath, "generated-test-lifecycle-decision/v1", key);
   await git(runner, verified, ["add", "-N", "--all"]);
   const inputs: VerifierExecutionInputs = {
     schemaVersion: "verifier-execution-inputs/v1",
@@ -176,12 +218,21 @@ async function createFixture() {
     trustedArtifacts: [`${runRoot}/build-agent-usage.json`, `${runRoot}/build-agent-rationale.json`],
     manifest, manifestArtifactSha256: sha256(manifestBytes), integritySha256: report.verifierInputsSha256,
   };
-  return { sandbox, repository, verified, runner, runRoot, lifecyclePath, inputs, report };
+  return { sandbox, repository, verified, runner, runRoot, lifecyclePath, inputs, report, key };
 }
 
 async function git(runner: CommandRunner, root: string, args: readonly string[]): Promise<void> {
   const result = await runner.run(["git", ...args], root);
   assert.equal(result.exitCode, 0, result.stderr);
+}
+
+async function writePublisherArtifacts(root: string, runRoot: string, key: string): Promise<void> {
+  await writeFile(join(root, runRoot, "daily-improvement-decision.json"), "{\"schemaVersion\":\"daily-improvement-decision/v1\",\"outcome\":\"completed\"}\n");
+  await writeFile(join(root, runRoot, "publication-authorization.json"), "{\"schemaVersion\":\"publication-authorization/v1\",\"outcome\":\"authorized\"}\n");
+  await writeFile(join(root, runRoot, "publication-request.json"), "{\"schemaVersion\":\"publication-request/v1\",\"draft\":true}\n");
+  await signArtifact(root, `${runRoot}/daily-improvement-decision.json`, "daily-improvement-decision/v1", key);
+  await signArtifact(root, `${runRoot}/publication-authorization.json`, "publication-authorization/v1", key);
+  await signArtifact(root, `${runRoot}/publication-request.json`, "publication-request/v1", key);
 }
 
 function sha256(value: Buffer): string {

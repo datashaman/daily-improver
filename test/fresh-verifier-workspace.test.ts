@@ -135,7 +135,7 @@ async function createFixture(): Promise<{
   await writeFile(join(runRoot, "test-agent-rationale.json"), testRationaleSource);
   const sealedSource = await readFile(join(generated, "tests", "generated.php"));
   const manifest = {
-    schema: 1 as const,
+    schemaVersion: "test-manifest/v2" as const,
     generatedAt: "2026-07-18T00:00:00.000Z",
     files: {
       "tests/generated.php": sha256(sealedSource),

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { AdapterRegistry } from "../src/core/adapter-registry.js";
 import { PipelineStages } from "../src/core/stages.js";
 import type { DailyImprovementDecision } from "../src/domain/model.js";
 import { CommandRunner, type CommandResult } from "../src/infra/command-runner.js";
+import { signArtifact } from "../src/core/artifact-authentication.js";
 
 test("authorizes publication only while trusted main remains at the verified commit", async () => {
   const fixture = await createRepository();
@@ -108,10 +110,27 @@ test("main advancement blocks the daily claim completion and publication artifac
     evidence: ["verified evidence"],
     constraints: { maxFiles: 1, maxChangedLines: 10, maxCostUsd: 1 },
   }));
-  await writeFile(join(runRoot, "verification.json"), JSON.stringify({
+  const verificationBytes = Buffer.from(JSON.stringify({
     ...verification(fixture.head),
     checks: [],
   }));
+  await writeFile(join(runRoot, "verification.json"), verificationBytes);
+  const lifecycleBytes = Buffer.from('{"schemaVersion":"generated-test-lifecycle-decision/v1"}');
+  await writeFile(join(runRoot, "generated-test-verification-lifecycle.json"), lifecycleBytes);
+  const specBytes = await readFile(join(runRoot, "spec.json"));
+  await writeFile(join(runRoot, "verified-publication-patch.json"), JSON.stringify({
+    schemaVersion: "verified-publication-patch/v1",
+    expectedBaseSha: fixture.head,
+    verifierInputsSha256: "a".repeat(64),
+    verificationReportSha256: sha256(verificationBytes),
+    verificationLifecycleSha256: sha256(lifecycleBytes),
+    files: [{ path: ".ai/runs/2026-07-18/spec.json", state: "regular", sha256: sha256(specBytes), mode: 0o644 }],
+  }));
+  const artifactKey = "publication-authorization-artifact-key";
+  const artifactTime = new Date(timestamp);
+  await signArtifact(fixture.repository, ".ai/runs/2026-07-18/verification.json", "verification-report/v1", artifactKey, artifactTime);
+  await signArtifact(fixture.repository, ".ai/runs/2026-07-18/generated-test-verification-lifecycle.json", "generated-test-lifecycle-decision/v1", artifactKey, artifactTime);
+  await signArtifact(fixture.repository, ".ai/runs/2026-07-18/verified-publication-patch.json", "verified-publication-patch/v1", artifactKey, artifactTime);
   const claim: DailyImprovementDecision = {
     schemaVersion: "daily-improvement-decision/v1",
     repositoryId: "b".repeat(64),
@@ -140,7 +159,7 @@ test("main advancement blocks the daily claim completion and publication artifac
   process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-18";
   try {
     await assert.rejects(
-      stages.publicationRequest(fixture.repository, { repository: fixture.repository, reference: "main" }),
+      stages.publicationRequest(fixture.repository, { repository: fixture.repository, reference: "main" }, artifactKey),
       /no longer matches/,
     );
     assert.equal(completed, false);
@@ -189,4 +208,8 @@ async function createRepository(): Promise<{ readonly repository: string; readon
 async function git(runner: CommandRunner, root: string, args: readonly string[]): Promise<void> {
   const result = await runner.run(["git", ...args], root);
   assert.equal(result.exitCode, 0, result.stderr);
+}
+
+function sha256(value: Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
 }

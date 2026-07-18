@@ -17,7 +17,7 @@ export interface AnalysisArtifact {
 }
 
 export interface TestManifest {
-  readonly schema: 1;
+  readonly schemaVersion: "test-manifest/v2";
   readonly generatedAt: string;
   readonly files: Readonly<Record<string, string>>;
   readonly signature: string;
@@ -58,7 +58,12 @@ export async function createTestManifest(root: string, key: string): Promise<Tes
   }
   const generatedAt = new Date().toISOString();
   const payload = stablePayload(files, generatedAt);
-  return { schema: 1, generatedAt, files, signature: createHmac("sha256", key).update(payload).digest("hex") };
+  return {
+    schemaVersion: "test-manifest/v2",
+    generatedAt,
+    files,
+    signature: createHmac("sha256", key).update(payload).digest("hex"),
+  };
 }
 
 export async function verifyTestManifest(root: string, manifest: TestManifest, key: string): Promise<boolean> {
@@ -79,6 +84,7 @@ async function verifyTestManifestFiles(
   key: string,
   paths: readonly string[],
 ): Promise<boolean> {
+  if (!isExactTestManifest(manifest)) return false;
   const expected = createHmac("sha256", key).update(stablePayload(manifest.files, manifest.generatedAt)).digest();
   const actual = Buffer.from(manifest.signature, "hex");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
@@ -96,7 +102,35 @@ async function verifyTestManifestFiles(
 export type SpecArtifact = ImprovementSpec;
 
 function stablePayload(files: Readonly<Record<string, string>>, generatedAt: string): string {
-  return JSON.stringify({ generatedAt, files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))) });
+  return JSON.stringify({
+    schemaVersion: "test-manifest/v2",
+    generatedAt,
+    files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))),
+  });
+}
+
+function isExactTestManifest(value: TestManifest): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)
+    || Object.keys(value).sort().join("|") !== "files|generatedAt|schemaVersion|signature"
+    || value.schemaVersion !== "test-manifest/v2"
+    || typeof value.generatedAt !== "string" || !isFreshTimestamp(value.generatedAt)
+    || typeof value.signature !== "string" || !/^[a-f0-9]{64}$/u.test(value.signature)
+    || typeof value.files !== "object" || value.files === null || Array.isArray(value.files)) return false;
+  const entries = Object.entries(value.files);
+  return entries.length > 0 && entries.length <= 10_000 && entries.every(([path, hash]) => (
+    path.length > 0 && path.length <= 1_024 && !path.startsWith("/") && !path.includes("\\")
+    && !/[\u0000-\u001f\u007f]/u.test(path)
+    && path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
+    && /^[a-f0-9]{64}$/u.test(hash)
+  ));
+}
+
+function isFreshTimestamp(value: string): boolean {
+  if (value.length > 64) return false;
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) return false;
+  const age = Date.now() - parsed.getTime();
+  return age >= -5 * 60_000 && age <= 24 * 60 * 60_000;
 }
 
 export function runDirectory(root: string): string {

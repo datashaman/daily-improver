@@ -2,9 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, sep } from "node:path";
 import type { CommandRunner } from "../infra/command-runner.js";
-import { verifierManifestFilePaths } from "./artifacts.js";
+import { verifierManifestFilePaths, verifyVerifierTestManifest } from "./artifacts.js";
 import type { PublicationVerificationBinding } from "./publication-authorization.js";
 import type { VerifierExecutionInputs } from "./verifier-execution-inputs.js";
+import { artifactAuthenticationPath, signArtifact, verifyArtifact } from "./artifact-authentication.js";
 
 const maximumTransferFiles = 10_000;
 const maximumPathLength = 1_024;
@@ -13,6 +14,11 @@ const publisherArtifacts = [
   "publication-authorization.json",
   "publication-request.json",
 ] as const;
+const publisherArtifactSchemas = {
+  "daily-improvement-decision.json": "daily-improvement-decision/v1",
+  "publication-authorization.json": "publication-authorization/v1",
+  "publication-request.json": "publication-request/v1",
+} as const;
 
 export interface VerifiedPublicationFile {
   readonly path: string;
@@ -41,6 +47,7 @@ export class TrustedPublicationWorkspace {
   constructor(
     private readonly baseDirectory: string,
     private readonly runner: CommandRunner,
+    private readonly artifactKey: string,
   ) {}
 
   async create(
@@ -61,21 +68,39 @@ export class TrustedPublicationWorkspace {
     const sealedPaths = validatePaths(verifierManifestFilePaths(inputs.manifest), "sealed");
     const manifestPath = siblingArtifactPath(inputs.outputArtifact, "test-manifest.json");
     const patchPath = siblingArtifactPath(inputs.outputArtifact, "verified-publication-patch.json");
+    const reportAuthenticationPath = artifactAuthenticationPath(inputs.outputArtifact);
+    const lifecycleAuthenticationPath = artifactAuthenticationPath(verificationLifecyclePath);
+    const patchAuthenticationPath = artifactAuthenticationPath(patchPath);
     assertRepositoryPath(verificationLifecyclePath);
-    const transferPaths = [...productionPaths, ...sealedPaths, manifestPath, inputs.outputArtifact, verificationLifecyclePath];
+    const transferPaths = [
+      ...productionPaths,
+      ...sealedPaths,
+      manifestPath,
+      inputs.outputArtifact,
+      reportAuthenticationPath,
+      verificationLifecyclePath,
+      lifecycleAuthenticationPath,
+    ];
     if (new Set(transferPaths).size !== transferPaths.length) throw new Error("Trusted publication transfer paths overlap.");
 
     await assertOnlyExpectedWorkspaceChanges(verified, transferPaths, this.runner);
     await assertFileSha256(verified, manifestPath, inputs.manifestArtifactSha256);
+    if (!(await verifyVerifierTestManifest(verified, inputs.manifest, this.artifactKey))) {
+      throw new Error("Trusted publication test manifest authentication failed.");
+    }
     for (const path of sealedPaths) await assertFileSha256(verified, path, inputs.manifest.files[path]!);
-    const reportSource = await exactRegularFile(verified, inputs.outputArtifact);
-    const reportBytes = await readFile(reportSource);
+    const reportBytes = await verifyArtifact(verified, inputs.outputArtifact, "verification-report/v1", this.artifactKey);
     const parsedReport = JSON.parse(reportBytes.toString("utf8")) as PublicationVerificationBinding;
     assertVerificationBinding(inputs, parsedReport);
     if (JSON.stringify(parsedReport) !== JSON.stringify(verification)) {
       throw new Error("Trusted publication verification report does not match the successful verifier result.");
     }
-    const lifecycleBytes = await readFile(await exactRegularFile(verified, verificationLifecyclePath));
+    const lifecycleBytes = await verifyArtifact(
+      verified,
+      verificationLifecyclePath,
+      "generated-test-lifecycle-decision/v1",
+      this.artifactKey,
+    );
     const files = await Promise.all([...productionPaths, ...sealedPaths, manifestPath].sort().map(
       async (path) => await describeVerifiedFile(verified, path, productionPaths.includes(path)),
     ));
@@ -103,13 +128,18 @@ export class TrustedPublicationWorkspace {
       await assertCleanCheckout(checkout, inputs.expectedBaseSha, this.runner);
       for (const file of files) await materializeVerifiedFile(verified, checkout, file);
       await transferBoundFile(verified, checkout, inputs.outputArtifact, patch.verificationReportSha256);
+      await transferBoundFile(verified, checkout, reportAuthenticationPath, sha256(await readFile(await exactRegularFile(verified, reportAuthenticationPath))));
       await transferBoundFile(verified, checkout, verificationLifecyclePath, patch.verificationLifecycleSha256);
+      await transferBoundFile(verified, checkout, lifecycleAuthenticationPath, sha256(await readFile(await exactRegularFile(verified, lifecycleAuthenticationPath))));
       const patchBytes = Buffer.from(`${JSON.stringify(patch, null, 2)}\n`);
       const patchSha256 = sha256(patchBytes);
       await atomicWrite(join(checkout, patchPath), patchBytes, 0o600);
+      await signArtifact(checkout, patchPath, "verified-publication-patch/v1", this.artifactKey);
       await assertExactHead(source, inputs.expectedBaseSha, this.runner, "Trusted publication baseline changed");
       await assertExactHead(checkout, inputs.expectedBaseSha, this.runner, "Trusted publication checkout baseline changed");
-      const permittedPaths = [...transferPaths, patchPath, ...publisherArtifacts.map((name) => siblingArtifactPath(inputs.outputArtifact, name))];
+      const publisherPaths = publisherArtifacts.map((name) => siblingArtifactPath(inputs.outputArtifact, name));
+      const publisherAuthenticationPaths = publisherPaths.map((path) => artifactAuthenticationPath(path));
+      const permittedPaths = [...transferPaths, patchPath, patchAuthenticationPath, ...publisherPaths, ...publisherAuthenticationPaths];
       const publicationDecisionPath = siblingArtifactPath(inputs.outputArtifact, "daily-improvement-decision.json");
       return {
         path: checkout,
@@ -119,6 +149,17 @@ export class TrustedPublicationWorkspace {
           await assertExactHead(checkout, inputs.expectedBaseSha, this.runner, "Trusted publication checkout baseline changed");
           await assertMaterializedPatch(checkout, patch, inputs.outputArtifact, verificationLifecyclePath, publicationDecisionPath);
           await assertFileSha256(checkout, patchPath, patchSha256);
+          await verifyArtifact(checkout, patchPath, "verified-publication-patch/v1", this.artifactKey);
+          await verifyArtifact(checkout, inputs.outputArtifact, "verification-report/v1", this.artifactKey);
+          await verifyArtifact(checkout, verificationLifecyclePath, "generated-test-lifecycle-decision/v1", this.artifactKey);
+          for (const name of publisherArtifacts) {
+            await verifyArtifact(
+              checkout,
+              siblingArtifactPath(inputs.outputArtifact, name),
+              publisherArtifactSchemas[name],
+              this.artifactKey,
+            );
+          }
           await assertOnlyExpectedWorkspaceChanges(checkout, permittedPaths, this.runner);
           assertBranchName(branch);
           if (!message || message.length > 512 || message.includes("\0")) throw new Error("Publication commit message is malformed.");
@@ -188,6 +229,7 @@ async function assertMaterializedPatch(
   lifecyclePath: string,
   publicationDecisionPath: string,
 ): Promise<void> {
+  assertVerifiedPublicationPatchContract(patch);
   for (const file of patch.files) {
     // The trusted publisher alone transitions this control artifact from claimed to completed.
     if (file.path === publicationDecisionPath) continue;
@@ -202,6 +244,50 @@ async function assertMaterializedPatch(
   }
   await assertFileSha256(root, reportPath, patch.verificationReportSha256);
   await assertFileSha256(root, lifecyclePath, patch.verificationLifecycleSha256);
+}
+
+export async function assertVerifiedPublicationPatchMaterialized(
+  root: string,
+  patch: VerifiedPublicationPatch,
+  reportPath: string,
+  lifecyclePath: string,
+  publicationDecisionPath: string,
+): Promise<void> {
+  await assertMaterializedPatch(root, patch, reportPath, lifecyclePath, publicationDecisionPath);
+}
+
+function assertVerifiedPublicationPatchContract(patch: VerifiedPublicationPatch): void {
+  if (typeof patch !== "object" || patch === null || Array.isArray(patch)
+    || Object.keys(patch).sort().join("|") !== "expectedBaseSha|files|schemaVersion|verificationLifecycleSha256|verificationReportSha256|verifierInputsSha256"
+    || patch.schemaVersion !== "verified-publication-patch/v1") {
+    throw new Error("Verified publication patch must use the exact verified-publication-patch/v1 contract.");
+  }
+  assertCommitSha(patch.expectedBaseSha);
+  for (const identity of [patch.verifierInputsSha256, patch.verificationReportSha256, patch.verificationLifecycleSha256]) {
+    if (!/^[a-f0-9]{64}$/u.test(identity)) throw new Error("Verified publication patch identity is malformed.");
+  }
+  if (!Array.isArray(patch.files) || patch.files.length === 0 || patch.files.length > maximumTransferFiles) {
+    throw new Error("Verified publication patch file inventory is empty or excessive.");
+  }
+  const paths = patch.files.map((file) => {
+    if (typeof file !== "object" || file === null || Array.isArray(file)) throw new Error("Verified publication patch file is malformed.");
+    assertRepositoryPath(file.path);
+    if (file.state === "deleted") {
+      if (Object.keys(file).sort().join("|") !== "path|state") throw new Error("Verified publication deletion contract is extended or malformed.");
+    } else if (file.state === "regular") {
+      if (Object.keys(file).sort().join("|") !== "mode|path|sha256|state"
+        || typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(file.sha256)
+        || !Number.isInteger(file.mode) || file.mode! < 0 || file.mode! > 0o777) {
+        throw new Error("Verified publication regular-file contract is extended or malformed.");
+      }
+    } else {
+      throw new Error("Verified publication file state is unsupported.");
+    }
+    return file.path;
+  });
+  if (new Set(paths).size !== paths.length || paths.some((path, index) => index > 0 && paths[index - 1]! >= path)) {
+    throw new Error("Verified publication patch file inventory is duplicate or ambiguously ordered.");
+  }
 }
 
 async function assertOnlyExpectedWorkspaceChanges(root: string, expected: readonly string[], runner: CommandRunner): Promise<void> {

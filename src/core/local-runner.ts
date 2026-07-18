@@ -36,6 +36,7 @@ import {
 import { IsolatedBuilderFilesystem } from "./builder-filesystem.js";
 import { FreshVerifierWorkspace } from "./fresh-verifier-workspace.js";
 import { TrustedPublicationWorkspace, type TrustedPublicationWorkspaceHandle } from "./trusted-publication-workspace.js";
+import { signArtifact } from "./artifact-authentication.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -300,7 +301,13 @@ export class LocalImprovementRunner {
           verifier.path,
           await writeArtifact(verifier.path, "generated-test-verification-lifecycle.json", verificationLifecycle),
         );
-        publicationWorkspace = await new TrustedPublicationWorkspace(this.workspaceBase, this.runner).create(
+        await signArtifact(
+          verifier.path,
+          verificationLifecyclePath,
+          "generated-test-lifecycle-decision/v1",
+          this.manifestKey,
+        );
+        publicationWorkspace = await new TrustedPublicationWorkspace(this.workspaceBase, this.runner, this.manifestKey).create(
           repository,
           verifier.path,
           verifierInputs,
@@ -315,7 +322,7 @@ export class LocalImprovementRunner {
         const publication = await this.stages.publicationRequest(publicationWorkspace.path, {
           repository,
           reference: "HEAD",
-        });
+        }, this.manifestKey);
         await isolated.cleanup();
         isolatedCleaned = true;
         await publicationWorkspace.commitToBranch(repository, branch, `fix: ${spec.title}`);
