@@ -86,7 +86,7 @@ export class PipelineStages {
         maxFiles: config.limits.max_changed_files,
         maxChangedLines: config.limits.max_diff_lines,
         maxCostUsd: config.limits.max_cost_usd,
-      });
+      }, config.protected_paths);
       await writeArtifact(root, "daily-improvement-decision.json", decision);
       await writeArtifact(root, "spec.json", spec);
       return spec;

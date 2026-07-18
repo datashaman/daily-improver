@@ -179,7 +179,7 @@ Exit gate: generated tests demonstrate an observable difference between defectiv
 
 Goal: prevent unauthorized changes rather than only detecting them afterward.
 
-- [ ] Give the builder a strict filesystem allowlist.
+- [x] Give the builder a strict filesystem allowlist.
 - [ ] Make sealed tests, specifications, policies, workflows, and migrations read-only.
 - [ ] Remove test-agent and analysis-agent credentials from the builder environment.
 - [ ] Disable outbound networking by default.

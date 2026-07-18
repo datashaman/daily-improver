@@ -33,6 +33,7 @@ import {
   readGeneratedTestLifecycleReport,
   type TestCommandOutcome,
 } from "../domain/generated-test-lifecycle.js";
+import { IsolatedBuilderFilesystem } from "./builder-filesystem.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -265,7 +266,10 @@ export class LocalImprovementRunner {
           protectedFiles: [...new Set([...config.protected_paths, ...Object.keys(manifest.files)])],
         },
       };
-      const builderExecution = await this.agents.build(builderContext);
+      const builderExecution = await new IsolatedBuilderFilesystem(this.workspaceBase).execute(
+        builderContext,
+        async (context) => await this.agents.build(context),
+      );
       const trustedBuilderArtifacts = await persistAgentExecution(isolated.path, "build", builderExecution);
       await this.runner.run(["git", "add", "-N", "."], isolated.path);
       const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey, trustedBuilderArtifacts);

@@ -121,7 +121,7 @@ export class ImprovementPipeline {
       maxFiles: limits.maxFiles,
       maxChangedLines: limits.maxChangedLines,
       maxCostUsd: options.maxCostUsd ?? config.limits.max_cost_usd,
-    });
+    }, config.protected_paths);
     const context: PolicyContext = {
       estimatedFiles: options.estimatedFiles ?? (candidate.suggestedFiles.length || 1),
       estimatedChangedLines: options.estimatedChangedLines ?? 80,

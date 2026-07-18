@@ -1,26 +1,27 @@
 # Current Project Status
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: Eris-specific property-test inspection rejects unsupported generators, bypassed or overridden execution, missing target calls, and missing invariant checks before the builder.
-- Current checkpoint commit: `feat: inspect generated Eris property tests`.
+- Last completed milestone: Builder writes are confined to an exact specification-derived production-file allowlist through a disposable filesystem boundary.
+- Current checkpoint commit: `feat: confine builder writes to approved files`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1E — Builder isolation.
-- Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
+- Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E now derives one exact production-file write allowlist from the validated specification, rejects malformed and escaping input before builder invocation, runs the builder without Git metadata in a disposable filesystem copy, and imports only approved regular-file writes. The configured customer-runner structured-endpoint proof remains a separate deployment gate; the local CLI continues to expose the command-backed provider.
 
 ## Exact next task
 
-Give the builder a strict filesystem allowlist.
+Make sealed tests, specifications, policies, workflows, and migrations read-only to the builder.
 
 ## Acceptance criteria for the next task
 
-- Derive the builder write allowlist only from the validated specification and keep it language-neutral.
-- Prevent builder writes outside approved production paths during execution, rather than relying only on response claims or post-build verification.
-- Reject absolute paths, traversal, symlink escapes, protected test/spec/policy paths, and malformed or unbounded allowlist input before builder execution.
-- Preserve separate stage credentials, sealed artifacts, diff limits, response validation, and independent verification.
-- Add deterministic executable examples for accepted writes and every fail-closed escape class without live credentials or network access.
+- Materialize sealed test-agent outputs, specifications, policies, workflows, and migrations as read-only inputs at the builder boundary.
+- Derive protection only from trusted configuration plus sealed artifact identities, and keep the core mechanism language-neutral.
+- Reject missing, mutable, non-regular, replaced, or symlink-crossing protected inputs before the builder runs.
+- Prove the builder can read required sealed inputs but cannot modify, replace, rename, or delete them during execution.
+- Preserve the strict production-file write allowlist, separate stage credentials, response validation, diff limits, and independent verification.
+- Add deterministic executable examples for accepted reads and every fail-closed protected-input mutation without live credentials or network access.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -48,6 +49,8 @@ Give the builder a strict filesystem allowlist.
 - `TrustedRunnerModelStageCredentialSource` resolves exchange configuration without repository arguments, validates exact trusted issuer/audience/stage/scope identity claims, keeps the assertion only in the bounded exchange authorization header, and accepts only an exact short-lived `model-stage-credential/v1` response for the requested stage and hashed repository/specification scope.
 - Credential exchange bounds identity, request, response, and timeout values; unsupported protocols, extended schemas, mismatched claims, status failures, malformed responses, and oversized values fail closed with sanitized explicit classifications. Only transient acquisition failures retry, and failed exchanges settle zero model cost.
 - The local runner creates an isolated daily worktree and branch.
+- Specification removes configured protected scopes before producing the builder write allowlist. The runner accepts only a non-empty, unique, bounded collection of exact repository-relative production files, rejects absolute paths, traversal, wildcards, protected overlap, non-regular targets, missing parents, and symlink crossings before builder invocation, and passes the narrowed allowlist to the builder request.
+- The builder executes against a disposable repository copy without Git metadata. Only approved regular-file changes or deletions are atomically imported into the isolated run checkout; attempted test, specification, policy, or unrelated writes remain confined to the disposable copy and are removed, while the established response, manifest, diff, semantic, and verification gates still run independently.
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
@@ -79,16 +82,18 @@ Give the builder a strict filesystem allowlist.
 
 ## Last verification
 
-Verified on 2026-07-17 for the Eris property-test quality slice:
+Verified on 2026-07-18 for the builder filesystem allowlist slice:
 
-- Focused Eris/Pest/PHPUnit adapter-quality tests: 15 tests passed.
-- `npm test`: 228 tests passed; both live model proofs remained excluded.
+- Focused builder filesystem tests: 3 tests passed.
+- Focused builder filesystem, pipeline, and property-proof tests: 21 tests passed.
+- Focused local-runner integration tests: 4 tests passed.
+- `npm test`: 231 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
-- `git diff --check` passed.
+- `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
 - The container was not rebuilt because production dependencies and CLI runtime packaging did not change.
-- The established end-to-end defect proof remained green with `test-plan/v7`; Eris-specific executable examples separately proved supported generator construction, proof-bound default iteration execution, target and invariant structure, nested PHPUnit evidence, and every new rejection class without invoking a live model.
+- The established end-to-end defect proof remained green with `test-plan/v7`; new deterministic examples separately proved approved imports, disposable confinement of protected and unrelated writes, and pre-builder rejection of absolute, traversing, wildcard, duplicate, excessive, protected, non-regular, and symlink-crossing allowlists without invoking a live model.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
