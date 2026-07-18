@@ -3,8 +3,10 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { createServer } from "node:net";
 import test from "node:test";
 import type { AgentContext } from "../src/agents/agent-provider.js";
+import { CommandAgentProvider, createCommandAgentRuntimeEnvironment } from "../src/agents/command-agent-provider.js";
 import {
   assertProtectedInputsReadOnly,
   deriveBuilderProtectedInputs,
@@ -131,6 +133,49 @@ test("rejects missing, mutable, replaced, non-regular, and symlink-crossing prot
     /symbolic link/,
   );
   assert.equal(called, false);
+});
+
+test("denies builder connections while preserving protected reads and one approved production write", async () => {
+  const root = await fixtureRepository();
+  const scriptPath = join(root, ".ai", "builder-network-proof.cjs");
+  const server = createServer((socket) => socket.end("reachable"));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  await writeFile(scriptPath, [
+    "const fs = require('node:fs');",
+    "const net = require('node:net');",
+    "if (fs.readFileSync('tests/Service.test.ts', 'utf8') !== 'sealed test\\n') process.exit(7);",
+    `const socket = net.connect(${address.port}, '127.0.0.1');`,
+    "socket.setTimeout(1000);",
+    "socket.on('connect', () => process.exit(8));",
+    "socket.on('timeout', () => process.exit(9));",
+    "socket.on('error', () => fs.writeFileSync('src/Service.ts', 'network denied\\n'));",
+  ].join("\n"));
+  const context = fixtureContext(root);
+  const provider = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: `${process.execPath} .ai/builder-network-proof.cjs`,
+    runtimeEnvironment: createCommandAgentRuntimeEnvironment(process.env),
+  });
+
+  try {
+    await new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(
+      context,
+      { trustedPatterns: [".ai/**", ".github/workflows/**", "database/migrations/**"], sealedFiles: (await fixtureProtection(root)).sealedFiles },
+      async (isolated) => await provider.build(isolated),
+    );
+    assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "network denied\n");
+    assert.equal(await readFile(join(root, "tests/Service.test.ts"), "utf8"), "sealed test\n");
+  } catch (error) {
+    assert.match(String(error), /Builder outbound network denial is unavailable or could not be verified|unavailable on this runner platform/);
+    assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
 
 async function fixtureRepository(): Promise<string> {

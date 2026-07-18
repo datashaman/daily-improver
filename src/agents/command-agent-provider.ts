@@ -1,6 +1,11 @@
 import type { AgentContext, AgentProvider } from "./agent-provider.js";
 import { CommandRunner } from "../infra/command-runner.js";
 import { isAbsolute, relative } from "node:path";
+import {
+  PlatformBuilderNetworkIsolation,
+  validateBuilderNetworkPolicy,
+} from "./builder-network-isolation.js";
+import type { BuilderNetworkIsolation, BuilderNetworkPolicy } from "./builder-network-isolation.js";
 
 const maximumPathEnvironmentLength = 8_192;
 const maximumSpecificationPathLength = 4_096;
@@ -13,6 +18,7 @@ export interface CommandAgentOptions {
   readonly testCommand: string;
   readonly buildCommand: string;
   readonly runtimeEnvironment: CommandAgentRuntimeEnvironment;
+  readonly builderNetworkPolicy?: BuilderNetworkPolicy;
 }
 
 export function createCommandAgentRuntimeEnvironment(
@@ -30,6 +36,7 @@ export class CommandAgentProvider implements AgentProvider {
   constructor(
     private readonly options: CommandAgentOptions,
     private readonly runner = new CommandRunner(),
+    private readonly builderNetworkIsolation: BuilderNetworkIsolation = new PlatformBuilderNetworkIsolation(),
   ) {}
 
   async generateTests(context: AgentContext): Promise<void> {
@@ -43,16 +50,15 @@ export class CommandAgentProvider implements AgentProvider {
   private async execute(stage: "test" | "build", command: string, context: AgentContext): Promise<void> {
     const runtimeEnvironment = validateRuntimeEnvironment(this.options.runtimeEnvironment);
     assertSpecificationPath(context);
-    const result = await this.runner.runWithExactEnvironment(
-      ["/bin/sh", "-c", command],
-      context.repository,
-      20 * 60_000,
-      {
-        ...runtimeEnvironment,
-        DAILY_IMPROVER_AGENT_STAGE: stage,
-        DAILY_IMPROVER_SPEC_PATH: context.specPath,
-      },
-    );
+    const agentEnvironment = {
+      ...runtimeEnvironment,
+      DAILY_IMPROVER_AGENT_STAGE: stage,
+      DAILY_IMPROVER_SPEC_PATH: context.specPath,
+    };
+    const commandArguments = ["/bin/sh", "-c", command];
+    const result = stage === "build" && validateBuilderNetworkPolicy(this.options.builderNetworkPolicy).outbound === "deny"
+      ? await this.builderNetworkIsolation.run(commandArguments, context.repository, 20 * 60_000, agentEnvironment)
+      : await this.runner.runWithExactEnvironment(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
     if (result.exitCode !== 0) {
       throw new Error(`${stage} agent failed: ${(result.stderr || result.stdout).trim()}`);
     }

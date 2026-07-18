@@ -7,6 +7,8 @@ import {
   CommandAgentProvider,
   createCommandAgentRuntimeEnvironment,
 } from "../src/agents/command-agent-provider.js";
+import type { BuilderNetworkIsolation } from "../src/agents/builder-network-isolation.js";
+import { CommandRunner } from "../src/infra/command-runner.js";
 import type { CommandAgentRuntimeEnvironment } from "../src/agents/command-agent-provider.js";
 import type { AgentContext } from "../src/agents/agent-provider.js";
 import type { ImprovementSpec } from "../src/domain/model.js";
@@ -28,15 +30,17 @@ test("command-backed stages receive only runner runtime and exact stage inputs",
     GITHUB_TOKEN: "github-sentinel",
     OPENAI_API_KEY: "unrelated-model-sentinel",
   };
+  const networkIsolation = new RecordingNetworkIsolation();
   const provider = new CommandAgentProvider({
     testCommand: "env > tests/test-agent.env",
     buildCommand: "env > src/build-agent.env",
     runtimeEnvironment: createCommandAgentRuntimeEnvironment(sentinelEnvironment),
-  });
+  }, new CommandRunner(), networkIsolation);
   const context = fixtureContext(root, specPath);
 
   await provider.generateTests(context);
   await provider.build(context);
+  assert.equal(networkIsolation.invocations, 1);
 
   const testEnvironment = await readFile(join(root, "tests", "test-agent.env"), "utf8");
   const buildEnvironment = await readFile(join(root, "src", "build-agent.env"), "utf8");
@@ -48,6 +52,38 @@ test("command-backed stages receive only runner runtime and exact stage inputs",
     assert.doesNotMatch(environment, /test-stage-sentinel|analysis-stage-sentinel|manifest-sentinel/);
     assert.doesNotMatch(environment, /control-plane-sentinel|github-sentinel|unrelated-model-sentinel/);
   }
+});
+
+test("builder networking defaults to denial and requires an exact trusted runner approval", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-command-network-policy-"));
+  const specPath = join(root, ".ai", "spec.json");
+  await mkdir(dirname(specPath), { recursive: true });
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(specPath, "{}\n");
+  const rejectingIsolation: BuilderNetworkIsolation = {
+    async run() { throw new Error("network isolation invoked"); },
+  };
+  const runtimeEnvironment = createCommandAgentRuntimeEnvironment(process.env);
+
+  const denied = new CommandAgentProvider({ testCommand: "true", buildCommand: "true", runtimeEnvironment }, new CommandRunner(), rejectingIsolation);
+  await assert.rejects(denied.build(fixtureContext(root, specPath)), /network isolation invoked/);
+
+  const approved = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "printf approved > src/build-agent.env",
+    runtimeEnvironment,
+    builderNetworkPolicy: { schemaVersion: "builder-network-policy/v1", outbound: "allow" },
+  }, new CommandRunner(), rejectingIsolation);
+  await approved.build(fixtureContext(root, specPath));
+  assert.equal(await readFile(join(root, "src/build-agent.env"), "utf8"), "approved");
+
+  const malformed = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "true",
+    runtimeEnvironment,
+    builderNetworkPolicy: { schemaVersion: "builder-network-policy/v1", outbound: "allow", repositoryOverride: true } as never,
+  });
+  await assert.rejects(malformed.build(fixtureContext(root, specPath)), /exact trusted runner-owned value/);
 });
 
 test("command-backed agents fail closed without an exact safe runtime", async () => {
@@ -98,4 +134,19 @@ const fixtureSpec: ImprovementSpec = {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+class RecordingNetworkIsolation implements BuilderNetworkIsolation {
+  invocations = 0;
+  private readonly runner = new CommandRunner();
+
+  async run(
+    command: readonly string[],
+    cwd: string,
+    timeoutMs: number,
+    environment: Readonly<Record<string, string>>,
+  ) {
+    this.invocations += 1;
+    return await this.runner.runWithExactEnvironment(command, cwd, timeoutMs, environment);
+  }
 }
