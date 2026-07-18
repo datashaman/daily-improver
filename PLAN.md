@@ -204,7 +204,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Run repository commands in a clean environment.
 - [x] Run targeted mutation testing against changed production files.
 - [x] Compare mutation score to baseline.
-- [ ] Compare static-analysis findings to baseline.
+- [x] Compare static-analysis findings to baseline.
 - [ ] Compare public API surfaces with an ecosystem tool.
 - [ ] Detect new ignored static-analysis findings.
 - [ ] Detect broad exception swallowing.

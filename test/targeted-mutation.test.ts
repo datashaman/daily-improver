@@ -12,7 +12,7 @@ import {
 } from "../src/domain/targeted-mutation.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import { createVerifierCommandEnvironmentDecision, runVerifierCommand } from "../src/core/verifier-command-environment.js";
-import { assertVerifierMutationStateUnchanged, captureVerifierMutationState } from "../src/core/verifier-mutation-state.js";
+import { assertVerifierExecutionStateUnchanged, captureVerifierExecutionState } from "../src/core/verifier-execution-state.js";
 
 const target = "app/Domain/MoneyAllocator.php";
 const plan = {
@@ -163,14 +163,14 @@ test("rejects any tracked or untracked checkout change made by the targeted muta
     const result = await runner.run(["git", ...args], root);
     assert.equal(result.exitCode, 0, result.stderr);
   }
-  const before = await captureVerifierMutationState(root, "HEAD", runner);
+  const before = await captureVerifierExecutionState(root, "HEAD", runner);
   await writeFile(join(root, "source.php"), "<?php return 2;\n");
-  await assert.rejects(assertVerifierMutationStateUnchanged(root, "HEAD", before, runner), /changed the fresh verifier checkout/);
+  await assert.rejects(assertVerifierExecutionStateUnchanged(root, "HEAD", before, runner), /changed the fresh verifier checkout/);
 
   await writeFile(join(root, "source.php"), "<?php return 1;\n");
-  const restored = await captureVerifierMutationState(root, "HEAD", runner);
+  const restored = await captureVerifierExecutionState(root, "HEAD", runner);
   await writeFile(join(root, "mutation-cache.json"), "{}\n");
-  await assert.rejects(assertVerifierMutationStateUnchanged(root, "HEAD", restored, runner), /changed the fresh verifier checkout/);
+  await assert.rejects(assertVerifierExecutionStateUnchanged(root, "HEAD", restored, runner), /changed the fresh verifier checkout/);
 });
 
 function execution() {

@@ -16,6 +16,11 @@ import type {
   TargetedMutationPlan,
   TargetedMutationResult,
 } from "./domain/targeted-mutation.js";
+import type {
+  StaticAnalysisExecution,
+  StaticAnalysisPlan,
+  StaticAnalysisResult,
+} from "./domain/static-analysis-findings.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -45,6 +50,9 @@ export interface RepositoryAdapter {
   readonly targetedMutationInventorySemantics?: readonly string[];
   prepareTargetedMutation?(root: string, targets: readonly string[]): Promise<TargetedMutationPlan>;
   inspectTargetedMutation?(root: string, plan: TargetedMutationPlan, execution: TargetedMutationExecution): Promise<TargetedMutationResult>;
+  readonly staticAnalysisFindingIdentitySemantics?: readonly string[];
+  prepareVerifierStaticAnalysis?(root: string): Promise<StaticAnalysisPlan>;
+  inspectVerifierStaticAnalysis?(root: string, plan: StaticAnalysisPlan, execution: StaticAnalysisExecution): Promise<StaticAnalysisResult>;
 }
 
 export interface RunStore {

@@ -445,6 +445,9 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, /"schemaVersion": "verification-report\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v2"/);
   assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-score-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-findings-comparison\/v1"/);
+  assert.match(verification.stdout, /"outcome": "clean"/);
   assert.match(verification.stdout, /"targets": \[\s+"app\/Domain\/MoneyAllocator.php"/);
   assert.match(verification.stdout, /"killed": 1/);
   assert.match(verification.stdout, /"scoreBasisPoints": 0/);

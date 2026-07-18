@@ -13,6 +13,7 @@ import { collectPhpStaticAnalysisEvidence, phpStaticAnalysisCommand, phpStaticAn
 import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersion } from "./php-coverage.js";
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
 import { inspectPhpTargetedMutation, preparePhpTargetedMutation } from "./php-targeted-mutation.js";
+import { inspectPhpVerifierStaticAnalysis, preparePhpVerifierStaticAnalysis } from "./php-verifier-static-analysis.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
@@ -49,6 +50,7 @@ type PackageMap = Readonly<Record<string, string>>;
 export class PhpAdapter implements RepositoryAdapter {
   readonly id = "php";
   readonly targetedMutationInventorySemantics = ["php-infection-mutator-location/v1"] as const;
+  readonly staticAnalysisFindingIdentitySemantics = ["php-static-analysis-path-rule-message/v1"] as const;
 
   constructor(
     private readonly evidenceRunner: EvidenceRunner = new BoundedEvidenceRunner(),
@@ -216,6 +218,14 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async inspectTargetedMutation(root: string, plan: Parameters<typeof inspectPhpTargetedMutation>[1], execution: Parameters<typeof inspectPhpTargetedMutation>[2]) {
     return await inspectPhpTargetedMutation(root, plan, execution);
+  }
+
+  async prepareVerifierStaticAnalysis(root: string) {
+    return await preparePhpVerifierStaticAnalysis(root);
+  }
+
+  async inspectVerifierStaticAnalysis(root: string, plan: Parameters<typeof inspectPhpVerifierStaticAnalysis>[1], execution: Parameters<typeof inspectPhpVerifierStaticAnalysis>[2]) {
+    return await inspectPhpVerifierStaticAnalysis(root, plan, execution);
   }
 }
 

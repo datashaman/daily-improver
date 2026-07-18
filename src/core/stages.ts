@@ -26,8 +26,9 @@ import { authorizePublication, type PublicationVerificationBinding } from "./pub
 import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
 import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
 import { assertTargetedMutationPlan, assertTargetedMutationResult, compareTargetedMutationScores, type TargetedMutationResult, type TargetedMutationScoreComparison } from "../domain/targeted-mutation.js";
-import { assertVerifierMutationStateUnchanged, captureVerifierMutationState } from "./verifier-mutation-state.js";
-import { createTargetedMutationBaselineWorkspace } from "./targeted-mutation-baseline-workspace.js";
+import { assertVerifierExecutionStateUnchanged, captureVerifierExecutionState } from "./verifier-execution-state.js";
+import { createVerifierBaselineWorkspace } from "./verifier-baseline-workspace.js";
+import { assertStaticAnalysisPlan, assertStaticAnalysisResult, compareStaticAnalysisFindings, type StaticAnalysisFindingsComparison, type StaticAnalysisResult } from "../domain/static-analysis-findings.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -193,12 +194,13 @@ export class PipelineStages {
     const ordinaryVerificationPassed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
     let targetedMutation: TargetedMutationResult | undefined;
     let targetedMutationComparison: TargetedMutationScoreComparison | undefined;
+    let staticAnalysis: StaticAnalysisResult | undefined;
+    let staticAnalysisComparison: StaticAnalysisFindingsComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
       throw new Error("Full verifier mutation testing is unsupported; use the exact targeted mode.");
     }
-    if (ordinaryVerificationPassed && inputs.mutationMode === "targeted") {
-      const targets = changedProductionTargets(diff.files, inputs.specification.allowedFiles);
-      const baselineWorkspace = await createTargetedMutationBaselineWorkspace(root, inputs, this.runner);
+    if (ordinaryVerificationPassed) {
+      const baselineWorkspace = await createVerifierBaselineWorkspace(root, inputs, this.runner);
       try {
         await assertVerifierExecutionInputs(baselineWorkspace.path, inputs, this.runner);
         await assertVerifierCommandEnvironment(this.runner, inputs.commandEnvironment, baselineWorkspace.path);
@@ -207,22 +209,30 @@ export class PipelineStages {
         }
         const baselineAdapter = await this.registry.resolve(baselineWorkspace.path);
         const currentAdapter = await this.registry.resolve(root);
-        if (baselineAdapter.id !== currentAdapter.id) throw new Error("Targeted mutation adapters are incomparable across baseline and current states.");
-        const baselineMutation = await executeTargetedMutation(
-          baselineWorkspace.path,
-          baselineAdapter,
-          targets,
-          inputs,
-          key,
-          this.runner,
-        );
-        targetedMutation = await executeTargetedMutation(root, currentAdapter, targets, inputs, key, this.runner);
-        targetedMutationComparison = compareTargetedMutationScores(baselineMutation, targetedMutation);
+        if (baselineAdapter.id !== currentAdapter.id) throw new Error("Verifier adapters are incomparable across baseline and current states.");
+        const baselineStaticAnalysis = await executeVerifierStaticAnalysis(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
+        staticAnalysis = await executeVerifierStaticAnalysis(root, currentAdapter, inputs, key, this.runner);
+        staticAnalysisComparison = compareStaticAnalysisFindings(baselineStaticAnalysis, staticAnalysis);
+        if (inputs.mutationMode === "targeted") {
+          const targets = changedProductionTargets(diff.files, inputs.specification.allowedFiles);
+          const baselineMutation = await executeTargetedMutation(
+            baselineWorkspace.path,
+            baselineAdapter,
+            targets,
+            inputs,
+            key,
+            this.runner,
+          );
+          targetedMutation = await executeTargetedMutation(root, currentAdapter, targets, inputs, key, this.runner);
+          targetedMutationComparison = compareTargetedMutationScores(baselineMutation, targetedMutation);
+        }
       } finally {
         await baselineWorkspace.cleanup();
       }
     }
     const passed = ordinaryVerificationPassed
+      && staticAnalysis !== undefined
+      && staticAnalysisComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
     const report = {
       schemaVersion: "verification-report/v1" as const,
@@ -232,6 +242,8 @@ export class PipelineStages {
       diff,
       sourceSafety,
       checks,
+      ...(staticAnalysis ? { staticAnalysis } : {}),
+      ...(staticAnalysisComparison ? { staticAnalysisComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
       ...(targetedMutationComparison ? { targetedMutationComparison } : {}),
       verifiedAt: this.clock.now().toISOString(),
@@ -315,6 +327,34 @@ export class PipelineStages {
   }
 }
 
+async function executeVerifierStaticAnalysis(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<StaticAnalysisResult> {
+  if (!adapter.prepareVerifierStaticAnalysis || !adapter.inspectVerifierStaticAnalysis) {
+    throw new Error("Static analysis is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertStaticAnalysisPlan(await adapter.prepareVerifierStaticAnalysis(root));
+  const execution = await runVerifierCommand(runner, inputs.commandEnvironment, plan.command, root, plan.timeoutMs);
+  const result = assertStaticAnalysisResult(await adapter.inspectVerifierStaticAnalysis(root, plan, execution), plan);
+  if (!Array.isArray(adapter.staticAnalysisFindingIdentitySemantics)
+    || adapter.staticAnalysisFindingIdentitySemantics.length < 1
+    || adapter.staticAnalysisFindingIdentitySemantics.length > 16
+    || !adapter.staticAnalysisFindingIdentitySemantics.includes(result.findingIdentitySemantics)) {
+    throw new Error("Static-analysis result uses unsupported adapter finding-identity semantics.");
+  }
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Static-analysis execution changed a sealed verifier input.");
+  }
+  return result;
+}
+
 async function executeTargetedMutation(
   root: string,
   adapter: RepositoryAdapter,
@@ -326,7 +366,7 @@ async function executeTargetedMutation(
   if (!adapter.prepareTargetedMutation || !adapter.inspectTargetedMutation) {
     throw new Error("Targeted mutation testing is unavailable for the selected repository adapter.");
   }
-  const beforeMutationState = await captureVerifierMutationState(root, inputs.expectedBaseSha, runner);
+  const beforeMutationState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertTargetedMutationPlan(await adapter.prepareTargetedMutation(root, targets), targets);
   const execution = await runVerifierCommand(
     runner,
@@ -342,7 +382,7 @@ async function executeTargetedMutation(
     || !adapter.targetedMutationInventorySemantics.includes(result.inventorySemantics)) {
     throw new Error("Targeted mutation result uses unsupported adapter inventory semantics.");
   }
-  await assertVerifierMutationStateUnchanged(root, inputs.expectedBaseSha, beforeMutationState, runner);
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeMutationState, runner);
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Targeted mutation execution changed a sealed verifier input.");

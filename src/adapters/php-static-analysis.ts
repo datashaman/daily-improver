@@ -28,7 +28,7 @@ export interface PhpStaticAnalysisEvidence {
   readonly candidates: readonly ImprovementCandidate[];
 }
 
-type StaticAnalysisTool = PhpStaticAnalysisFinding["tool"];
+export type StaticAnalysisTool = PhpStaticAnalysisFinding["tool"];
 
 const trustedCommands: Readonly<Record<StaticAnalysisTool, readonly string[]>> = {
   phpstan: [
@@ -47,6 +47,14 @@ const trustedCommands: Readonly<Record<StaticAnalysisTool, readonly string[]>> =
 
 export function phpStaticAnalysisCommand(tool: StaticAnalysisTool): readonly string[] {
   return trustedCommands[tool];
+}
+
+export function phpStaticAnalysisConfigurationPaths(tool: StaticAnalysisTool): readonly string[] {
+  return tool === "phpstan" ? ["phpstan.neon", "phpstan.neon.dist"] : ["psalm.xml", "psalm.xml.dist"];
+}
+
+export function parsePhpStaticAnalysisOutput(tool: StaticAnalysisTool, root: string, output: string): ParsedStaticAnalysis {
+  return parseOutput(tool, root, output);
 }
 
 export async function collectPhpStaticAnalysisEvidence(
@@ -128,7 +136,7 @@ function parseFindings(
   return parseOutput(tool, root, output).findings;
 }
 
-interface ParsedStaticAnalysis {
+export interface ParsedStaticAnalysis {
   readonly findings: readonly PhpStaticAnalysisFinding[];
   readonly globalErrors: readonly string[];
 }
