@@ -37,6 +37,7 @@ import { IsolatedBuilderFilesystem } from "./builder-filesystem.js";
 import { FreshVerifierWorkspace } from "./fresh-verifier-workspace.js";
 import { TrustedPublicationWorkspace, type TrustedPublicationWorkspaceHandle } from "./trusted-publication-workspace.js";
 import { signArtifact } from "./artifact-authentication.js";
+import { runVerifierCommand, type VerifierCommandEnvironmentDecision } from "./verifier-command-environment.js";
 
 export interface LocalRunResult {
   readonly branch: string;
@@ -288,7 +289,15 @@ export class LocalImprovementRunner {
       try {
         await verifier.assertReady();
         verification = await this.stages.verify(verifier.path, verifierInputs, this.manifestKey);
-        const verificationAttempts = await runLifecycleAttempts(this.runner, verifier.path, test.command, changedTests, "verification");
+        const verificationAttempts = await runLifecycleAttempts(
+          this.runner,
+          verifier.path,
+          test.command,
+          changedTests,
+          "verification",
+          {},
+          verifierInputs.commandEnvironment,
+        );
         const verificationLifecycle = decideGeneratedTestLifecycle({
           phase: "verification",
           command: test.command,
@@ -359,6 +368,7 @@ async function runLifecycleAttempts(
   testPaths: readonly string[],
   phase: "baseline" | "verification",
   firstAttemptEnvironment: Readonly<Record<string, string>> = {},
+  verifierEnvironment?: VerifierCommandEnvironmentDecision,
 ): Promise<{ readonly results: readonly Awaited<ReturnType<CommandRunner["run"]>>[]; readonly outcomes: readonly TestCommandOutcome[] }> {
   const reportPath = join(root, ".daily-improver", "generated-test-lifecycle-report.json");
   await mkdir(dirname(reportPath), { recursive: true });
@@ -367,13 +377,16 @@ async function runLifecycleAttempts(
   for (let index = 0; index < 3; index++) {
     const nonce = randomBytes(16).toString("hex");
     await rm(reportPath, { force: true });
-    const result = await runner.run(command, root, undefined, {
+    const environment = {
       ...(index === 0 ? firstAttemptEnvironment : {}),
       DAILY_IMPROVER_TEST_LIFECYCLE_PATH: reportPath,
       DAILY_IMPROVER_TEST_LIFECYCLE_NONCE: nonce,
       DAILY_IMPROVER_TEST_LIFECYCLE_PHASE: phase,
       DAILY_IMPROVER_GENERATED_TEST_PATHS: JSON.stringify(testPaths),
-    });
+    };
+    const result = verifierEnvironment
+      ? await runVerifierCommand(runner, verifierEnvironment, command, root, 10 * 60_000, environment)
+      : await runner.run(command, root, undefined, environment);
     const report = await readGeneratedTestLifecycleReport(reportPath, nonce, testPaths);
     results.push(result);
     outcomes.push(commandOutcome(index + 1, result, report));

@@ -5,48 +5,32 @@ import type { ImproverConfig } from "../config.js";
 import type { ImprovementSpec } from "../domain/model.js";
 import type { CommandRunner } from "../infra/command-runner.js";
 import { runDirectory, type TestManifest } from "./artifacts.js";
+import {
+  validateVerifierCommandEnvironmentDecision,
+  type VerifierCommandEnvironmentDecision,
+} from "./verifier-command-environment.js";
 
 const maximumCommands = 64;
 const maximumCommandLength = 4_096;
 
-export interface VerifierRuntimeEnvironment {
-  readonly [name: string]: string;
-  readonly PATH: string;
-}
-
 export interface VerifierExecutionPreparation {
-  readonly schemaVersion: "verifier-execution-preparation/v1";
+  readonly schemaVersion: "verifier-execution-preparation/v2";
   readonly expectedBaseSha: string;
   readonly specification: ImprovementSpec;
   readonly specificationSha256: string;
   readonly configurationSha256: string | "absent";
   readonly commands: readonly string[];
   readonly protectedPaths: readonly string[];
-  readonly runtimeEnvironment: VerifierRuntimeEnvironment;
+  readonly commandEnvironment: VerifierCommandEnvironmentDecision;
   readonly outputArtifact: string;
   readonly trustedArtifacts: readonly string[];
 }
 
 export interface VerifierExecutionInputs extends Omit<VerifierExecutionPreparation, "schemaVersion"> {
-  readonly schemaVersion: "verifier-execution-inputs/v1";
+  readonly schemaVersion: "verifier-execution-inputs/v2";
   readonly manifest: TestManifest;
   readonly manifestArtifactSha256: string;
   readonly integritySha256: string;
-}
-
-export function createVerifierRuntimeEnvironment(
-  environment: Readonly<Record<string, string | undefined>>,
-): VerifierRuntimeEnvironment {
-  const path = environment.PATH;
-  if (!path || path.length > 16_384 || path.includes("\0")) {
-    throw new Error("Verifier runtime PATH must be a bounded non-empty value.");
-  }
-  for (const component of path.split(":")) {
-    if (!component || !component.startsWith("/") || component.includes("\0")) {
-      throw new Error("Verifier runtime PATH must contain only absolute non-empty components.");
-    }
-  }
-  return { PATH: path };
 }
 
 export async function prepareVerifierExecution(
@@ -54,7 +38,7 @@ export async function prepareVerifierExecution(
   base: string,
   spec: ImprovementSpec,
   config: ImproverConfig,
-  runtimeEnvironment: VerifierRuntimeEnvironment,
+  commandEnvironment: VerifierCommandEnvironmentDecision,
   runner: CommandRunner,
 ): Promise<VerifierExecutionPreparation> {
   const expectedBaseSha = await resolveCommit(root, base, runner);
@@ -64,14 +48,14 @@ export async function prepareVerifierExecution(
   const outputArtifact = exactRepositoryPath(root, join(runDirectory(root), "verification.json"));
   const runRoot = exactRepositoryPath(root, runDirectory(root));
   return deepFreeze({
-    schemaVersion: "verifier-execution-preparation/v1",
+    schemaVersion: "verifier-execution-preparation/v2",
     expectedBaseSha,
     specification: clone(spec),
     specificationSha256,
     configurationSha256,
     commands,
     protectedPaths: clone(config.protected_paths),
-    runtimeEnvironment: createVerifierRuntimeEnvironment(runtimeEnvironment),
+    commandEnvironment: validateVerifierCommandEnvironmentDecision(commandEnvironment),
     outputArtifact,
     trustedArtifacts: [
       `${runRoot}/build-agent-usage.json`,
@@ -89,7 +73,7 @@ export async function sealVerifierExecution(
   const manifestArtifactSha256 = await regularFileSha256(root, relative(root, join(runDirectory(root), "test-manifest.json")));
   const unsigned = {
     ...clone(preparation),
-    schemaVersion: "verifier-execution-inputs/v1" as const,
+    schemaVersion: "verifier-execution-inputs/v2" as const,
     manifest: clone(manifest),
     manifestArtifactSha256,
   };
@@ -101,12 +85,12 @@ export async function assertVerifierExecutionInputs(
   inputs: VerifierExecutionInputs,
   runner: CommandRunner,
 ): Promise<void> {
-  if (inputs.schemaVersion !== "verifier-execution-inputs/v1") throw new Error("Verifier execution inputs use an unsupported schema.");
+  if (inputs.schemaVersion !== "verifier-execution-inputs/v2") throw new Error("Verifier execution inputs use an unsupported schema.");
   const { integritySha256, ...unsigned } = inputs;
   if (!/^[a-f0-9]{64}$/u.test(integritySha256) || sha256(JSON.stringify(unsigned)) !== integritySha256) {
     throw new Error("Verifier execution inputs changed after they were sealed.");
   }
-  assertPreparation({ ...unsigned, schemaVersion: "verifier-execution-preparation/v1" });
+  assertPreparation({ ...unsigned, schemaVersion: "verifier-execution-preparation/v2" });
   if (await regularFileSha256(root, relative(root, join(runDirectory(root), "spec.json"))) !== inputs.specificationSha256) {
     throw new Error("Verifier specification identity changed after preparation.");
   }
@@ -141,15 +125,12 @@ export async function writeVerificationOutput(
 }
 
 function assertPreparation(value: VerifierExecutionPreparation): void {
-  if (value.schemaVersion !== "verifier-execution-preparation/v1") throw new Error("Verifier preparation uses an unsupported schema.");
+  if (value.schemaVersion !== "verifier-execution-preparation/v2") throw new Error("Verifier preparation uses an unsupported schema.");
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(value.expectedBaseSha)) throw new Error("Verifier baseline identity is malformed.");
   if (!/^[a-f0-9]{64}$/u.test(value.specificationSha256)) throw new Error("Verifier specification identity is malformed.");
   if (value.configurationSha256 !== "absent" && !/^[a-f0-9]{64}$/u.test(value.configurationSha256)) throw new Error("Verifier configuration identity is malformed.");
   validateCommands(value.commands);
-  if (Object.keys(value.runtimeEnvironment).some((name) => name !== "PATH")) {
-    throw new Error("Verifier runtime environment may contain only PATH.");
-  }
-  createVerifierRuntimeEnvironment(value.runtimeEnvironment);
+  validateVerifierCommandEnvironmentDecision(value.commandEnvironment);
   assertRepositoryRelativePath(value.outputArtifact);
   if (value.trustedArtifacts.length !== 2 || new Set(value.trustedArtifacts).size !== 2) throw new Error("Verifier trusted artifact paths are malformed.");
   for (const path of [...value.trustedArtifacts, ...value.protectedPaths]) {

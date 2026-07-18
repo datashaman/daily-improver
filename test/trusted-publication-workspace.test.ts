@@ -200,7 +200,7 @@ async function createFixture() {
   await signArtifact(verified, lifecyclePath, "generated-test-lifecycle-decision/v1", key);
   await git(runner, verified, ["add", "-N", "--all"]);
   const inputs: VerifierExecutionInputs = {
-    schemaVersion: "verifier-execution-inputs/v1",
+    schemaVersion: "verifier-execution-inputs/v2",
     expectedBaseSha,
     specification: {
       id: "candidate",
@@ -214,7 +214,13 @@ async function createFixture() {
       verification: ["test"], constraints: { maxFiles: 1, maxChangedLines: 10, maxCostUsd: 1 }, evidence: ["fixture"],
     },
     specificationSha256: "b".repeat(64), configurationSha256: "absent", commands: [], protectedPaths: ["tests/**"],
-    runtimeEnvironment: { PATH: "/usr/bin:/bin" }, outputArtifact: `${runRoot}/verification.json`,
+    commandEnvironment: {
+      schemaVersion: "verifier-command-environment/v1",
+      isolation: "fresh-process-and-storage-per-command",
+      shell: "/bin/sh",
+      path: "/usr/bin:/bin",
+      inheritedVariables: [],
+    }, outputArtifact: `${runRoot}/verification.json`,
     trustedArtifacts: [`${runRoot}/build-agent-usage.json`, `${runRoot}/build-agent-rationale.json`],
     manifest, manifestArtifactSha256: sha256(manifestBytes), integritySha256: report.verifierInputsSha256,
   };

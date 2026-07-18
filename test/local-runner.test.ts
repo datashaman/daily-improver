@@ -183,6 +183,21 @@ if (getenv('DAILY_IMPROVER_TEST_LIFECYCLE_PHASE') === 'verification'
     && glob(dirname(__DIR__, 2) . '/.ai/runs/*/*-agent-rationale.json') !== []) {
     throw new RuntimeException('Model rationale reached the verifier.');
 }
+if (getenv('DAILY_IMPROVER_TEST_LIFECYCLE_PHASE') === 'verification') {
+    $root = dirname(__DIR__, 2);
+    $cache = getenv('XDG_CACHE_HOME');
+    $home = getenv('HOME');
+    $temporary = getenv('TMPDIR');
+    if (getenv('DAILY_IMPROVER_AMBIENT_CREDENTIAL') !== false
+        || getenv('DAILY_IMPROVER_PROCESS_STATE_SENTINEL') !== false
+        || getenv('DAILY_IMPROVER_VERIFIER_ENVIRONMENT') !== 'verifier-command-environment/v1'
+        || !is_string($cache) || !is_dir($cache) || is_file($cache . '/sentinel')
+        || !is_string($home) || !is_dir($home)
+        || !is_string($temporary) || !is_dir($temporary)
+        || str_contains(getenv('PATH') ?: '', $root)) {
+        throw new RuntimeException('Verifier command environment was not clean.');
+    }
+}
 if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR__, 2) . '/verifier-command')) {
     throw new RuntimeException('Builder-only filesystem state reached the verifier.');
 }
@@ -365,7 +380,7 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 
-test("ignores builder attempts to suppress, replace, redirect, or pre-populate the independent verifier", async () => {
+test("ignores builder attempts to suppress, replace, redirect, or pre-populate the independent verifier", async (context) => {
   const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-verifier-boundary-"));
   const repository = join(sandbox, "repository");
   await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
@@ -377,7 +392,25 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
   const expectedBaseSha = (await expectSuccess(shell.run(["git", "rev-parse", "HEAD"], repository))).stdout.trim();
 
+  const previousEnvironment = {
+    runDate: process.env.DAILY_IMPROVER_RUN_DATE,
+    credential: process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL,
+    processState: process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL,
+    cache: process.env.XDG_CACHE_HOME,
+  };
+  context.after(() => {
+    restoreEnvironment("DAILY_IMPROVER_RUN_DATE", previousEnvironment.runDate);
+    restoreEnvironment("DAILY_IMPROVER_AMBIENT_CREDENTIAL", previousEnvironment.credential);
+    restoreEnvironment("DAILY_IMPROVER_PROCESS_STATE_SENTINEL", previousEnvironment.processState);
+    restoreEnvironment("XDG_CACHE_HOME", previousEnvironment.cache);
+  });
   process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
+  process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL = "must-not-cross";
+  process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL = "builder-process-state";
+  const ambientCache = join(sandbox, "ambient-cache");
+  await mkdir(ambientCache);
+  await writeFile(join(ambientCache, "sentinel"), "untrusted cache state\n");
+  process.env.XDG_CACHE_HOME = ambientCache;
   const app = createApplication(join(sandbox, "state"), {
     current: async (observedAt) => ({
       schemaVersion: "open-pull-request-state/v1",
@@ -415,7 +448,6 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.notEqual(fakeExecutable.exitCode, 0);
   const rationale = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
   assert.notEqual(rationale.exitCode, 0);
-  delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 
 test("rejects known non-behavioral defect-test failure classifications", () => {
@@ -495,4 +527,9 @@ async function expectSuccess<T extends { exitCode: number; stderr: string }>(pro
   const result = await promise;
   assert.equal(result.exitCode, 0, result.stderr);
   return result;
+}
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }

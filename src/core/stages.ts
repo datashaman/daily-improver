@@ -15,14 +15,13 @@ import { excludeUnresolvedFindings } from "./unresolved-findings.js";
 import { assertScoreExplanations } from "../domain/candidate-score.js";
 import {
   assertVerifierExecutionInputs,
-  createVerifierRuntimeEnvironment,
   prepareVerifierExecution,
   sealVerifierExecution,
   writeVerificationOutput,
   type VerifierExecutionInputs,
   type VerifierExecutionPreparation,
-  type VerifierRuntimeEnvironment,
 } from "./verifier-execution-inputs.js";
+import { assertVerifierCommandEnvironment, createVerifierCommandEnvironmentDecision, runVerifierCommand, type VerifierCommandEnvironmentDecision } from "./verifier-command-environment.js";
 import { authorizePublication, type PublicationVerificationBinding } from "./publication-authorization.js";
 import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
 import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
@@ -40,7 +39,7 @@ export class PipelineStages {
     private readonly unresolvedFindings?: UnresolvedFindingStateSource,
     private readonly runner = new CommandRunner(),
     private readonly clock: Clock = { now: () => new Date() },
-    private readonly verifierRuntimeEnvironment: VerifierRuntimeEnvironment = createVerifierRuntimeEnvironment(process.env),
+    private readonly verifierCommandEnvironment: VerifierCommandEnvironmentDecision = createVerifierCommandEnvironmentDecision(process.env),
   ) {}
 
   async resolveAdapter(root: string) {
@@ -137,7 +136,7 @@ export class PipelineStages {
   ): Promise<VerifierExecutionPreparation> {
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
-    return await prepareVerifierExecution(root, base, spec, config, this.verifierRuntimeEnvironment, this.runner);
+    return await prepareVerifierExecution(root, base, spec, config, this.verifierCommandEnvironment, this.runner);
   }
 
   async sealVerification(
@@ -161,6 +160,7 @@ export class PipelineStages {
     );
     await assertVerifierExecutionInputs(root, inputs, this.runner);
     if (!(await verifyVerifierTestManifest(root, inputs.manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
+    await assertVerifierCommandEnvironment(this.runner, inputs.commandEnvironment, root);
     const trustedPaths = new Set(verifierManifestFilePaths(inputs.manifest));
     trustedPaths.add(relative(root, `${runDirectory(root)}/test-manifest.json`));
     const diff = await new DiffGuard(this.runner).inspect(
@@ -177,11 +177,12 @@ export class PipelineStages {
     );
     const checks = [];
     for (const command of inputs.commands) {
-      const result = await this.runner.runWithExactEnvironment(
-        ["/bin/sh", "-c", command],
+      const result = await runVerifierCommand(
+        this.runner,
+        inputs.commandEnvironment,
+        [inputs.commandEnvironment.shell, "-c", command],
         root,
         10 * 60_000,
-        inputs.runtimeEnvironment,
       );
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
