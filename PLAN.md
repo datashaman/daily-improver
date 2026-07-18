@@ -189,7 +189,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 - [x] Capture filesystem state before and after execution.
 - [x] Fail immediately when protected content changes.
 - [x] Prevent commits, pushes, and PR operations inside the builder.
-- [ ] Prevent generated output from altering the verifier.
+- [x] Prevent generated output from altering the verifier.
 
 Exit gate: the builder cannot modify protected files even when explicitly instructed to do so.
 
@@ -507,7 +507,7 @@ The recent and next commit-sized milestones are:
 36. [x] `feat: reject builder protected changes`
 37. [x] `feat: deny builder repository publication`
 
-The immediate next task is Phase 1E: prevent generated output from altering the verifier. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: verify from a fresh checkout based on the expected main SHA. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

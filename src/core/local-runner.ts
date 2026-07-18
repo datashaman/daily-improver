@@ -66,6 +66,7 @@ export class LocalImprovementRunner {
       const adapter = await this.stagesAdapter(isolated.path);
       const profile = await adapter.profile(isolated.path);
       const config = await loadConfig(isolated.path);
+      const verifierPreparation = await this.stages.prepareVerification(isolated.path, "HEAD");
       const improvementIntent = assertImprovementIntent(spec.improvementIntent);
       if (spec.propertyInvariants.length > 0 && !spec.propertyTestTarget) {
         throw new Error("A selected target is required when the specification requires property-test proof.");
@@ -258,6 +259,7 @@ export class LocalImprovementRunner {
       });
       const manifest = await createTestManifest(isolated.path, this.manifestKey);
       await writeArtifact(isolated.path, "test-manifest.json", manifest);
+      const verifierInputs = await this.stages.sealVerification(isolated.path, verifierPreparation, manifest);
 
       const builderContext: AgentContext = {
         ...baseContext,
@@ -271,9 +273,9 @@ export class LocalImprovementRunner {
         { trustedPatterns: config.protected_paths, sealedFiles: manifest.files },
         async (context) => await this.agents.build(context),
       );
-      const trustedBuilderArtifacts = await persistAgentExecution(isolated.path, "build", builderExecution);
+      await persistAgentExecution(isolated.path, "build", builderExecution);
       await this.runner.run(["git", "add", "-N", "."], isolated.path);
-      const verification = await this.stages.verify(isolated.path, "HEAD", this.manifestKey, trustedBuilderArtifacts);
+      const verification = await this.stages.verify(isolated.path, verifierInputs, this.manifestKey);
       const verificationAttempts = await runLifecycleAttempts(this.runner, isolated.path, test.command, changedTests, "verification");
       const verificationLifecycle = decideGeneratedTestLifecycle({
         phase: "verification",
@@ -401,18 +403,18 @@ export async function persistAgentExecution(
 ): Promise<readonly string[]> {
   if (!execution) return [];
   const usagePath = await writeArtifact(root, `${stage}-agent-usage.json`, {
-    schemaVersion: execution.routingDecision ? "agent-usage/v4" : execution.requestAttempts ? "agent-usage/v3" : execution.budgetDecision ? "agent-usage/v2" : "agent-usage/v1",
-    stage,
     ...execution.usage,
     ...(execution.budgetDecision ? { budgetDecision: execution.budgetDecision } : {}),
     ...(execution.requestAttempts ? { requestAttempts: execution.requestAttempts } : {}),
     ...(execution.routingDecision ? { routingDecision: execution.routingDecision } : {}),
+    schemaVersion: execution.routingDecision ? "agent-usage/v4" : execution.requestAttempts ? "agent-usage/v3" : execution.budgetDecision ? "agent-usage/v2" : "agent-usage/v1",
+    stage,
   });
   const rationalePath = await writeArtifact(root, `${stage}-agent-rationale.json`, {
+    ...execution.rationale,
     schemaVersion: "agent-rationale/v1",
     trust: "untrusted-model-output",
     stage,
-    ...execution.rationale,
   });
   return [relative(root, usagePath), relative(root, rationalePath)];
 }

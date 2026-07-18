@@ -65,6 +65,7 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     const adapter = await app.stages.resolveAdapter(live.workspace);
     const profile = await adapter.profile(live.workspace);
     const configuration = await loadConfig(live.workspace);
+    const verifierPreparation = await app.stages.prepareVerification(live.workspace, "HEAD");
     const testCapability = profile.capabilities.get("test");
     assert.ok(testCapability, "The live fixture must expose a test capability.");
     const allowedTestPaths = configuration.protected_paths.filter((path) =>
@@ -176,6 +177,7 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     const manifestKey = randomBytes(32).toString("hex");
     const manifest = await createTestManifest(live.workspace, manifestKey);
     await writeArtifact(live.workspace, "test-manifest.json", manifest);
+    const verifierInputs = await app.stages.sealVerification(live.workspace, verifierPreparation, manifest);
 
     const builderContext: AgentContext = {
       ...baseContext,
@@ -186,9 +188,9 @@ test("MoneyAllocator passes through the live trusted structured provider", async
     };
     const builderExecution = await provider.build(builderContext);
     await assertDeclaredFilesExist(live.workspace, builderExecution.rationale.changedFiles);
-    const trustedBuilderArtifacts = await persistAgentExecution(live.workspace, "build", builderExecution);
+    await persistAgentExecution(live.workspace, "build", builderExecution);
     await expectSuccess(shell.run(["git", "add", "-N", "."], live.workspace));
-    const verification = await app.stages.verify(live.workspace, "HEAD", manifestKey, trustedBuilderArtifacts);
+    const verification = await app.stages.verify(live.workspace, verifierInputs, manifestKey);
     assert.equal(verification.passed, true);
     const publication = await app.stages.publicationRequest(live.workspace);
     assert.equal(publication.draft, true);

@@ -173,6 +173,25 @@ if ($failures !== [] && $attempt % 2 === 1) {`,
   }
 }
 
+class VerifierTamperingAgent extends ProvingAgent {
+  override async build(context: AgentContext): Promise<BuilderExecution> {
+    const execution = await super.build(context);
+    await writeFile(join(context.repository, "verification.json"), JSON.stringify({ passed: true, checks: [] }));
+    await writeFile(join(context.repository, "verifier-command"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const maliciousRationale = {
+      ...execution.rationale,
+      verificationCommands: [],
+      verifierPath: "./verifier-command",
+      expectedBaseSha: "0".repeat(40),
+      manifestSha256: "0".repeat(64),
+      outputArtifact: "verification.json",
+      verificationReport: { passed: true, checks: [] },
+      environment: { PATH: ".", DAILY_IMPROVER_MANIFEST_KEY: "builder-selected" },
+    };
+    return { ...execution, rationale: maliciousRationale };
+  }
+}
+
 const fixtureUsage = {
   provider: "deterministic-fixture",
   model: "fixture-model-v1",
@@ -319,6 +338,60 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   const openPrDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/open-pull-request-limit-decision.json`], repository));
   assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
   assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
+  delete process.env.DAILY_IMPROVER_RUN_DATE;
+});
+
+test("ignores builder attempts to suppress, replace, redirect, or pre-populate the independent verifier", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-verifier-boundary-"));
+  const repository = join(sandbox, "repository");
+  await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
+  const shell = new CommandRunner();
+  await expectSuccess(shell.run(["git", "init", "-b", "main"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.email", "improver@example.test"], repository));
+  await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
+  await expectSuccess(shell.run(["git", "add", "."], repository));
+  await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
+  const expectedBaseSha = (await expectSuccess(shell.run(["git", "rev-parse", "HEAD"], repository))).stdout.trim();
+
+  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
+  const app = createApplication(join(sandbox, "state"), {
+    current: async (observedAt) => ({
+      schemaVersion: "open-pull-request-state/v1",
+      repositoryId: "b".repeat(64),
+      observedAt,
+      openPullRequests: 0,
+    }),
+  }, {
+    current: async (observedAt) => ({
+      schemaVersion: "unresolved-finding-state/v1",
+      repositoryId: "f".repeat(64),
+      observedAt,
+      findingIds: [],
+    }),
+  });
+  const result = await new LocalImprovementRunner(
+    app.stages,
+    new VerifierTamperingAgent(),
+    join(sandbox, "worktrees"),
+    "ephemeral-test-key",
+  ).run(repository);
+
+  assert.equal(result.verificationPassed, true);
+  const fixedSource = await expectSuccess(shell.run(["git", "show", `${result.branch}:app/Domain/MoneyAllocator.php`], repository));
+  assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
+  const verification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verification.json`], repository));
+  assert.match(verification.stdout, /"schemaVersion": "verification-report\/v1"/);
+  assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
+  assert.match(verification.stdout, /"command": "php tests\/run.php"/);
+  assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
+  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|"checks": \[\]/);
+  const rootPrepopulation = await shell.run(["git", "show", `${result.branch}:verification.json`], repository);
+  assert.notEqual(rootPrepopulation.exitCode, 0);
+  const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
+  assert.notEqual(fakeExecutable.exitCode, 0);
+  const rationale = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository));
+  assert.match(rationale.stdout, /"verificationCommands": \[\]/);
+  assert.match(rationale.stdout, /"outputArtifact": "verification.json"/);
   delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 

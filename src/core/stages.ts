@@ -12,6 +12,16 @@ import { createSpec } from "./specification.js";
 import { decideOpenPullRequestLimit } from "./open-pull-request-limit.js";
 import { excludeUnresolvedFindings } from "./unresolved-findings.js";
 import { assertScoreExplanations } from "../domain/candidate-score.js";
+import {
+  assertVerifierExecutionInputs,
+  createVerifierRuntimeEnvironment,
+  prepareVerifierExecution,
+  sealVerifierExecution,
+  writeVerificationOutput,
+  type VerifierExecutionInputs,
+  type VerifierExecutionPreparation,
+  type VerifierRuntimeEnvironment,
+} from "./verifier-execution-inputs.js";
 
 export class PipelineStages {
   constructor(
@@ -21,6 +31,7 @@ export class PipelineStages {
     private readonly unresolvedFindings?: UnresolvedFindingStateSource,
     private readonly runner = new CommandRunner(),
     private readonly clock: Clock = { now: () => new Date() },
+    private readonly verifierRuntimeEnvironment: VerifierRuntimeEnvironment = createVerifierRuntimeEnvironment(process.env),
   ) {}
 
   async resolveAdapter(root: string) {
@@ -111,31 +122,74 @@ export class PipelineStages {
     return { command, exitCode: result.exitCode };
   }
 
-  async verify(
+  async prepareVerification(
     root: string,
     base = process.env.DAILY_IMPROVER_BASE_REF ?? "origin/main",
-    manifestKey?: string,
-    trustedArtifacts: readonly string[] = [],
-  ) {
-    const key = manifestKey ?? requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
+  ): Promise<VerifierExecutionPreparation> {
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
-    const manifest = await readArtifact<TestManifest>(root, "test-manifest.json");
-    if (!(await verifyTestManifest(root, manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
-    const trustedPaths = new Set(Object.keys(manifest.files));
+    return await prepareVerifierExecution(root, base, spec, config, this.verifierRuntimeEnvironment, this.runner);
+  }
+
+  async sealVerification(
+    root: string,
+    preparation: VerifierExecutionPreparation,
+    manifest: TestManifest,
+  ): Promise<VerifierExecutionInputs> {
+    return await sealVerifierExecution(root, preparation, manifest);
+  }
+
+  async verify(
+    root: string,
+    preparedInputs?: VerifierExecutionInputs,
+    manifestKey?: string,
+  ) {
+    const key = manifestKey ?? requiredSecret("DAILY_IMPROVER_MANIFEST_KEY");
+    const inputs = preparedInputs ?? await this.sealVerification(
+      root,
+      await this.prepareVerification(root),
+      await readArtifact<TestManifest>(root, "test-manifest.json"),
+    );
+    await assertVerifierExecutionInputs(root, inputs, this.runner);
+    if (!(await verifyTestManifest(root, inputs.manifest, key))) throw new Error("Protected test manifest is invalid or a protected test changed.");
+    const trustedPaths = new Set(Object.keys(inputs.manifest.files));
     trustedPaths.add(relative(root, `${runDirectory(root)}/test-manifest.json`));
-    for (const path of trustedArtifacts) trustedPaths.add(path);
-    const diff = await new DiffGuard(this.runner).inspect(root, base, spec, config.protected_paths, trustedPaths);
-    const sourceSafety = await new SourceSafetyInspector(this.runner).inspect(root, base, Object.keys(manifest.files));
+    for (const path of inputs.trustedArtifacts) trustedPaths.add(path);
+    const diff = await new DiffGuard(this.runner).inspect(
+      root,
+      inputs.expectedBaseSha,
+      inputs.specification,
+      inputs.protectedPaths,
+      trustedPaths,
+    );
+    const sourceSafety = await new SourceSafetyInspector(this.runner).inspect(
+      root,
+      inputs.expectedBaseSha,
+      Object.keys(inputs.manifest.files),
+    );
     const checks = [];
-    for (const command of config.verification.commands) {
-      const result = await this.runner.run(["/bin/sh", "-lc", command], root);
+    for (const command of inputs.commands) {
+      const result = await this.runner.runWithExactEnvironment(
+        ["/bin/sh", "-c", command],
+        root,
+        10 * 60_000,
+        inputs.runtimeEnvironment,
+      );
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
     }
     const passed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
-    const report = { passed, base, diff, sourceSafety, checks, verifiedAt: new Date().toISOString() };
-    await writeArtifact(root, "verification.json", report);
+    const report = {
+      schemaVersion: "verification-report/v1",
+      passed,
+      expectedBaseSha: inputs.expectedBaseSha,
+      verifierInputsSha256: inputs.integritySha256,
+      diff,
+      sourceSafety,
+      checks,
+      verifiedAt: this.clock.now().toISOString(),
+    };
+    await writeVerificationOutput(root, inputs.outputArtifact, report);
     if (!passed) throw new Error(`Verification failed: ${[...diff.violations, ...sourceSafety.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
     return report;
   }
