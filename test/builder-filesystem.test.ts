@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createServer } from "node:net";
@@ -75,6 +75,79 @@ test("captures post-builder filesystem state before propagating a builder failur
     { path: "src/Service.ts", change: "modified" },
   ]);
   assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
+});
+
+test("rejects every protected addition, modification, deletion, and type change before import", async () => {
+  const attempts = [
+    {
+      name: "addition below a protected parent",
+      change: async (repository: string) => {
+        await chmod(join(repository, "tests"), 0o755);
+        await writeFile(join(repository, "tests/injected.test.ts"), "injected\n");
+      },
+    },
+    {
+      name: "replacement after lifting file permissions",
+      change: async (repository: string) => {
+        await chmod(join(repository, "tests"), 0o755);
+        await rm(join(repository, "tests/Service.test.ts"));
+        await writeFile(join(repository, "tests/Service.test.ts"), "replacement\n");
+      },
+    },
+    {
+      name: "deletion",
+      change: async (repository: string) => {
+        await chmod(join(repository, "tests"), 0o755);
+        await rm(join(repository, "tests/Service.test.ts"));
+      },
+    },
+    {
+      name: "type change",
+      change: async (repository: string) => {
+        await chmod(join(repository, "tests"), 0o755);
+        await rm(join(repository, "tests/Service.test.ts"));
+        await mkdir(join(repository, "tests/Service.test.ts"));
+      },
+    },
+  ] as const;
+
+  for (const attempt of attempts) {
+    const root = await fixtureRepository();
+    await assert.rejects(
+      new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(
+        fixtureContext(root),
+        await fixtureProtection(root),
+        async (isolated) => {
+          await writeFile(join(isolated.repository, "src/Service.ts"), "approved but rejected\n");
+          await attempt.change(isolated.repository);
+        },
+      ),
+      /Builder changed a protected filesystem path/,
+      attempt.name,
+    );
+    assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n", attempt.name);
+    assert.equal(await readFile(join(root, "tests/Service.test.ts"), "utf8"), "sealed test\n", attempt.name);
+  }
+});
+
+test("protected changes from a failing builder take precedence over its response failure", async () => {
+  const root = await fixtureRepository();
+  await assert.rejects(
+    new IsolatedBuilderFilesystem(join(root, "../sandboxes")).execute(fixtureContext(root), await fixtureProtection(root), async (isolated) => {
+      await chmod(join(isolated.repository, "tests"), 0o755);
+      await chmod(join(isolated.repository, "tests/Service.test.ts"), 0o644);
+      await writeFile(join(isolated.repository, "tests/Service.test.ts"), "failing replacement\n");
+      await writeFile(join(isolated.repository, "src/Service.ts"), "failed builder write\n");
+      throw new Error("untrusted builder response failure");
+    }),
+    (error: Error) => {
+      assert.match(error.message, /Builder changed a protected filesystem path/);
+      assert.doesNotMatch(error.message, /untrusted builder response failure|failing replacement/);
+      return true;
+    },
+  );
+  assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
+  assert.equal(await readFile(join(root, "tests/Service.test.ts"), "utf8"), "sealed test\n");
 });
 
 test("rejects malformed, traversing, absolute, wildcard, duplicate, and unbounded allowlists before builder execution", async () => {

@@ -136,6 +136,7 @@ export class IsolatedBuilderFilesystem {
       }
       const after = await this.stateCapturer.capture(workspace);
       const changes = deriveBuilderFilesystemChangeSet(before, after);
+      assertBuilderProtectedFilesystemUnchanged({ before, after, changes }, protectedInputs);
       await this.synchronization.afterStateCapture?.({ before, after, changes });
       if (buildFailed) throw buildFailure;
       await assertProtectedInputsReadOnly(workspace, protectedInputs);
@@ -148,6 +149,42 @@ export class IsolatedBuilderFilesystem {
     } finally {
       await makeProtectedInputsRemovable(workspace, protectedInputs);
       await rm(temporary, { recursive: true, force: true });
+    }
+  }
+}
+
+export function assertBuilderProtectedFilesystemUnchanged(
+  state: BuilderFilesystemExecutionState,
+  inputs: BuilderProtectedInputs,
+): void {
+  if (inputs.schemaVersion !== "builder-protected-inputs/v1" || inputs.files.length === 0) {
+    throw new Error("Builder protected inputs must be a non-empty versioned value.");
+  }
+  const beforeByPath = new Map(state.before.entries.map((entry) => [entry.path, entry]));
+  const protectedFiles = new Set<string>();
+  const protectedParents = new Set<string>();
+  for (const input of inputs.files) {
+    assertExactRepositoryFile(input.path);
+    if (!/^[a-f0-9]{64}$/u.test(input.sha256)
+      || (input.source !== "trusted-configuration" && input.source !== "sealed-artifact")) {
+      throw new Error(`Builder protected input identity is malformed: ${input.path}`);
+    }
+    const baseline = beforeByPath.get(input.path);
+    if (baseline?.type !== "regular-file" || baseline.sha256 !== input.sha256) {
+      throw new Error(`Builder protected input identity does not match the captured baseline: ${input.path}`);
+    }
+    protectedFiles.add(input.path);
+    for (const parent of repositoryParents(input.path)) {
+      if (beforeByPath.get(parent)?.type !== "directory") {
+        throw new Error(`Builder protected input parent does not match the captured baseline: ${input.path}`);
+      }
+      protectedParents.add(parent);
+    }
+  }
+  for (const change of state.changes.changes) {
+    if (protectedFiles.has(change.path) || repositoryParents(change.path).some((parent) => protectedParents.has(parent))
+      || protectedParents.has(change.path)) {
+      throw new Error(`Builder changed a protected filesystem path: ${change.path}`);
     }
   }
 }
@@ -301,6 +338,13 @@ function protectedParents(root: string, path: string): readonly string[] {
     parents.push(current);
     current = dirname(current);
   }
+  return parents;
+}
+
+function repositoryParents(path: string): readonly string[] {
+  const parts = path.split("/");
+  const parents: string[] = [];
+  for (let index = 1; index < parts.length; index += 1) parents.push(parts.slice(0, index).join("/"));
   return parents;
 }
 
