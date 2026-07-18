@@ -23,6 +23,8 @@ import type {
   BuilderResourceIsolation,
   BuilderResourceLimits,
 } from "./builder-resource-limits.js";
+import { RepositoryPublicationBuilderIsolation } from "./builder-repository-publication.js";
+import type { BuilderRepositoryPublicationIsolation } from "./builder-repository-publication.js";
 
 const maximumPathEnvironmentLength = 8_192;
 const maximumSpecificationPathLength = 4_096;
@@ -57,6 +59,7 @@ export class CommandAgentProvider implements AgentProvider {
     private readonly runner = new CommandRunner(),
     private readonly builderNetworkIsolation: BuilderNetworkIsolation = new PlatformBuilderNetworkIsolation(),
     private readonly builderDependencyInstallationIsolation: BuilderDependencyInstallationIsolation = new PackageManagerBuilderDependencyIsolation(),
+    private readonly builderRepositoryPublicationIsolation: BuilderRepositoryPublicationIsolation = new RepositoryPublicationBuilderIsolation(),
     private readonly builderResourceIsolation: BuilderResourceIsolation = new PlatformBuilderResourceIsolation(),
   ) {}
 
@@ -88,11 +91,13 @@ export class CommandAgentProvider implements AgentProvider {
       const resourceLimits = validateBuilderResourceLimits(this.options.builderResourceLimits);
       const executeWithResources: BuilderCommandExecutor = async (nextCommand, cwd, _limits, environment) =>
         await this.builderResourceIsolation.run(nextCommand, cwd, resourceLimits, environment, execute);
+      const executeWithoutPublication: BuilderCommandExecutor = async (nextCommand, cwd, limits, environment) =>
+        await this.builderRepositoryPublicationIsolation.run(nextCommand, cwd, limits, environment, executeWithResources);
       result = validateBuilderDependencyInstallationPolicy(this.options.builderDependencyInstallationPolicy).installation === "deny"
         ? await this.builderDependencyInstallationIsolation.run(
-          commandArguments, context.repository, resourceLimits, agentEnvironment, executeWithResources,
+          commandArguments, context.repository, resourceLimits, agentEnvironment, executeWithoutPublication,
         )
-        : await executeWithResources(commandArguments, context.repository, resourceLimits, agentEnvironment);
+        : await executeWithoutPublication(commandArguments, context.repository, resourceLimits, agentEnvironment);
     } else {
       result = await this.runner.runWithExactEnvironment(commandArguments, context.repository, 20 * 60_000, agentEnvironment);
     }

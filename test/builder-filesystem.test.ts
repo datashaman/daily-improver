@@ -395,6 +395,66 @@ test("denies builder connections while preserving protected reads and one approv
   }
 });
 
+test("denies builder repository publication while importing an approved production write", async () => {
+  const root = await fixtureRepository();
+  const runnerRoot = await mkdtemp(join(tmpdir(), "daily-improver-publication-proof-"));
+  const bin = join(runnerRoot, "bin");
+  const externalOperation = join(runnerRoot, "external-repository-operation");
+  await mkdir(bin, { recursive: true });
+  for (const executable of ["git", "gh"]) {
+    const executablePath = join(bin, executable);
+    await writeFile(executablePath, `#!/bin/sh\nprintf reached > ${externalOperation}\n`, { mode: 0o700 });
+    await chmod(executablePath, 0o700);
+  }
+  const runtimeEnvironment = createCommandAgentRuntimeEnvironment({ PATH: `${bin}:${process.env.PATH}` });
+  const networkAllowed = { schemaVersion: "builder-network-policy/v1", outbound: "allow" } as const;
+  const dependencyAllowed = {
+    schemaVersion: "builder-dependency-installation-policy/v1",
+    installation: "allow",
+  } as const;
+  const resourceLimits = {
+    schemaVersion: "builder-resource-limits/v1",
+    cpuTimeMs: 5_000,
+    memoryBytes: 256 * 1024 * 1024,
+    diskBytes: 16 * 1024 * 1024,
+    outputBytes: 64 * 1024,
+    wallClockMs: 10_000,
+  } as const;
+  const filesystem = new IsolatedBuilderFilesystem(join(root, "../sandboxes"));
+  const protection = await fixtureProtection(root);
+
+  for (const command of ["git commit -am unsafe", "git push origin HEAD", "gh pr create"]) {
+    const provider = new CommandAgentProvider({
+      testCommand: "true",
+      buildCommand: command,
+      runtimeEnvironment,
+      builderResourceLimits: resourceLimits,
+      builderNetworkPolicy: networkAllowed,
+      builderDependencyInstallationPolicy: dependencyAllowed,
+    });
+    await assert.rejects(
+      filesystem.execute(fixtureContext(root), protection, async (isolated) => await provider.build(isolated)),
+      /repository publication tooling is denied/,
+    );
+    assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "original\n");
+    await assert.rejects(readFile(externalOperation), /ENOENT/);
+  }
+
+  const ordinary = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "printf approved > src/Service.ts",
+    runtimeEnvironment,
+    builderResourceLimits: resourceLimits,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: dependencyAllowed,
+  });
+  await filesystem.execute(
+    fixtureContext(root), protection, async (isolated) => await ordinary.build(isolated),
+  );
+  assert.equal(await readFile(join(root, "src/Service.ts"), "utf8"), "approved");
+  await assert.rejects(readFile(externalOperation), /ENOENT/);
+});
+
 async function fixtureRepository(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "daily-improver-builder-filesystem-"));
   for (const [path, content] of [

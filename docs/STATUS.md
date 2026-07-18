@@ -4,22 +4,24 @@ Last updated: 2026-07-18
 
 ## Checkpoint
 
-- Last completed milestone: The complete builder change set rejects every protected file and protected-parent change before result handling or import.
-- Current checkpoint commit: `feat: reject builder protected changes`.
+- Last completed milestone: Every command-backed builder denies Git and GitHub CLI publication tooling before the real executable can run.
+- Current checkpoint commit: `feat: deny builder repository publication`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1E — Builder isolation.
 - Current state: Phase 1A through Phase 1D are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. The disposable copy is captured immediately before and after every successful or failed builder execution as exact `builder-filesystem-state/v1` values. Streamed hashes and bounded metadata describe regular files, directories, symbolic links, and unsupported types without retaining contents; `builder-filesystem-change-set/v1` exhaustively reports additions, modifications, deletions, and type changes inside and outside the write allowlist. Repeated stable walks fail closed on unreadable, excessive, malformed, traversing, or changing state. Immediately after capture, the runner binds every protected SHA-256 identity to the captured baseline, expands its repository-relative parents, and rejects every addition, modification, deletion, or type change at or below those paths before retaining a successful result, propagating a builder failure, staging, or importing. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
 
+Every command-backed builder now always denies Git and GitHub CLI publication tooling through an independent runner-owned executable layer. Direct, PATH-resolved, explicit-path, shell-indirect, and command-level PATH-bypass attempts fail before the real tools run, even when network and dependency capabilities are approved; there is no repository or model-controlled exception.
+
 ## Exact next task
 
-Prevent commits, pushes, and PR operations inside the builder.
+Prevent generated output from altering the verifier.
 
 ## Acceptance criteria for the next task
 
-- Deny commit, push, and pull-request tooling inside every command-backed builder independently of the absent disposable-copy Git metadata.
-- Intercept direct, PATH-resolved, explicit-path, and shell-indirect Git and GitHub CLI entry points without trusting repository commands, model output, or builder claims.
-- Prove ordinary approved production edits still import while commit, push, and PR attempts fail without changing the source checkout or reaching an external repository operation.
-- Keep the denial language-neutral and preserve resource limits, path confinement, protected-input immutability and change detection, command environment and dependency/network policies, response validation, cost accounting, diff limits, and independent verification.
+- Derive verifier execution inputs only from trusted configuration and sealed artifacts, never from builder response fields, implementation notes, generated files, or repository-controlled overrides.
+- Prevent the builder from changing verifier commands, policies, executable resolution, credentials, expected baseline identity, sealed artifact identities, or verification output destinations.
+- Prove malicious generated output cannot suppress, replace, redirect, or pre-populate verification while an ordinary approved production edit still reaches the independent verifier.
+- Keep the boundary language-neutral and preserve builder isolation, response validation, cost accounting, diff limits, semantic gates, and fail-closed verification.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -56,6 +58,7 @@ Prevent commits, pushes, and PR operations inside the builder.
 - Command-backed builders require exact `builder-resource-limits/v1` CPU, aggregate resident-memory, repository disk-growth, combined-output, and wall-clock limits from the runner construction boundary. Unix hard CPU/file-size limits, process-group accounting, bounded byte capture, and repository growth monitoring enforce the decision. Any exhaustion terminates the complete group with forced-kill escalation and reports only `cpu`, `memory`, `disk`, `output`, or `wall-clock`; missing, malformed, extended, unsupported, or out-of-bounds decisions fail before builder execution.
 - The disposable copy is captured immediately before and after builder execution through exact `builder-filesystem-state/v1` snapshots. Regular files retain only bounded sizes, modes, and streamed SHA-256 identities; directories, symbolic links, and unsupported entry types have deterministic source-free descriptors. Exact runner-owned limits bound entry count, individual and aggregate paths, individual and aggregate file bytes, and symbolic-link targets. Two consecutive identical walks, non-following file opens, directory replay, and identity checks reject unreadable, excessive, malformed, traversing, or unstable state. The exhaustive `builder-filesystem-change-set/v1` reports every addition, modification, deletion, and type change, including paths outside the builder allowlist, before any approved import.
 - The complete change set is checked immediately against the exact trusted `builder-protected-inputs/v1` file identities and their expanded repository-relative parents. A protected addition, modification, deletion, or type change fails before result handling or import for successful and failing builders; deterministic chmod-and-replacement proofs retain no source contents and import no production change.
+- Every command-backed builder unconditionally prepends runner-owned Git and GitHub CLI denial entry points. Direct, PATH-resolved, explicit-path, shell-indirect, and command-level PATH-bypass attempts fail before the real tools run even when network and dependency policies allow their capabilities; ordinary allowlisted production edits still import and external-operation sentinels remain untouched.
 - The opt-in live runner harness uses explicit `skip`/`require` invocation, runner-owned absolute configuration paths, distinct bounded stage assertions, a disposable exact workspace, and fail-before-network absence checks; it is excluded from the checkpoint test glob.
 - The direct OpenAI provider uses the Responses API with strict Structured Outputs, bounded allowlisted regular-file source context, no serialized host path, pre-request estimated cost limits, sanitized HTTP failures, trusted runner requirements, protected builder context, and validated same-worktree replacement writes before the existing manifest/diff/verification gates.
 - A correctness regression/property test must fail against baseline behavior; syntax, resource-limit, dependency, and autoload failures are rejected as non-behavioral proof.
@@ -87,15 +90,15 @@ Prevent commits, pushes, and PR operations inside the builder.
 
 ## Last verification
 
-Verified on 2026-07-18 for the protected-change rejection slice:
+Verified on 2026-07-18 for the builder repository-publication denial slice:
 
-- Focused filesystem-state and builder-filesystem tests: 14 tests passed.
-- `npm test`: 252 tests passed; both live model proofs remained excluded.
+- Focused command-agent and builder-filesystem tests: 17 tests passed.
+- `npm test`: 254 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- Deterministic examples reject protected additions, modifications, deletions, and type changes for successful and failing builders before any approved import; permission-lifting replacement attempts remain contained in the disposable copy and failure messages retain no source contents.
+- Deterministic examples deny direct commit, push, and pull-request attempts, PATH-resolved shell-indirect calls, explicit Git paths, and PATH replacement without invoking the real tool; an ordinary approved edit still imports while the source checkout and external-operation sentinel remain unchanged on denied attempts.
 - The container image was not rebuilt because CLI production dependencies and runtime packaging did not change.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 

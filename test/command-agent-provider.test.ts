@@ -9,6 +9,7 @@ import {
 } from "../src/agents/command-agent-provider.js";
 import type { BuilderNetworkIsolation } from "../src/agents/builder-network-isolation.js";
 import { builderPackageManagerExecutablesByEcosystem } from "../src/agents/builder-dependency-installation.js";
+import { builderRepositoryPublicationExecutables } from "../src/agents/builder-repository-publication.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
 import type { CommandAgentRuntimeEnvironment } from "../src/agents/command-agent-provider.js";
 import type { AgentContext } from "../src/agents/agent-provider.js";
@@ -189,6 +190,74 @@ test("builder dependency installation defaults to denial and requires exact trus
     } as never,
   });
   await assert.rejects(malformed.build(fixtureContext(root, specPath)), /exact trusted runner-owned value/);
+});
+
+test("builder repository publication tooling is always denied", async () => {
+  const root = await mkdtemp(join(tmpdir(), "daily-improver-command-publication-policy-"));
+  const bin = join(root, "runner-bin");
+  const specPath = join(root, ".ai", "spec.json");
+  const externalOperation = join(root, "external-repository-operation");
+  await mkdir(bin, { recursive: true });
+  await mkdir(dirname(specPath), { recursive: true });
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(specPath, "{}\n");
+  await writeFile(join(root, ".ai", "indirect-publication.sh"), "git push origin HEAD\n");
+  for (const executable of builderRepositoryPublicationExecutables) {
+    const path = join(bin, executable);
+    await writeFile(path, `#!/bin/sh\nprintf reached > ${externalOperation}\n`, { mode: 0o700 });
+    await chmod(path, 0o700);
+  }
+  const runtimeEnvironment = createCommandAgentRuntimeEnvironment({ PATH: `${bin}:${process.env.PATH}` });
+  const networkAllowed = { schemaVersion: "builder-network-policy/v1", outbound: "allow" } as const;
+  const dependencyAllowed = {
+    schemaVersion: "builder-dependency-installation-policy/v1",
+    installation: "allow",
+  } as const;
+
+  for (const command of ["git commit -am unsafe", "git push origin HEAD", "gh pr create", "sh .ai/indirect-publication.sh"]) {
+    const provider = new CommandAgentProvider({
+      testCommand: "true",
+      buildCommand: command,
+      runtimeEnvironment,
+      builderResourceLimits,
+      builderNetworkPolicy: networkAllowed,
+      builderDependencyInstallationPolicy: dependencyAllowed,
+    });
+    await assert.rejects(provider.build(fixtureContext(root, specPath)), /repository publication tooling is denied/);
+    await assert.rejects(readFile(externalOperation), /ENOENT/);
+  }
+
+  const explicitPath = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: `${join(bin, "git")} commit -am unsafe`,
+    runtimeEnvironment,
+    builderResourceLimits,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: dependencyAllowed,
+  });
+  await assert.rejects(explicitPath.build(fixtureContext(root, specPath)), /resolved through the trusted runner PATH/);
+  await assert.rejects(readFile(externalOperation), /ENOENT/);
+
+  const pathBypass = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: `PATH=${bin} git push origin HEAD`,
+    runtimeEnvironment,
+    builderResourceLimits,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: dependencyAllowed,
+  });
+  await assert.rejects(pathBypass.build(fixtureContext(root, specPath)), /may not replace PATH/);
+
+  const ordinary = new CommandAgentProvider({
+    testCommand: "true",
+    buildCommand: "printf approved > src/build-agent.env",
+    runtimeEnvironment,
+    builderResourceLimits,
+    builderNetworkPolicy: networkAllowed,
+    builderDependencyInstallationPolicy: dependencyAllowed,
+  });
+  await ordinary.build(fixtureContext(root, specPath));
+  assert.equal(await readFile(join(root, "src", "build-agent.env"), "utf8"), "approved");
 });
 
 test("command-backed agents fail closed without an exact safe runtime", async () => {

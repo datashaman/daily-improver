@@ -188,7 +188,7 @@ Goal: prevent unauthorized changes rather than only detecting them afterward.
 - [x] Limit CPU, memory, disk, output, and wall-clock duration.
 - [x] Capture filesystem state before and after execution.
 - [x] Fail immediately when protected content changes.
-- [ ] Prevent commits, pushes, and PR operations inside the builder.
+- [x] Prevent commits, pushes, and PR operations inside the builder.
 - [ ] Prevent generated output from altering the verifier.
 
 Exit gate: the builder cannot modify protected files even when explicitly instructed to do so.
@@ -505,8 +505,9 @@ The recent and next commit-sized milestones are:
 34. [x] `feat: bound builder resource consumption`
 35. [x] `feat: capture builder filesystem state`
 36. [x] `feat: reject builder protected changes`
+37. [x] `feat: deny builder repository publication`
 
-The immediate next task is Phase 1E: prevent commits, pushes, and PR operations inside the builder. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1E: prevent generated output from altering the verifier. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 
