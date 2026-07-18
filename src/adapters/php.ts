@@ -12,6 +12,7 @@ import { collectComposerAuditEvidence } from "./composer-audit.js";
 import { collectPhpStaticAnalysisEvidence, phpStaticAnalysisCommand, phpStaticAnalysisSchemaVersion } from "./php-static-analysis.js";
 import { collectPhpCoverageEvidence, phpCoverageCommand, phpCoverageSchemaVersion } from "./php-coverage.js";
 import { collectPhpMutationEvidence, phpMutationCommand, phpMutationSchemaVersion } from "./php-mutation.js";
+import { inspectPhpTargetedMutation, preparePhpTargetedMutation } from "./php-targeted-mutation.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
@@ -206,6 +207,14 @@ export class PhpAdapter implements RepositoryAdapter {
       return inspection;
     }
     return frameworkInspection;
+  }
+
+  async prepareTargetedMutation(root: string, targets: readonly string[]) {
+    return await preparePhpTargetedMutation(root, targets);
+  }
+
+  async inspectTargetedMutation(root: string, plan: Parameters<typeof inspectPhpTargetedMutation>[1], execution: Parameters<typeof inspectPhpTargetedMutation>[2]) {
+    return await inspectPhpTargetedMutation(root, plan, execution);
   }
 }
 

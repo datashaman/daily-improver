@@ -102,12 +102,13 @@ export async function collectPhpMutationEvidence(
         : parsed.findings.length > 0
           ? "code-finding"
           : "success";
+      const preparedSemantics = await readPreparedMutationSemantics(root);
       return {
         schemaVersion: phpMutationSchemaVersion,
         result: { ...run.result, status },
         artifact: artifactMetadata(artifact),
         findings: parsed.findings,
-        candidates: status === "code-finding" ? parsed.findings.map(mutationCandidate) : [],
+        candidates: status === "code-finding" ? parsed.findings.map((finding) => mutationCandidate(finding, preparedSemantics.get(mutationKey(finding)))) : [],
       };
     } catch {
       return emptyEvidence({ ...run.result, status: "infrastructure-failure" }, artifactMetadata(artifact));
@@ -286,7 +287,12 @@ function normalizeMutation(
   };
 }
 
-function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
+interface PreparedMutationSemantic {
+  readonly invariant: string;
+  readonly baselineMutation: true;
+}
+
+function mutationCandidate(finding: PhpMutationFinding, semantic?: PreparedMutationSemantic): ImprovementCandidate {
   const escaped = finding.status === "escaped";
   return {
     id: finding.id,
@@ -309,13 +315,50 @@ function mutationCandidate(finding: PhpMutationFinding): ImprovementCandidate {
     suggestedFiles: [finding.file, "tests/Property"],
     target: finding.file,
     estimatedDiffLines: 80,
-    reproducibility: reproducibleEvidence(0.99, ["Infection executed collector"]),
+    ...(semantic ? {
+      propertyInvariants: [semantic.invariant],
+      knownMutation: {
+        schemaVersion: "known-mutation/v1" as const,
+        id: `infection-${finding.id}`,
+        target: finding.file,
+        operator: finding.mutator,
+        executionMode: "baseline-known-mutant" as const,
+        criterion: { kind: "property-invariant" as const, statement: semantic.invariant },
+      },
+    } : {}),
+    reproducibility: reproducibleEvidence(0.99, semantic
+      ? ["Infection executed collector", "Matching prepared mutation semantics"]
+      : ["Infection executed collector"]),
     deduplication: {
       schemaVersion: "candidate-deduplication/v1",
       subsystem: finding.file,
       defect: `mutation:${finding.line}:${finding.mutator}`,
     },
   };
+}
+
+async function readPreparedMutationSemantics(root: string): Promise<ReadonlyMap<string, PreparedMutationSemantic>> {
+  let parsed: unknown;
+  try { parsed = JSON.parse(await readFile(join(root, ".ai", "evidence", "infection.json"), "utf8")); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Map(); throw error; }
+  if (!isRecord(parsed) || !Array.isArray(parsed.mutations) || parsed.mutations.length > findingLimit) return new Map();
+  const result = new Map<string, PreparedMutationSemantic>();
+  for (const value of parsed.mutations) {
+    if (!isRecord(value) || value.status !== "escaped" || value.baselineMutation !== true
+      || typeof value.file !== "string" || typeof value.line !== "number" || typeof value.mutator !== "string"
+      || typeof value.invariant !== "string" || value.invariant.length < 1 || value.invariant.length > 2_000) continue;
+    const finding: Pick<PhpMutationFinding, "file" | "line" | "mutator"> = {
+      file: safeRelative(value.file),
+      line: positiveInteger(value.line),
+      mutator: requiredBoundedString(value.mutator, 128),
+    };
+    result.set(mutationKey(finding), { invariant: value.invariant, baselineMutation: true });
+  }
+  return result;
+}
+
+function mutationKey(finding: Pick<PhpMutationFinding, "file" | "line" | "mutator">): string {
+  return `${finding.file}:${finding.line}:${finding.mutator}`;
 }
 
 function emptyEvidence(result: EvidenceResult, artifact: PhpMutationArtifact | null = null): PhpMutationEvidence {

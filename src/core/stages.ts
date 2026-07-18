@@ -25,6 +25,8 @@ import { assertVerifierCommandEnvironment, createVerifierCommandEnvironmentDecis
 import { authorizePublication, type PublicationVerificationBinding } from "./publication-authorization.js";
 import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
 import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
+import { assertTargetedMutationPlan, assertTargetedMutationResult, type TargetedMutationResult } from "../domain/targeted-mutation.js";
+import { assertVerifierMutationStateUnchanged, captureVerifierMutationState } from "./verifier-mutation-state.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -187,7 +189,32 @@ export class PipelineStages {
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
     }
-    const passed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
+    const ordinaryVerificationPassed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
+    let targetedMutation: TargetedMutationResult | undefined;
+    if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
+      throw new Error("Full verifier mutation testing is unsupported; use the exact targeted mode.");
+    }
+    if (ordinaryVerificationPassed && inputs.mutationMode === "targeted") {
+      const targets = changedProductionTargets(diff.files, inputs.specification.allowedFiles);
+      const adapter = await this.registry.resolve(root);
+      if (!adapter.prepareTargetedMutation || !adapter.inspectTargetedMutation) {
+        throw new Error("Targeted mutation testing is unavailable for the selected repository adapter.");
+      }
+      const beforeMutationState = await captureVerifierMutationState(root, inputs.expectedBaseSha, this.runner);
+      const plan = assertTargetedMutationPlan(await adapter.prepareTargetedMutation(root, targets), targets);
+      const execution = await runVerifierCommand(
+        this.runner,
+        inputs.commandEnvironment,
+        plan.command,
+        root,
+        plan.timeoutMs,
+      );
+      targetedMutation = assertTargetedMutationResult(await adapter.inspectTargetedMutation(root, plan, execution), plan);
+      await assertVerifierMutationStateUnchanged(root, inputs.expectedBaseSha, beforeMutationState, this.runner);
+      await assertVerifierExecutionInputs(root, inputs, this.runner);
+      if (!(await verifyVerifierTestManifest(root, inputs.manifest, key))) throw new Error("Targeted mutation execution changed a sealed verifier input.");
+    }
+    const passed = ordinaryVerificationPassed && (inputs.mutationMode !== "targeted" || targetedMutation !== undefined);
     const report = {
       schemaVersion: "verification-report/v1" as const,
       passed,
@@ -196,6 +223,7 @@ export class PipelineStages {
       diff,
       sourceSafety,
       checks,
+      ...(targetedMutation ? { targetedMutation } : {}),
       verifiedAt: this.clock.now().toISOString(),
     };
     await writeVerificationOutput(root, inputs.outputArtifact, report);
@@ -275,6 +303,17 @@ export class PipelineStages {
     if (!this.unresolvedFindings) throw new Error("Unresolved finding state is required for analysis.");
     return this.unresolvedFindings;
   }
+}
+
+function changedProductionTargets(diffFiles: readonly string[], allowedFiles: readonly string[]): readonly string[] {
+  if (!Array.isArray(diffFiles) || !Array.isArray(allowedFiles)) throw new Error("Targeted mutation inputs are unavailable.");
+  const allowed = new Set(allowedFiles);
+  const targets = [...new Set(diffFiles.filter((path) => allowed.has(path)))].sort();
+  if (targets.length < 1 || targets.length > 64) throw new Error("Targeted mutation production targets are missing or excessive.");
+  if (targets.some((path) => !path || path.startsWith("/") || path.includes("\\") || path.split("/").includes(".."))) {
+    throw new Error("Targeted mutation production target escaped the sealed specification allowlist.");
+  }
+  return targets;
 }
 
 function baselineSummary(testPlan: {

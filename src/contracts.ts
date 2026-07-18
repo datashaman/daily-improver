@@ -11,6 +11,11 @@ import type {
 } from "./domain/model.js";
 import type { GeneratedTestLifecycleDecision } from "./domain/generated-test-lifecycle.js";
 import type { PropertyTestExecutionProof } from "./domain/property-test-execution-proof.js";
+import type {
+  TargetedMutationExecution,
+  TargetedMutationPlan,
+  TargetedMutationResult,
+} from "./domain/targeted-mutation.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -37,6 +42,8 @@ export interface RepositoryAdapter {
   discoverCandidates(profile: RepositoryProfile): Promise<readonly ImprovementCandidate[]>;
   classifyFailure?(output: string): string;
   inspectGeneratedTestQuality?(request: GeneratedTestQualityInspectionRequest): Promise<AdapterGeneratedTestQualityInspection | undefined>;
+  prepareTargetedMutation?(root: string, targets: readonly string[]): Promise<TargetedMutationPlan>;
+  inspectTargetedMutation?(root: string, plan: TargetedMutationPlan, execution: TargetedMutationExecution): Promise<TargetedMutationResult>;
 }
 
 export interface RunStore {

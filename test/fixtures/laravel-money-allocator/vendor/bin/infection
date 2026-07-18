@@ -1,0 +1,59 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+if (in_array('--version', $argv, true)) {
+    fwrite(STDOUT, "Infection - PHP Mutation Testing Framework version 0.30.0\n");
+    exit(0);
+}
+
+$configurationPath = null;
+$filter = null;
+foreach ($argv as $argument) {
+    if (str_starts_with($argument, '--configuration=')) {
+        $configurationPath = substr($argument, strlen('--configuration='));
+    }
+    if (str_starts_with($argument, '--filter=')) {
+        $filter = substr($argument, strlen('--filter='));
+    }
+}
+if (!is_string($configurationPath) || !is_file($configurationPath)) {
+    fwrite(STDERR, "Configuration does not exist.\n");
+    exit(2);
+}
+$configuration = json_decode(file_get_contents($configurationPath) ?: '', true, 512, JSON_THROW_ON_ERROR);
+$reportPath = $configuration['logs']['json'] ?? null;
+if (!is_string($reportPath)) {
+    fwrite(STDERR, "JSON logger is missing.\n");
+    exit(2);
+}
+
+$targeted = $filter === 'app/Domain/MoneyAllocator.php';
+$mutation = [
+    'mutator' => [
+        'mutatorName' => 'Arithmetic/RemainderAllocation',
+        'originalFilePath' => 'app/Domain/MoneyAllocator.php',
+        'originalStartLine' => 24,
+    ],
+];
+$report = [
+    'stats' => [
+        'totalMutantsCount' => 1,
+        'killedCount' => $targeted ? 1 : 0,
+        'escapedCount' => $targeted ? 0 : 1,
+        'notCoveredCount' => 0,
+        'errorCount' => 0,
+        'syntaxErrorCount' => 0,
+        'timeOutCount' => 0,
+    ],
+    'escaped' => $targeted ? [] : [$mutation],
+    'killed' => $targeted ? [$mutation] : [],
+    'uncovered' => [],
+    'errored' => [],
+    'syntaxErrors' => [],
+    'timeouted' => [],
+];
+file_put_contents($reportPath, json_encode($report, JSON_THROW_ON_ERROR));
+fwrite(STDOUT, $targeted ? "Targeted mutation killed.\n" : "One escaped mutant. Mutation score recorded.\n");
+exit($targeted ? 0 : 1);

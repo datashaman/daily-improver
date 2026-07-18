@@ -146,7 +146,7 @@ async function createFixture(): Promise<{
   const manifestSource = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(join(runRoot, "test-manifest.json"), manifestSource);
   const inputs: VerifierExecutionInputs = {
-    schemaVersion: "verifier-execution-inputs/v2",
+    schemaVersion: "verifier-execution-inputs/v3",
     expectedBaseSha,
     specification: {
       id: "candidate",
@@ -167,6 +167,7 @@ async function createFixture(): Promise<{
     specificationSha256: "b".repeat(64),
     configurationSha256: "absent",
     commands: ["php tests/generated.php"],
+    mutationMode: "off",
     protectedPaths: ["tests/**"],
     commandEnvironment: {
       schemaVersion: "verifier-command-environment/v1",

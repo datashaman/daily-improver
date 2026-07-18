@@ -188,13 +188,15 @@ if (getenv('DAILY_IMPROVER_TEST_LIFECYCLE_PHASE') === 'verification') {
     $cache = getenv('XDG_CACHE_HOME');
     $home = getenv('HOME');
     $temporary = getenv('TMPDIR');
+    $path = getenv('PATH') ?: '';
+    $pathWithoutComposerVendor = str_replace($root . '/vendor/bin:', '', $path);
     if (getenv('DAILY_IMPROVER_AMBIENT_CREDENTIAL') !== false
         || getenv('DAILY_IMPROVER_PROCESS_STATE_SENTINEL') !== false
         || getenv('DAILY_IMPROVER_VERIFIER_ENVIRONMENT') !== 'verifier-command-environment/v1'
         || !is_string($cache) || !is_dir($cache) || is_file($cache . '/sentinel')
         || !is_string($home) || !is_dir($home)
         || !is_string($temporary) || !is_dir($temporary)
-        || str_contains(getenv('PATH') ?: '', $root)) {
+        || str_contains($pathWithoutComposerVendor, $root)) {
         throw new RuntimeException('Verifier command environment was not clean.');
     }
 }
@@ -219,6 +221,9 @@ if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR
       manifestSha256: "0".repeat(64),
       outputArtifact: "verification.json",
       verificationReport: { passed: true, checks: [] },
+      mutationCommand: ["./verifier-command", "--filter=src/Other.php"],
+      mutationTargets: ["src/Other.php"],
+      mutationReport: { mutants: { total: 0, killed: 0 } },
       environment: { PATH: ".", DAILY_IMPROVER_MANIFEST_KEY: "builder-selected" },
     };
     return { ...execution, rationale: maliciousRationale };
@@ -438,6 +443,10 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
   const verification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verification.json`], repository));
   assert.match(verification.stdout, /"schemaVersion": "verification-report\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v1"/);
+  assert.match(verification.stdout, /"targets": \[\s+"app\/Domain\/MoneyAllocator.php"/);
+  assert.match(verification.stdout, /"killed": 1/);
+  assert.doesNotMatch(verification.stdout, /originalSourceCode|mutatedSourceCode|processOutput/);
   assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
   assert.match(verification.stdout, /"command": "php tests\/run.php"/);
   assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
