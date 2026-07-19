@@ -1,13 +1,9 @@
 import type { CommandRunner } from "../infra/command-runner.js";
+import { assertVerificationReport, type VerificationReport } from "../domain/verification-report.js";
 
 const commitPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u;
 
-export interface PublicationVerificationBinding {
-  readonly schemaVersion: "verification-report/v1";
-  readonly passed: boolean;
-  readonly expectedBaseSha: string;
-  readonly verifierInputsSha256: string;
-}
+export type PublicationVerificationBinding = VerificationReport;
 
 export interface PublicationAuthorization {
   readonly schemaVersion: "publication-authorization/v1";
@@ -21,11 +17,11 @@ export interface PublicationAuthorization {
 export async function authorizePublication(
   trustedRepository: string,
   trustedMainReference: string,
-  verification: PublicationVerificationBinding,
+  verificationValue: unknown,
   decidedAt: string,
   runner: CommandRunner,
 ): Promise<PublicationAuthorization> {
-  assertVerificationBinding(verification);
+  const verification = assertVerificationReport(verificationValue);
   assertDecisionTime(decidedAt);
   if (!trustedMainReference || trustedMainReference.length > 256 || trustedMainReference.startsWith("-") || trustedMainReference.includes("\0")) {
     throw new Error("Trusted main reference is malformed.");
@@ -56,13 +52,6 @@ export async function authorizePublication(
     outcome: "authorized",
     decidedAt,
   };
-}
-
-function assertVerificationBinding(value: PublicationVerificationBinding): void {
-  if (value.schemaVersion !== "verification-report/v1") throw new Error("Publication requires a supported verification report.");
-  if (value.passed !== true) throw new Error("Cannot publish an unverified improvement.");
-  if (!commitPattern.test(value.expectedBaseSha)) throw new Error("Verification report baseline identity is malformed.");
-  if (!/^[a-f0-9]{64}$/u.test(value.verifierInputsSha256)) throw new Error("Verification report input identity is malformed.");
 }
 
 function assertDecisionTime(value: string): void {

@@ -3,7 +3,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, unlink, writeFil
 import { basename, dirname, join, sep } from "node:path";
 import type { CommandRunner } from "../infra/command-runner.js";
 import { verifierManifestFilePaths, verifyVerifierTestManifest } from "./artifacts.js";
-import type { PublicationVerificationBinding } from "./publication-authorization.js";
+import { assertVerificationReport, verificationReportSchemaVersion } from "../domain/verification-report.js";
 import type { VerifierExecutionInputs } from "./verifier-execution-inputs.js";
 import { artifactAuthenticationPath, signArtifact, verifyArtifact } from "./artifact-authentication.js";
 
@@ -54,7 +54,7 @@ export class TrustedPublicationWorkspace {
     sourceRepository: string,
     verifiedWorkspace: string,
     inputs: VerifierExecutionInputs,
-    verification: PublicationVerificationBinding,
+    verification: unknown,
     verificationLifecyclePath: string,
   ): Promise<TrustedPublicationWorkspaceHandle> {
     assertVerificationBinding(inputs, verification);
@@ -89,8 +89,13 @@ export class TrustedPublicationWorkspace {
       throw new Error("Trusted publication test manifest authentication failed.");
     }
     for (const path of sealedPaths) await assertFileSha256(verified, path, inputs.manifest.files[path]!);
-    const reportBytes = await verifyArtifact(verified, inputs.outputArtifact, "verification-report/v1", this.artifactKey);
-    const parsedReport = JSON.parse(reportBytes.toString("utf8")) as PublicationVerificationBinding;
+    const reportBytes = await verifyArtifact(verified, inputs.outputArtifact, verificationReportSchemaVersion, this.artifactKey);
+    const parsedReport = assertVerificationReport(JSON.parse(reportBytes.toString("utf8")), {
+      expectedBaseSha: inputs.expectedBaseSha,
+      verifierInputsSha256: inputs.integritySha256,
+      mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+      commands: inputs.commands,
+    });
     assertVerificationBinding(inputs, parsedReport);
     if (JSON.stringify(parsedReport) !== JSON.stringify(verification)) {
       throw new Error("Trusted publication verification report does not match the successful verifier result.");
@@ -150,7 +155,13 @@ export class TrustedPublicationWorkspace {
           await assertMaterializedPatch(checkout, patch, inputs.outputArtifact, verificationLifecyclePath, publicationDecisionPath);
           await assertFileSha256(checkout, patchPath, patchSha256);
           await verifyArtifact(checkout, patchPath, "verified-publication-patch/v1", this.artifactKey);
-          await verifyArtifact(checkout, inputs.outputArtifact, "verification-report/v1", this.artifactKey);
+          const reportBytes = await verifyArtifact(checkout, inputs.outputArtifact, verificationReportSchemaVersion, this.artifactKey);
+          assertVerificationReport(JSON.parse(reportBytes.toString("utf8")), {
+            expectedBaseSha: inputs.expectedBaseSha,
+            verifierInputsSha256: inputs.integritySha256,
+            mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+            commands: inputs.commands,
+          });
           await verifyArtifact(checkout, verificationLifecyclePath, "generated-test-lifecycle-decision/v1", this.artifactKey);
           for (const name of publisherArtifacts) {
             await verifyArtifact(
@@ -389,12 +400,13 @@ async function resolveExactCommit(root: string, reference: string, runner: Comma
   return lines[0]!;
 }
 
-function assertVerificationBinding(inputs: VerifierExecutionInputs, verification: PublicationVerificationBinding): void {
-  if (verification.schemaVersion !== "verification-report/v1" || verification.passed !== true
-    || verification.expectedBaseSha !== inputs.expectedBaseSha
-    || verification.verifierInputsSha256 !== inputs.integritySha256) {
-    throw new Error("Trusted publication requires the successful report bound to the sealed verifier inputs.");
-  }
+function assertVerificationBinding(inputs: VerifierExecutionInputs, verification: unknown): void {
+  assertVerificationReport(verification, {
+    expectedBaseSha: inputs.expectedBaseSha,
+    verifierInputsSha256: inputs.integritySha256,
+    mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+    commands: inputs.commands,
+  });
 }
 
 function validatePaths(paths: readonly string[], kind: string): readonly string[] {

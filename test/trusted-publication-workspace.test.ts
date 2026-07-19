@@ -9,6 +9,7 @@ import type { VerifierExecutionInputs } from "../src/core/verifier-execution-inp
 import { CommandRunner } from "../src/infra/command-runner.js";
 import { createTestManifest } from "../src/core/artifacts.js";
 import { signArtifact } from "../src/core/artifact-authentication.js";
+import { createVerificationReport, verificationEvidenceSchemaVersions, verificationReportSchemaVersion } from "../src/domain/verification-report.js";
 
 test("publishes only identity-bound verified production and sealed artifact states", async () => {
   const fixture = await createFixture();
@@ -52,7 +53,7 @@ test("rejects tampered manifests, verifier outputs, lifecycle decisions, and pub
   );
 
   const report = await createFixture();
-  await writeFile(join(report.verified, report.runRoot, "verification.json"), '{"schemaVersion":"verification-report/v1","passed":false}\n');
+  await writeFile(join(report.verified, report.runRoot, "verification.json"), '{"schemaVersion":"verification-report/v2","passed":false}\n');
   await assert.rejects(
     new TrustedPublicationWorkspace(join(report.sandbox, "publication"), report.runner, report.key).create(
       report.repository, report.verified, report.inputs, report.report, report.lifecyclePath,
@@ -187,14 +188,14 @@ async function createFixture() {
   const manifest = await createTestManifest(verified, key);
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(join(verified, runRoot, "test-manifest.json"), manifestBytes);
-  const report = {
-    schemaVersion: "verification-report/v1" as const,
-    passed: true,
-    expectedBaseSha,
-    verifierInputsSha256: "c".repeat(64),
-  };
+  const report = createVerificationReport(
+    { expectedBaseSha, verifierInputsSha256: "c".repeat(64), mutationMode: "off", commands: [] },
+    verificationEvidenceSchemaVersions("off").map((schemaVersion) => ({ schemaVersion, value: { schemaVersion } })),
+    [],
+    "2026-07-18T10:30:00.000Z",
+  );
   await writeFile(join(verified, runRoot, "verification.json"), `${JSON.stringify(report, null, 2)}\n`);
-  await signArtifact(verified, `${runRoot}/verification.json`, "verification-report/v1", key);
+  await signArtifact(verified, `${runRoot}/verification.json`, verificationReportSchemaVersion, key);
   const lifecyclePath = `${runRoot}/generated-test-verification-lifecycle.json`;
   await writeFile(join(verified, lifecyclePath), "{\"schemaVersion\":\"generated-test-lifecycle-decision/v1\"}\n");
   await signArtifact(verified, lifecyclePath, "generated-test-lifecycle-decision/v1", key);

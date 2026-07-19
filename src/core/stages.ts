@@ -22,7 +22,7 @@ import {
   type VerifierExecutionPreparation,
 } from "./verifier-execution-inputs.js";
 import { assertVerifierCommandEnvironment, createVerifierCommandEnvironmentDecision, runVerifierCommand, type VerifierCommandEnvironmentDecision } from "./verifier-command-environment.js";
-import { authorizePublication, type PublicationVerificationBinding } from "./publication-authorization.js";
+import { authorizePublication } from "./publication-authorization.js";
 import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
 import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
 import { assertTargetedMutationPlan, assertTargetedMutationResult, compareTargetedMutationScores, type TargetedMutationResult, type TargetedMutationScoreComparison } from "../domain/targeted-mutation.js";
@@ -84,6 +84,12 @@ import {
   type ObjectiveVerificationResult,
 } from "../domain/objective-verification.js";
 import { createObjectiveVerifierEvidence, prepareObjectiveVerificationPlan, verifyImplementationObjective } from "./objective-verification.js";
+import {
+  assertVerificationReport,
+  createVerificationReport,
+  verificationReportSchemaVersion,
+  type VerificationEvidenceValue,
+} from "../domain/verification-report.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -416,40 +422,74 @@ export class PipelineStages {
         objectivePlan,
       );
     }
-    const passed = preObjectiveVerificationPassed && objectiveVerification !== undefined;
-    const report = {
-      schemaVersion: "verification-report/v1" as const,
-      passed,
+    if (!preObjectiveVerificationPassed || objectiveVerification === undefined
+      || !staticAnalysis || !staticAnalysisComparison || !staticAnalysisIgnoredFindings
+      || !staticAnalysisIgnoredFindingsComparison || !broadExceptionSwallowing || !broadExceptionSwallowingComparison
+      || !validationBoundaries || !validationBoundaryComparison || !testStrength || !testStrengthComparison
+      || !protectedRepositoryChanges || !protectedRepositoryChangeComparison || !secretScan
+      || !publicApiSurface || !publicApiSurfaceComparison) {
+      throw new Error(`Verification failed: ${[...diff.violations, ...sourceSafety.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
+    }
+    const evidence: VerificationEvidenceValue[] = [
+      { schemaVersion: "ordinary-diff-inspection/v1", value: diff },
+      { schemaVersion: specificationScope.schemaVersion, value: specificationScope },
+      { schemaVersion: patchLimits.schemaVersion, value: patchLimits },
+      { schemaVersion: "source-safety-report/v1", value: sourceSafety },
+      { schemaVersion: staticAnalysis.schemaVersion, value: staticAnalysis },
+      { schemaVersion: staticAnalysisComparison.schemaVersion, value: staticAnalysisComparison },
+      { schemaVersion: staticAnalysisIgnoredFindings.schemaVersion, value: staticAnalysisIgnoredFindings },
+      { schemaVersion: staticAnalysisIgnoredFindingsComparison.schemaVersion, value: staticAnalysisIgnoredFindingsComparison },
+      { schemaVersion: broadExceptionSwallowing.schemaVersion, value: broadExceptionSwallowing },
+      { schemaVersion: broadExceptionSwallowingComparison.schemaVersion, value: broadExceptionSwallowingComparison },
+      { schemaVersion: validationBoundaries.schemaVersion, value: validationBoundaries },
+      { schemaVersion: validationBoundaryComparison.schemaVersion, value: validationBoundaryComparison },
+      { schemaVersion: testStrength.schemaVersion, value: testStrength },
+      { schemaVersion: testStrengthComparison.schemaVersion, value: testStrengthComparison },
+      { schemaVersion: protectedRepositoryChanges.schemaVersion, value: protectedRepositoryChanges },
+      { schemaVersion: protectedRepositoryChangeComparison.schemaVersion, value: protectedRepositoryChangeComparison },
+      { schemaVersion: secretScan.schemaVersion, value: secretScan },
+      { schemaVersion: publicApiSurface.schemaVersion, value: publicApiSurface },
+      { schemaVersion: publicApiSurfaceComparison.schemaVersion, value: publicApiSurfaceComparison },
+      ...(inputs.mutationMode === "targeted" && targetedMutation && targetedMutationComparison
+        ? [
+          { schemaVersion: targetedMutation.schemaVersion, value: targetedMutation },
+          { schemaVersion: targetedMutationComparison.schemaVersion, value: targetedMutationComparison },
+        ]
+        : []),
+      { schemaVersion: objectiveVerification.schemaVersion, value: objectiveVerification },
+    ];
+    const report = createVerificationReport(
+      {
+        expectedBaseSha: inputs.expectedBaseSha,
+        verifierInputsSha256: inputs.integritySha256,
+        mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+        commands: inputs.commands,
+      },
+      evidence,
+      checks,
+      this.clock.now().toISOString(),
+    );
+    await writeVerificationOutput(root, inputs.outputArtifact, report);
+    assertVerificationReport(report, {
       expectedBaseSha: inputs.expectedBaseSha,
       verifierInputsSha256: inputs.integritySha256,
-      diff,
-      specificationScope,
-      patchLimits,
-      sourceSafety,
-      checks,
-      ...(staticAnalysis ? { staticAnalysis } : {}),
-      ...(staticAnalysisComparison ? { staticAnalysisComparison } : {}),
-      ...(staticAnalysisIgnoredFindings ? { staticAnalysisIgnoredFindings } : {}),
-      ...(staticAnalysisIgnoredFindingsComparison ? { staticAnalysisIgnoredFindingsComparison } : {}),
-      ...(broadExceptionSwallowing ? { broadExceptionSwallowing } : {}),
-      ...(broadExceptionSwallowingComparison ? { broadExceptionSwallowingComparison } : {}),
-      ...(validationBoundaries ? { validationBoundaries } : {}),
-      ...(validationBoundaryComparison ? { validationBoundaryComparison } : {}),
-      ...(testStrength ? { testStrength } : {}),
-      ...(testStrengthComparison ? { testStrengthComparison } : {}),
-      ...(protectedRepositoryChanges ? { protectedRepositoryChanges } : {}),
-      ...(protectedRepositoryChangeComparison ? { protectedRepositoryChangeComparison } : {}),
-      ...(secretScan ? { secretScan } : {}),
-      ...(publicApiSurface ? { publicApiSurface } : {}),
-      ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
-      ...(targetedMutation ? { targetedMutation } : {}),
-      ...(targetedMutationComparison ? { targetedMutationComparison } : {}),
-      ...(objectiveVerification ? { objectiveVerification } : {}),
-      verifiedAt: this.clock.now().toISOString(),
-    };
-    await writeVerificationOutput(root, inputs.outputArtifact, report);
-    await signArtifact(root, inputs.outputArtifact, "verification-report/v1", key, this.clock.now());
-    if (!passed) throw new Error(`Verification failed: ${[...diff.violations, ...sourceSafety.violations, ...checks.filter((c) => c.exitCode !== 0).map((c) => `Command failed: ${c.command}`)].join("; ")}`);
+      mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+      commands: inputs.commands,
+    });
+    const authenticationTime = this.clock.now();
+    await signArtifact(root, inputs.outputArtifact, verificationReportSchemaVersion, key, authenticationTime);
+    const authenticatedReport = assertVerificationReport(
+      JSON.parse((await verifyArtifact(root, inputs.outputArtifact, verificationReportSchemaVersion, key, authenticationTime)).toString("utf8")),
+      {
+        expectedBaseSha: inputs.expectedBaseSha,
+        verifierInputsSha256: inputs.integritySha256,
+        mutationMode: inputs.mutationMode === "targeted" ? "targeted" : "off",
+        commands: inputs.commands,
+      },
+    );
+    if (JSON.stringify(authenticatedReport) !== JSON.stringify(report)) {
+      throw new Error("Authenticated verification report changed before publication.");
+    }
     return report;
   }
 
@@ -466,7 +506,7 @@ export class PipelineStages {
     const authenticated = await verifyPublicationInputs(root, verificationPath, lifecyclePath, patchPath, key, now);
     const config = await loadConfig(root);
     const spec = await readArtifact<ImprovementSpec>(root, "spec.json");
-    const verification = JSON.parse(authenticated.reportBytes.toString("utf8")) as PublicationVerificationBinding & { readonly checks: readonly { command: string; exitCode: number }[] };
+    const verification = assertVerificationReport(JSON.parse(authenticated.reportBytes.toString("utf8")));
     const testPlan = await optionalArtifact<{
       schemaVersion?: string;
       improvementIntent?: { readonly intent?: string };
@@ -477,7 +517,7 @@ export class PipelineStages {
     const authorization = await authorizePublication(main.repository, main.reference, verification, decidedAt, this.runner);
     const request = {
       title: spec.title,
-      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${baselineSummary(testPlan)}${verification.checks.map((check) => `- ${check.command}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
+      body: `## Improvement\n${spec.objective}\n\n## Evidence\n${spec.evidence.map((item) => `- ${item}`).join("\n")}\n\n## Verification\n${baselineSummary(testPlan)}${verification.checks.map((check) => `- sealed command ${check.commandSha256}: passed`).join("\n")}\n\n## Risk\nBounded to ${spec.constraints.maxFiles} files and ${spec.constraints.maxChangedLines} changed lines.`,
       draft: config.pull_request.draft,
       labels: config.pull_request.labels,
     };
@@ -834,7 +874,8 @@ async function verifyPublicationInputs(
   key: string,
   now: Date,
 ): Promise<{ readonly reportBytes: Buffer; readonly lifecycleBytes: Buffer; readonly patch: VerifiedPublicationPatch }> {
-  const reportBytes = await verifyArtifact(root, verificationPath, "verification-report/v1", key, now);
+  const reportBytes = await verifyArtifact(root, verificationPath, verificationReportSchemaVersion, key, now);
+  assertVerificationReport(JSON.parse(reportBytes.toString("utf8")));
   const lifecycleBytes = await verifyArtifact(root, lifecyclePath, "generated-test-lifecycle-decision/v1", key, now);
   const patchBytes = await verifyArtifact(root, patchPath, "verified-publication-patch/v1", key, now);
   const patch = JSON.parse(patchBytes.toString("utf8")) as VerifiedPublicationPatch;

@@ -11,6 +11,7 @@ import { PipelineStages } from "../src/core/stages.js";
 import type { DailyImprovementDecision } from "../src/domain/model.js";
 import { CommandRunner, type CommandResult } from "../src/infra/command-runner.js";
 import { signArtifact } from "../src/core/artifact-authentication.js";
+import { createVerificationReport, verificationEvidenceSchemaVersions, verificationReportSchemaVersion } from "../src/domain/verification-report.js";
 
 test("authorizes publication only while trusted main remains at the verified commit", async () => {
   const fixture = await createRepository();
@@ -128,7 +129,7 @@ test("main advancement blocks the daily claim completion and publication artifac
   }));
   const artifactKey = "publication-authorization-artifact-key";
   const artifactTime = new Date(timestamp);
-  await signArtifact(fixture.repository, ".ai/runs/2026-07-18/verification.json", "verification-report/v1", artifactKey, artifactTime);
+  await signArtifact(fixture.repository, ".ai/runs/2026-07-18/verification.json", verificationReportSchemaVersion, artifactKey, artifactTime);
   await signArtifact(fixture.repository, ".ai/runs/2026-07-18/generated-test-verification-lifecycle.json", "generated-test-lifecycle-decision/v1", artifactKey, artifactTime);
   await signArtifact(fixture.repository, ".ai/runs/2026-07-18/verified-publication-patch.json", "verified-publication-patch/v1", artifactKey, artifactTime);
   const claim: DailyImprovementDecision = {
@@ -173,12 +174,12 @@ test("main advancement blocks the daily claim completion and publication artifac
 const timestamp = "2026-07-18T10:30:00.000Z";
 
 function verification(expectedBaseSha: string) {
-  return {
-    schemaVersion: "verification-report/v1" as const,
-    passed: true,
-    expectedBaseSha,
-    verifierInputsSha256: "a".repeat(64),
-  };
+  return createVerificationReport(
+    { expectedBaseSha, verifierInputsSha256: "a".repeat(64), mutationMode: "off", commands: [] },
+    verificationEvidenceSchemaVersions("off").map((schemaVersion) => ({ schemaVersion, value: { schemaVersion } })),
+    [],
+    timestamp,
+  );
 }
 
 class AmbiguousMainRunner extends CommandRunner {
