@@ -44,6 +44,13 @@ import {
   type BroadExceptionSwallowingComparison,
   type BroadExceptionSwallowingResult,
 } from "../domain/broad-exception-swallowing.js";
+import {
+  assertValidationBoundaryPlan,
+  assertValidationBoundaryResult,
+  compareValidationBoundaries,
+  type ValidationBoundaryComparison,
+  type ValidationBoundaryResult,
+} from "../domain/validation-boundaries.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -215,6 +222,8 @@ export class PipelineStages {
     let staticAnalysisIgnoredFindingsComparison: StaticAnalysisIgnoredFindingsComparison | undefined;
     let broadExceptionSwallowing: BroadExceptionSwallowingResult | undefined;
     let broadExceptionSwallowingComparison: BroadExceptionSwallowingComparison | undefined;
+    let validationBoundaries: ValidationBoundaryResult | undefined;
+    let validationBoundaryComparison: ValidationBoundaryComparison | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -258,6 +267,15 @@ export class PipelineStages {
           baselineBroadExceptionSwallowing,
           broadExceptionSwallowing,
         );
+        const baselineValidationBoundaries = await executeValidationBoundaries(
+          baselineWorkspace.path,
+          baselineAdapter,
+          inputs,
+          key,
+          this.runner,
+        );
+        validationBoundaries = await executeValidationBoundaries(root, currentAdapter, inputs, key, this.runner);
+        validationBoundaryComparison = compareValidationBoundaries(baselineValidationBoundaries, validationBoundaries);
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -285,6 +303,8 @@ export class PipelineStages {
       && staticAnalysisIgnoredFindingsComparison !== undefined
       && broadExceptionSwallowing !== undefined
       && broadExceptionSwallowingComparison !== undefined
+      && validationBoundaries !== undefined
+      && validationBoundaryComparison !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -302,6 +322,8 @@ export class PipelineStages {
       ...(staticAnalysisIgnoredFindingsComparison ? { staticAnalysisIgnoredFindingsComparison } : {}),
       ...(broadExceptionSwallowing ? { broadExceptionSwallowing } : {}),
       ...(broadExceptionSwallowingComparison ? { broadExceptionSwallowingComparison } : {}),
+      ...(validationBoundaries ? { validationBoundaries } : {}),
+      ...(validationBoundaryComparison ? { validationBoundaryComparison } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -473,6 +495,39 @@ async function executeBroadExceptionSwallowing(
     throw new Error("Broad exception-swallowing inspection changed a sealed verifier input.");
   }
   return result;
+}
+
+async function executeValidationBoundaries(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<ValidationBoundaryResult> {
+  if (!adapter.prepareValidationBoundaries || !adapter.inspectValidationBoundaries) {
+    throw new Error("Validation-boundary inspection is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertValidationBoundaryPlan(await adapter.prepareValidationBoundaries(root));
+  const result = assertValidationBoundaryResult(
+    await adapter.inspectValidationBoundaries(root, plan),
+    plan,
+  );
+  assertSupportedSemantics(adapter.validationBoundaryIdentitySemantics, result.boundaryIdentitySemantics, "boundary");
+  assertSupportedSemantics(adapter.validationGuaranteeIdentitySemantics, result.guaranteeIdentitySemantics, "guarantee");
+  assertSupportedSemantics(adapter.unvalidatedFlowIdentitySemantics, result.unvalidatedFlowIdentitySemantics, "unvalidated flow");
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Validation-boundary inspection changed a sealed verifier input.");
+  }
+  return result;
+}
+
+function assertSupportedSemantics(supported: readonly string[] | undefined, actual: string, name: string): void {
+  if (!Array.isArray(supported) || supported.length < 1 || supported.length > 16 || !supported.includes(actual)) {
+    throw new Error(`Validation-boundary result uses unsupported adapter ${name} identity semantics.`);
+  }
 }
 
 async function executePublicApiSurface(

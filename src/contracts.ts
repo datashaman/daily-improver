@@ -34,6 +34,10 @@ import type {
   BroadExceptionSwallowingPlan,
   BroadExceptionSwallowingResult,
 } from "./domain/broad-exception-swallowing.js";
+import type {
+  ValidationBoundaryPlan,
+  ValidationBoundaryResult,
+} from "./domain/validation-boundaries.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -72,6 +76,11 @@ export interface RepositoryAdapter {
   readonly broadExceptionSwallowingHazardIdentitySemantics?: readonly string[];
   prepareBroadExceptionSwallowing?(root: string): Promise<BroadExceptionSwallowingPlan>;
   inspectBroadExceptionSwallowing?(root: string, plan: BroadExceptionSwallowingPlan): Promise<BroadExceptionSwallowingResult>;
+  readonly validationBoundaryIdentitySemantics?: readonly string[];
+  readonly validationGuaranteeIdentitySemantics?: readonly string[];
+  readonly unvalidatedFlowIdentitySemantics?: readonly string[];
+  prepareValidationBoundaries?(root: string): Promise<ValidationBoundaryPlan>;
+  inspectValidationBoundaries?(root: string, plan: ValidationBoundaryPlan): Promise<ValidationBoundaryResult>;
   readonly publicApiSymbolIdentitySemantics?: readonly string[];
   preparePublicApiSurface?(root: string): Promise<PublicApiSurfacePlan>;
   inspectPublicApiSurface?(root: string, plan: PublicApiSurfacePlan, execution: PublicApiSurfaceExecution): Promise<PublicApiSurfaceResult>;

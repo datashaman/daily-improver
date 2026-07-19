@@ -17,6 +17,7 @@ import { inspectPhpVerifierStaticAnalysis, preparePhpVerifierStaticAnalysis } fr
 import { inspectPhpStaticAnalysisIgnoredFindings, preparePhpStaticAnalysisIgnoredFindings } from "./php-static-analysis-ignored-findings.js";
 import { inspectPhpPublicApiSurface, preparePhpPublicApiSurface } from "./php-public-api-surface.js";
 import { inspectPhpBroadExceptionSwallowing, preparePhpBroadExceptionSwallowing } from "./php-broad-exception-swallowing.js";
+import { inspectPhpValidationBoundaries, preparePhpValidationBoundaries } from "./php-validation-boundaries.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
@@ -56,6 +57,9 @@ export class PhpAdapter implements RepositoryAdapter {
   readonly staticAnalysisFindingIdentitySemantics = ["php-static-analysis-path-rule-message/v1"] as const;
   readonly staticAnalysisIgnoredFindingIdentitySemantics = ["php-static-analysis-ignore-inventory/v1"] as const;
   readonly broadExceptionSwallowingHazardIdentitySemantics = ["php-broad-catch-handler-fingerprint/v1"] as const;
+  readonly validationBoundaryIdentitySemantics = ["php-validation-boundary-context/v1"] as const;
+  readonly validationGuaranteeIdentitySemantics = ["php-validation-guarantee-strength/v1"] as const;
+  readonly unvalidatedFlowIdentitySemantics = ["php-request-mass-assignment-flow/v1"] as const;
   readonly publicApiSymbolIdentitySemantics = ["phpprobe-public-symbol-id-fingerprint/v1"] as const;
 
   constructor(
@@ -248,6 +252,14 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async inspectBroadExceptionSwallowing(root: string, plan: Parameters<typeof inspectPhpBroadExceptionSwallowing>[1]) {
     return await inspectPhpBroadExceptionSwallowing(root, plan);
+  }
+
+  async prepareValidationBoundaries(_root: string) {
+    return await preparePhpValidationBoundaries();
+  }
+
+  async inspectValidationBoundaries(root: string, plan: Parameters<typeof inspectPhpValidationBoundaries>[1]) {
+    return await inspectPhpValidationBoundaries(root, plan);
   }
 
   async preparePublicApiSurface(root: string) {
