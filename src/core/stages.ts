@@ -69,6 +69,8 @@ import {
   inspectProtectedRepositoryChanges,
   prepareProtectedRepositoryChangePlan,
 } from "./protected-repository-changes.js";
+import { assertSecretScanPlan, assertSecretScanResult, type SecretScanPlan, type SecretScanResult } from "../domain/secret-scan.js";
+import { prepareSecretScanPlan, scanVerifiedPatchForSecrets } from "./secret-scan.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -84,6 +86,7 @@ export class PipelineStages {
     private readonly runner = new CommandRunner(),
     private readonly clock: Clock = { now: () => new Date() },
     private readonly verifierCommandEnvironment: VerifierCommandEnvironmentDecision = createVerifierCommandEnvironmentDecision(process.env),
+    private readonly secretScanPlan: unknown = prepareSecretScanPlan(),
   ) {}
 
   async resolveAdapter(root: string) {
@@ -246,6 +249,7 @@ export class PipelineStages {
     let testStrengthComparison: TestStrengthComparison | undefined;
     let protectedRepositoryChanges: ProtectedRepositoryChangeResult | undefined;
     let protectedRepositoryChangeComparison: ProtectedRepositoryChangeComparison | undefined;
+    let secretScan: SecretScanResult | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -318,6 +322,7 @@ export class PipelineStages {
           baselineProtectedRepositoryChanges,
           protectedRepositoryChanges,
         );
+        secretScan = await executeSecretScan(root, inputs, diff.files, key, this.secretScanPlan, this.runner);
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -351,6 +356,7 @@ export class PipelineStages {
       && testStrengthComparison !== undefined
       && protectedRepositoryChanges !== undefined
       && protectedRepositoryChangeComparison !== undefined
+      && secretScan !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -374,6 +380,7 @@ export class PipelineStages {
       ...(testStrengthComparison ? { testStrengthComparison } : {}),
       ...(protectedRepositoryChanges ? { protectedRepositoryChanges } : {}),
       ...(protectedRepositoryChangeComparison ? { protectedRepositoryChangeComparison } : {}),
+      ...(secretScan ? { secretScan } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -614,6 +621,31 @@ async function executeProtectedRepositoryChangeInspection(
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Protected repository-change inspection changed a sealed verifier input.");
+  }
+  return result;
+}
+
+async function executeSecretScan(
+  root: string,
+  inputs: VerifierExecutionInputs,
+  diffFiles: readonly string[],
+  manifestKey: string,
+  planValue: unknown,
+  runner: CommandRunner,
+): Promise<SecretScanResult> {
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const allowed = new Set(inputs.specification.allowedFiles);
+  const productionPaths = [...new Set(diffFiles.filter((path) => allowed.has(path)))].sort();
+  if (productionPaths.length < 1) throw new Error("Secret-scan authenticated production patch is empty.");
+  const plan: SecretScanPlan = assertSecretScanPlan(planValue);
+  const result = assertSecretScanResult(
+    await scanVerifiedPatchForSecrets(root, inputs.expectedBaseSha, productionPaths, plan, runner),
+    plan,
+  );
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Secret-scan inspection changed a sealed verifier input.");
   }
   return result;
 }

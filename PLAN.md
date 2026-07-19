@@ -211,7 +211,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Detect weakened validation.
 - [x] Detect deleted, skipped, or weakened tests.
 - [x] Detect accidental dependency, migration, workflow, and generated-binary changes.
-- [ ] Scan the patch for secrets.
+- [x] Scan the patch for secrets.
 - [ ] Enforce file and line limits.
 - [ ] Enforce spec allowlists and exclusions.
 - [ ] Verify that the implementation matches the stated objective.
@@ -517,8 +517,9 @@ The recent and next commit-sized milestones are:
 46. [x] `feat: detect weakened validation`
 47. [x] `feat: detect weakened repository tests`
 48. [x] `feat: reject accidental protected repository changes`
+49. [x] `feat: reject secrets in verified patches`
 
-The immediate next task is Phase 1F: scan the verified patch for secrets. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: enforce file and line limits in the production verifier. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 
