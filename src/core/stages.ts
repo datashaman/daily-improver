@@ -71,6 +71,8 @@ import {
 } from "./protected-repository-changes.js";
 import { assertSecretScanPlan, assertSecretScanResult, type SecretScanPlan, type SecretScanResult } from "../domain/secret-scan.js";
 import { prepareSecretScanPlan, scanVerifiedPatchForSecrets } from "./secret-scan.js";
+import { assertVerifiedPatchLimitResult } from "../domain/verified-patch-limits.js";
+import { inspectVerifiedPatchLimits, prepareVerifiedPatchLimitPlan, requireVerifiedPatchWithinLimits } from "./verified-patch-limits.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -217,6 +219,12 @@ export class PipelineStages {
       inputs.protectedPaths,
       trustedPaths,
     );
+    const patchLimitPlan = prepareVerifiedPatchLimitPlan(inputs.repositoryLimits);
+    const patchLimits = assertVerifiedPatchLimitResult(
+      await inspectVerifiedPatchLimits(root, inputs.expectedBaseSha, patchLimitPlan, this.runner),
+      patchLimitPlan,
+    );
+    requireVerifiedPatchWithinLimits(patchLimits);
     const sourceSafety = await new SourceSafetyInspector(this.runner).inspect(
       root,
       inputs.expectedBaseSha,
@@ -366,6 +374,7 @@ export class PipelineStages {
       expectedBaseSha: inputs.expectedBaseSha,
       verifierInputsSha256: inputs.integritySha256,
       diff,
+      patchLimits,
       sourceSafety,
       checks,
       ...(staticAnalysis ? { staticAnalysis } : {}),

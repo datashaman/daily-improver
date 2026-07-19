@@ -9,12 +9,13 @@ import {
   validateVerifierCommandEnvironmentDecision,
   type VerifierCommandEnvironmentDecision,
 } from "./verifier-command-environment.js";
+import { assertVerifiedPatchLimits, type VerifiedPatchLimits } from "../domain/verified-patch-limits.js";
 
 const maximumCommands = 64;
 const maximumCommandLength = 4_096;
 
 export interface VerifierExecutionPreparation {
-  readonly schemaVersion: "verifier-execution-preparation/v3";
+  readonly schemaVersion: "verifier-execution-preparation/v4";
   readonly expectedBaseSha: string;
   readonly specification: ImprovementSpec;
   readonly specificationSha256: string;
@@ -22,13 +23,14 @@ export interface VerifierExecutionPreparation {
   readonly commands: readonly string[];
   readonly mutationMode: "off" | "targeted" | "full";
   readonly protectedPaths: readonly string[];
+  readonly repositoryLimits: VerifiedPatchLimits;
   readonly commandEnvironment: VerifierCommandEnvironmentDecision;
   readonly outputArtifact: string;
   readonly trustedArtifacts: readonly string[];
 }
 
 export interface VerifierExecutionInputs extends Omit<VerifierExecutionPreparation, "schemaVersion"> {
-  readonly schemaVersion: "verifier-execution-inputs/v3";
+  readonly schemaVersion: "verifier-execution-inputs/v4";
   readonly manifest: TestManifest;
   readonly manifestArtifactSha256: string;
   readonly integritySha256: string;
@@ -49,7 +51,7 @@ export async function prepareVerifierExecution(
   const outputArtifact = exactRepositoryPath(root, join(runDirectory(root), "verification.json"));
   const runRoot = exactRepositoryPath(root, runDirectory(root));
   return deepFreeze({
-    schemaVersion: "verifier-execution-preparation/v3",
+    schemaVersion: "verifier-execution-preparation/v4",
     expectedBaseSha,
     specification: clone(spec),
     specificationSha256,
@@ -57,6 +59,10 @@ export async function prepareVerifierExecution(
     commands,
     mutationMode: config.verification.mutation_testing,
     protectedPaths: clone(config.protected_paths),
+    repositoryLimits: assertVerifiedPatchLimits({
+      maxChangedFiles: config.limits.max_changed_files,
+      maxDiffLines: config.limits.max_diff_lines,
+    }),
     commandEnvironment: validateVerifierCommandEnvironmentDecision(commandEnvironment),
     outputArtifact,
     trustedArtifacts: [
@@ -75,7 +81,7 @@ export async function sealVerifierExecution(
   const manifestArtifactSha256 = await regularFileSha256(root, relative(root, join(runDirectory(root), "test-manifest.json")));
   const unsigned = {
     ...clone(preparation),
-    schemaVersion: "verifier-execution-inputs/v3" as const,
+    schemaVersion: "verifier-execution-inputs/v4" as const,
     manifest: clone(manifest),
     manifestArtifactSha256,
   };
@@ -87,12 +93,12 @@ export async function assertVerifierExecutionInputs(
   inputs: VerifierExecutionInputs,
   runner: CommandRunner,
 ): Promise<void> {
-  if (inputs.schemaVersion !== "verifier-execution-inputs/v3") throw new Error("Verifier execution inputs use an unsupported schema.");
+  if (inputs.schemaVersion !== "verifier-execution-inputs/v4") throw new Error("Verifier execution inputs use an unsupported schema.");
   const { integritySha256, ...unsigned } = inputs;
   if (!/^[a-f0-9]{64}$/u.test(integritySha256) || sha256(JSON.stringify(unsigned)) !== integritySha256) {
     throw new Error("Verifier execution inputs changed after they were sealed.");
   }
-  assertPreparation({ ...unsigned, schemaVersion: "verifier-execution-preparation/v3" });
+  assertPreparation({ ...unsigned, schemaVersion: "verifier-execution-preparation/v4" });
   if (await regularFileSha256(root, relative(root, join(runDirectory(root), "spec.json"))) !== inputs.specificationSha256) {
     throw new Error("Verifier specification identity changed after preparation.");
   }
@@ -127,12 +133,13 @@ export async function writeVerificationOutput(
 }
 
 function assertPreparation(value: VerifierExecutionPreparation): void {
-  if (value.schemaVersion !== "verifier-execution-preparation/v3") throw new Error("Verifier preparation uses an unsupported schema.");
+  if (value.schemaVersion !== "verifier-execution-preparation/v4") throw new Error("Verifier preparation uses an unsupported schema.");
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(value.expectedBaseSha)) throw new Error("Verifier baseline identity is malformed.");
   if (!/^[a-f0-9]{64}$/u.test(value.specificationSha256)) throw new Error("Verifier specification identity is malformed.");
   if (value.configurationSha256 !== "absent" && !/^[a-f0-9]{64}$/u.test(value.configurationSha256)) throw new Error("Verifier configuration identity is malformed.");
   validateCommands(value.commands);
   if (value.mutationMode !== "off" && value.mutationMode !== "targeted" && value.mutationMode !== "full") throw new Error("Verifier mutation mode is unsupported.");
+  assertVerifiedPatchLimits(value.repositoryLimits);
   validateVerifierCommandEnvironmentDecision(value.commandEnvironment);
   assertRepositoryRelativePath(value.outputArtifact);
   if (value.trustedArtifacts.length !== 2 || new Set(value.trustedArtifacts).size !== 2) throw new Error("Verifier trusted artifact paths are malformed.");

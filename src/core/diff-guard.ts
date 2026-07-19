@@ -24,8 +24,6 @@ export class DiffGuard {
       if (protectedPaths.some((pattern) => minimatch(file, pattern)) && !trustedPaths.has(file)) violations.push(`Untrusted change to protected path: ${file}`);
       if (!trustedPaths.has(file) && !spec.allowedFiles.some((pattern) => matchesAllowlist(file, pattern))) violations.push(`File is outside spec allowlist: ${file}`);
     }
-    if (boundedEntries.length > spec.constraints.maxFiles) violations.push(`Changed ${boundedEntries.length} product files; maximum is ${spec.constraints.maxFiles}.`);
-    if (changedLines > spec.constraints.maxChangedLines) violations.push(`Changed ${changedLines} lines; maximum is ${spec.constraints.maxChangedLines}.`);
     return { allowed: violations.length === 0, files, changedLines, violations };
   }
 }
