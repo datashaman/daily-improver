@@ -4,6 +4,7 @@ import { dirname, join, relative, sep } from "node:path";
 import JSON5 from "json5";
 import type { TargetedMutationExecution, TargetedMutationPlan, TargetedMutationResult } from "../domain/targeted-mutation.js";
 import { targetedMutationOutputHash } from "../domain/targeted-mutation.js";
+import { throwRequiredVerifierUnavailable } from "../domain/required-verifier.js";
 
 const reportLimitBytes = 2 * 1024 * 1024;
 const configurationLimitBytes = 512 * 1024;
@@ -15,7 +16,9 @@ const inventorySemantics = "php-infection-mutator-location/v1";
 export async function preparePhpTargetedMutation(root: string, targets: readonly string[]): Promise<TargetedMutationPlan> {
   const composer = exactRecord(JSON.parse(await readFile(join(root, "composer.json"), "utf8")), "Composer manifest");
   const packages = { ...optionalPackageMap(composer.require), ...optionalPackageMap(composer["require-dev"]) };
-  if (typeof packages["infection/infection"] !== "string") throw new Error("Targeted PHP mutation testing is unavailable because Infection is not manifest-declared.");
+  if (typeof packages["infection/infection"] !== "string") {
+    throwRequiredVerifierUnavailable("targeted-mutation", "tool", "tool-unavailable", "php:infection");
+  }
   await assertContainedExecutable(root, "vendor/bin/infection");
   const exactTargets = [...targets].sort();
   if (exactTargets.length < 1 || exactTargets.some((target) => !/^(?:app|src)\/.+\.php$/u.test(target))) {
@@ -180,13 +183,25 @@ async function readConfiguration(path: string): Promise<Readonly<Record<string, 
 
 async function assertContainedExecutable(root: string, path: string): Promise<void> {
   const canonicalRoot = await realpath(root);
-  const canonical = await realpath(join(root, path)).catch(() => "");
-  if (!canonical || (canonical !== canonicalRoot && !canonical.startsWith(`${canonicalRoot}${sep}`))) {
-    throw new Error("Targeted Infection executable is unavailable or escapes the repository.");
+  let canonical: string;
+  try {
+    canonical = await realpath(join(root, path));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throwRequiredVerifierUnavailable("targeted-mutation", "tool", "tool-unavailable", "php:infection");
+    }
+    throw error;
+  }
+  if (canonical !== canonicalRoot && !canonical.startsWith(`${canonicalRoot}${sep}`)) {
+    throw new Error("Targeted Infection executable escapes the repository.");
   }
   const metadata = await stat(canonical);
-  if (!metadata.isFile()) throw new Error("Targeted Infection executable is unavailable.");
-  await access(canonical, constants.X_OK).catch(() => { throw new Error("Targeted Infection executable is unavailable."); });
+  if (!metadata.isFile()) throw new Error("Targeted Infection executable is not a regular file.");
+  try {
+    await access(canonical, constants.X_OK);
+  } catch {
+    throwRequiredVerifierUnavailable("targeted-mutation", "tool", "tool-unavailable", "php:infection");
+  }
 }
 
 async function containedRegularFile(root: string, path: string): Promise<string> {

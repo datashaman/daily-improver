@@ -3,6 +3,7 @@ import { join, sep } from "node:path";
 import type { StaticAnalysisExecution, StaticAnalysisPlan, StaticAnalysisResult } from "../domain/static-analysis-findings.js";
 import { staticAnalysisHash } from "../domain/static-analysis-findings.js";
 import { readJson } from "./shared.js";
+import { throwRequiredVerifierUnavailable } from "../domain/required-verifier.js";
 import {
   parsePhpStaticAnalysisOutput,
   phpStaticAnalysisCommand,
@@ -23,9 +24,15 @@ export async function preparePhpVerifierStaticAnalysis(root: string): Promise<St
   const tool: StaticAnalysisTool | undefined = packages["phpstan/phpstan"] || packages["larastan/larastan"] || packages["nunomaduro/larastan"]
     ? "phpstan"
     : packages["vimeo/psalm"] ? "psalm" : undefined;
-  if (!tool) throw new Error("Verifier static analysis is unavailable because PHPStan or Psalm is not manifest-declared.");
-  const executable = await containedRegularFile(root, `vendor/bin/${tool}`);
-  if (!executable) throw new Error("Verifier static-analysis tool is unavailable.");
+  if (!tool) throwRequiredVerifierUnavailable("static-analysis", "tool", "tool-unavailable", "php:manifest-selected-static-analysis");
+  try {
+    await containedRegularFile(root, `vendor/bin/${tool}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throwRequiredVerifierUnavailable("static-analysis", "tool", "tool-unavailable", `php:${tool}`);
+    }
+    throw error;
+  }
   return {
     schemaVersion: "static-analysis-plan/v1",
     adapter: "php",

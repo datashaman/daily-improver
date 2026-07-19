@@ -3,6 +3,7 @@ import { join, sep } from "node:path";
 import type { PublicApiSurfaceExecution, PublicApiSurfacePlan, PublicApiSurfaceResult } from "../domain/public-api-surface.js";
 import { publicApiSurfaceHash } from "../domain/public-api-surface.js";
 import { readJson } from "./shared.js";
+import { throwRequiredVerifierUnavailable } from "../domain/required-verifier.js";
 
 const symbolIdentitySemantics = "phpprobe-public-symbol-id-fingerprint/v1";
 const tool = "phpprobe";
@@ -18,8 +19,17 @@ interface ComposerManifest {
 export async function preparePhpPublicApiSurface(root: string): Promise<PublicApiSurfacePlan> {
   const manifest = await readJson<ComposerManifest>(root, "composer.json");
   const packages = { ...manifest.require, ...manifest["require-dev"] };
-  if (!packages["infocyph/phpprobe"]) throw new Error("Verifier public-API analysis is unavailable because infocyph/phpprobe is not manifest-declared.");
-  await containedRegularFile(root, "vendor/bin/phpprobe");
+  if (!packages["infocyph/phpprobe"]) {
+    throwRequiredVerifierUnavailable("public-api-surface", "tool", "tool-unavailable", "php:phpprobe");
+  }
+  try {
+    await containedRegularFile(root, "vendor/bin/phpprobe");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throwRequiredVerifierUnavailable("public-api-surface", "tool", "tool-unavailable", "php:phpprobe");
+    }
+    throw error;
+  }
   const targetPaths = await composerAutoloadPaths(root, manifest);
   return {
     schemaVersion: "public-api-surface-plan/v1",

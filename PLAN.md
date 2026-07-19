@@ -216,7 +216,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Enforce spec allowlists and exclusions.
 - [x] Verify that the implementation matches the stated objective.
 - [x] Produce a signed `verification.json`.
-- [ ] Fail closed when a required verifier is unavailable.
+- [x] Fail closed when a required verifier is unavailable.
 
 Exit gate: only the fresh verifier can authorize publication.
 
@@ -522,8 +522,9 @@ The recent and next commit-sized milestones are:
 51. [x] `feat: enforce specification change scope`
 52. [x] `feat: verify implementation objective`
 53. [x] `feat: publish signed verification report`
+54. [x] `feat: reject unavailable required verifiers`
 
-The immediate next task is Phase 1F: fail closed when a required verifier is unavailable. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1G: select and document one real Laravel dogfood repository with meaningful domain logic, PHPUnit or Pest, PHPStan, and manageable CI duration. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

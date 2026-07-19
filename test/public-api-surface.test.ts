@@ -78,7 +78,7 @@ test("PHP adapter runs manifest-declared PHPProbe in a clean verifier environmen
 test("PHP adapter fails closed for unavailable tooling and malformed output", async () => {
   const missing = await mkdtemp(join(tmpdir(), "daily-improver-public-api-missing-"));
   await writeFile(join(missing, "composer.json"), JSON.stringify({ require: { php: "^8.2" }, autoload: { "psr-4": { "App\\": "app/" } } }));
-  await assert.rejects(preparePhpPublicApiSurface(missing), /not manifest-declared/);
+  await assert.rejects(preparePhpPublicApiSurface(missing), /required verifier public-api-surface is unavailable/i);
 
   const unavailable = await mkdtemp(join(tmpdir(), "daily-improver-public-api-unavailable-"));
   await writeFile(join(unavailable, "composer.json"), JSON.stringify({

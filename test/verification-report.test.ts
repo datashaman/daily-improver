@@ -10,6 +10,7 @@ import {
   verificationEvidenceSchemaVersions,
   verificationReportSchemaVersion,
 } from "../src/domain/verification-report.js";
+import { createRequiredVerifierUnavailableDecision } from "../src/domain/required-verifier.js";
 
 const now = new Date("2026-07-19T10:30:00.000Z");
 const inputs = {
@@ -68,6 +69,32 @@ test("rejects incomplete, extended, inconsistent, unsupported, unbounded, and ad
   await signArtifact(root, path, verificationReportSchemaVersion, "verification-report-test-key", now);
   const authenticated = JSON.parse((await verifyArtifact(root, path, verificationReportSchemaVersion, "verification-report-test-key", now)).toString("utf8"));
   assert.throws(() => assertVerificationReport(authenticated, inputs), /incomplete/);
+});
+
+test("unavailable required verifiers cannot substitute for evidence and targeted evidence remains conditional", () => {
+  const unavailableMutation = createRequiredVerifierUnavailableDecision(
+    "targeted-mutation",
+    "tool",
+    "tool-unavailable",
+    "php:infection",
+  );
+  const targetedInputs = { ...inputs, mutationMode: "targeted" as const };
+  const targetedEvidence = evidence("targeted");
+  assert.throws(() => createVerificationReport(
+    targetedInputs,
+    targetedEvidence.map((item) => item.schemaVersion === "targeted-mutation-result/v2"
+      ? { schemaVersion: item.schemaVersion, value: unavailableMutation }
+      : item),
+    inputs.commands.map((command) => ({ command, exitCode: 0, durationMs: 1 })),
+    now.toISOString(),
+  ), /schema is inconsistent/);
+
+  assert.doesNotThrow(() => createVerificationReport(
+    inputs,
+    evidence("off"),
+    inputs.commands.map((command) => ({ command, exitCode: 0, durationMs: 1 })),
+    now.toISOString(),
+  ));
 });
 
 function evidence(mutationMode: "off" | "targeted") {

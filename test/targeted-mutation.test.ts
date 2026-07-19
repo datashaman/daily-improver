@@ -123,7 +123,7 @@ test("PHP adapter runs Infection against only the changed MoneyAllocator target 
 test("PHP adapter fails closed when Infection is unavailable, escaped, or produces malformed output", async () => {
   const missing = await mkdtemp(join(tmpdir(), "daily-improver-targeted-missing-"));
   await writeFile(join(missing, "composer.json"), JSON.stringify({ require: { php: "^8.2" } }));
-  await assert.rejects(preparePhpTargetedMutation(missing, [target]), /not manifest-declared/);
+  await assert.rejects(preparePhpTargetedMutation(missing, [target]), /required verifier targeted-mutation is unavailable/i);
 
   const unavailable = await mkdtemp(join(tmpdir(), "daily-improver-targeted-unavailable-"));
   await writeFile(join(unavailable, "composer.json"), JSON.stringify({ "require-dev": { "infection/infection": "^0.30" } }));

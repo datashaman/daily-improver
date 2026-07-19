@@ -21,7 +21,7 @@ import {
   type VerifierExecutionInputs,
   type VerifierExecutionPreparation,
 } from "./verifier-execution-inputs.js";
-import { assertVerifierCommandEnvironment, createVerifierCommandEnvironmentDecision, runVerifierCommand, type VerifierCommandEnvironmentDecision } from "./verifier-command-environment.js";
+import { assertVerifierCommandEnvironment, createVerifierCommandEnvironmentDecision, type VerifierCommandEnvironmentDecision } from "./verifier-command-environment.js";
 import { authorizePublication } from "./publication-authorization.js";
 import { signArtifact, verifyArtifact } from "./artifact-authentication.js";
 import { assertVerifiedPublicationPatchMaterialized, type VerifiedPublicationPatch } from "./trusted-publication-workspace.js";
@@ -90,6 +90,7 @@ import {
   verificationReportSchemaVersion,
   type VerificationEvidenceValue,
 } from "../domain/verification-report.js";
+import { runRequiredVerifierCommand, unavailableRequiredVerifierAdapter } from "./required-verifier.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -261,13 +262,15 @@ export class PipelineStages {
       Object.keys(inputs.manifest.files),
     );
     const checks = [];
-    for (const command of inputs.commands) {
-      const result = await runVerifierCommand(
+    for (const [index, command] of inputs.commands.entries()) {
+      const result = await runRequiredVerifierCommand(
         this.runner,
         inputs.commandEnvironment,
         [inputs.commandEnvironment.shell, "-c", command],
         root,
         10 * 60_000,
+        "ordinary-command",
+        `${inputs.integritySha256}:${index}:${command}`,
       );
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
@@ -574,11 +577,19 @@ async function executeVerifierStaticAnalysis(
   runner: CommandRunner,
 ): Promise<StaticAnalysisResult> {
   if (!adapter.prepareVerifierStaticAnalysis || !adapter.inspectVerifierStaticAnalysis) {
-    throw new Error("Static analysis is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "static-analysis");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertStaticAnalysisPlan(await adapter.prepareVerifierStaticAnalysis(root));
-  const execution = await runVerifierCommand(runner, inputs.commandEnvironment, plan.command, root, plan.timeoutMs);
+  const execution = await runRequiredVerifierCommand(
+    runner,
+    inputs.commandEnvironment,
+    plan.command,
+    root,
+    plan.timeoutMs,
+    "static-analysis",
+    `${adapter.id}:${plan.tool}`,
+  );
   const result = assertStaticAnalysisResult(await adapter.inspectVerifierStaticAnalysis(root, plan, execution), plan);
   if (!Array.isArray(adapter.staticAnalysisFindingIdentitySemantics)
     || adapter.staticAnalysisFindingIdentitySemantics.length < 1
@@ -602,7 +613,7 @@ async function executeStaticAnalysisIgnoredFindings(
   runner: CommandRunner,
 ): Promise<StaticAnalysisIgnoredFindingsResult> {
   if (!adapter.prepareStaticAnalysisIgnoredFindings || !adapter.inspectStaticAnalysisIgnoredFindings) {
-    throw new Error("Static-analysis ignored-finding inspection is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "static-analysis-ignored-findings");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertStaticAnalysisIgnoredFindingsPlan(await adapter.prepareStaticAnalysisIgnoredFindings(root));
@@ -632,7 +643,7 @@ async function executeBroadExceptionSwallowing(
   runner: CommandRunner,
 ): Promise<BroadExceptionSwallowingResult> {
   if (!adapter.prepareBroadExceptionSwallowing || !adapter.inspectBroadExceptionSwallowing) {
-    throw new Error("Broad exception-swallowing inspection is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "broad-exception-swallowing");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertBroadExceptionSwallowingPlan(await adapter.prepareBroadExceptionSwallowing(root));
@@ -662,7 +673,7 @@ async function executeValidationBoundaries(
   runner: CommandRunner,
 ): Promise<ValidationBoundaryResult> {
   if (!adapter.prepareValidationBoundaries || !adapter.inspectValidationBoundaries) {
-    throw new Error("Validation-boundary inspection is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "validation-boundaries");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertValidationBoundaryPlan(await adapter.prepareValidationBoundaries(root));
@@ -689,7 +700,7 @@ async function executeTestStrength(
   runner: CommandRunner,
 ): Promise<TestStrengthResult> {
   if (!adapter.prepareTestStrength || !adapter.inspectTestStrength) {
-    throw new Error("Repository test-strength inspection is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "test-strength");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertTestStrengthPlan(await adapter.prepareTestStrength(root));
@@ -770,11 +781,19 @@ async function executePublicApiSurface(
   runner: CommandRunner,
 ): Promise<PublicApiSurfaceResult> {
   if (!adapter.preparePublicApiSurface || !adapter.inspectPublicApiSurface) {
-    throw new Error("Public-API analysis is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "public-api-surface");
   }
   const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertPublicApiSurfacePlan(await adapter.preparePublicApiSurface(root));
-  const execution = await runVerifierCommand(runner, inputs.commandEnvironment, plan.command, root, plan.timeoutMs);
+  const execution = await runRequiredVerifierCommand(
+    runner,
+    inputs.commandEnvironment,
+    plan.command,
+    root,
+    plan.timeoutMs,
+    "public-api-surface",
+    `${adapter.id}:${plan.tool}`,
+  );
   const result = assertPublicApiSurfaceResult(await adapter.inspectPublicApiSurface(root, plan, execution), plan);
   if (!Array.isArray(adapter.publicApiSymbolIdentitySemantics)
     || adapter.publicApiSymbolIdentitySemantics.length < 1
@@ -799,16 +818,18 @@ async function executeTargetedMutation(
   runner: CommandRunner,
 ): Promise<TargetedMutationResult> {
   if (!adapter.prepareTargetedMutation || !adapter.inspectTargetedMutation) {
-    throw new Error("Targeted mutation testing is unavailable for the selected repository adapter.");
+    unavailableRequiredVerifierAdapter(adapter.id, "targeted-mutation");
   }
   const beforeMutationState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
   const plan = assertTargetedMutationPlan(await adapter.prepareTargetedMutation(root, targets), targets);
-  const execution = await runVerifierCommand(
+  const execution = await runRequiredVerifierCommand(
     runner,
     inputs.commandEnvironment,
     plan.command,
     root,
     plan.timeoutMs,
+    "targeted-mutation",
+    `${adapter.id}:${plan.tool}`,
   );
   const result = assertTargetedMutationResult(await adapter.inspectTargetedMutation(root, plan, execution), plan);
   if (!Array.isArray(adapter.targetedMutationInventorySemantics)

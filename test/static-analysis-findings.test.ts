@@ -71,7 +71,7 @@ test("PHP adapter runs the manifest-selected analyzer in a clean verifier enviro
 test("PHP adapter fails closed when tooling is unavailable or output is malformed", async () => {
   const missing = await mkdtemp(join(tmpdir(), "daily-improver-static-missing-"));
   await writeFile(join(missing, "composer.json"), JSON.stringify({ require: { php: "^8.2" } }));
-  await assert.rejects(preparePhpVerifierStaticAnalysis(missing), /not manifest-declared/);
+  await assert.rejects(preparePhpVerifierStaticAnalysis(missing), /required verifier static-analysis is unavailable/i);
 
   const unavailable = await mkdtemp(join(tmpdir(), "daily-improver-static-unavailable-"));
   await writeFile(join(unavailable, "composer.json"), JSON.stringify({ "require-dev": { "phpstan/phpstan": "^2.0" } }));
