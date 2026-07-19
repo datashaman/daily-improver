@@ -209,7 +209,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Detect new ignored static-analysis findings.
 - [x] Detect broad exception swallowing.
 - [x] Detect weakened validation.
-- [ ] Detect deleted, skipped, or weakened tests.
+- [x] Detect deleted, skipped, or weakened tests.
 - [ ] Detect accidental dependency, migration, workflow, and generated-binary changes.
 - [ ] Scan the patch for secrets.
 - [ ] Enforce file and line limits.
@@ -515,8 +515,9 @@ The recent and next commit-sized milestones are:
 44. [x] `feat: detect new ignored static-analysis findings`
 45. [x] `feat: detect broad exception swallowing`
 46. [x] `feat: detect weakened validation`
+47. [x] `feat: detect weakened repository tests`
 
-The immediate next task is Phase 1F: detect deleted, skipped, or weakened tests. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: detect accidental dependency, migration, workflow, and generated-binary changes. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

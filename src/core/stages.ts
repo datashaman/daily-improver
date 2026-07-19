@@ -51,6 +51,13 @@ import {
   type ValidationBoundaryComparison,
   type ValidationBoundaryResult,
 } from "../domain/validation-boundaries.js";
+import {
+  assertTestStrengthPlan,
+  assertTestStrengthResult,
+  compareTestStrength,
+  type TestStrengthComparison,
+  type TestStrengthResult,
+} from "../domain/test-strength.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -224,6 +231,8 @@ export class PipelineStages {
     let broadExceptionSwallowingComparison: BroadExceptionSwallowingComparison | undefined;
     let validationBoundaries: ValidationBoundaryResult | undefined;
     let validationBoundaryComparison: ValidationBoundaryComparison | undefined;
+    let testStrength: TestStrengthResult | undefined;
+    let testStrengthComparison: TestStrengthComparison | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -276,6 +285,15 @@ export class PipelineStages {
         );
         validationBoundaries = await executeValidationBoundaries(root, currentAdapter, inputs, key, this.runner);
         validationBoundaryComparison = compareValidationBoundaries(baselineValidationBoundaries, validationBoundaries);
+        const baselineTestStrength = await executeTestStrength(
+          baselineWorkspace.path,
+          baselineAdapter,
+          inputs,
+          key,
+          this.runner,
+        );
+        testStrength = await executeTestStrength(root, currentAdapter, inputs, key, this.runner);
+        testStrengthComparison = compareTestStrength(baselineTestStrength, testStrength);
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -305,6 +323,8 @@ export class PipelineStages {
       && broadExceptionSwallowingComparison !== undefined
       && validationBoundaries !== undefined
       && validationBoundaryComparison !== undefined
+      && testStrength !== undefined
+      && testStrengthComparison !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -324,6 +344,8 @@ export class PipelineStages {
       ...(broadExceptionSwallowingComparison ? { broadExceptionSwallowingComparison } : {}),
       ...(validationBoundaries ? { validationBoundaries } : {}),
       ...(validationBoundaryComparison ? { validationBoundaryComparison } : {}),
+      ...(testStrength ? { testStrength } : {}),
+      ...(testStrengthComparison ? { testStrengthComparison } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -522,6 +544,36 @@ async function executeValidationBoundaries(
     throw new Error("Validation-boundary inspection changed a sealed verifier input.");
   }
   return result;
+}
+
+async function executeTestStrength(
+  root: string,
+  adapter: RepositoryAdapter,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<TestStrengthResult> {
+  if (!adapter.prepareTestStrength || !adapter.inspectTestStrength) {
+    throw new Error("Repository test-strength inspection is unavailable for the selected repository adapter.");
+  }
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertTestStrengthPlan(await adapter.prepareTestStrength(root));
+  const result = assertTestStrengthResult(await adapter.inspectTestStrength(root, plan), plan);
+  assertAdapterSemantics(adapter.testIdentitySemantics, result.testIdentitySemantics, "test");
+  assertAdapterSemantics(adapter.testExpectationIdentitySemantics, result.expectationIdentitySemantics, "expectation");
+  assertAdapterSemantics(adapter.testCaseIdentitySemantics, result.caseIdentitySemantics, "case");
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Repository test-strength inspection changed a sealed verifier input.");
+  }
+  return result;
+}
+
+function assertAdapterSemantics(supported: readonly string[] | undefined, actual: string, name: string): void {
+  if (!Array.isArray(supported) || supported.length < 1 || supported.length > 16 || !supported.includes(actual)) {
+    throw new Error(`Test-strength result uses unsupported adapter ${name} identity semantics.`);
+  }
 }
 
 function assertSupportedSemantics(supported: readonly string[] | undefined, actual: string, name: string): void {

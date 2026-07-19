@@ -38,6 +38,10 @@ import type {
   ValidationBoundaryPlan,
   ValidationBoundaryResult,
 } from "./domain/validation-boundaries.js";
+import type {
+  TestStrengthPlan,
+  TestStrengthResult,
+} from "./domain/test-strength.js";
 
 export interface GeneratedTestQualityInspectionRequest {
   readonly root: string;
@@ -81,6 +85,11 @@ export interface RepositoryAdapter {
   readonly unvalidatedFlowIdentitySemantics?: readonly string[];
   prepareValidationBoundaries?(root: string): Promise<ValidationBoundaryPlan>;
   inspectValidationBoundaries?(root: string, plan: ValidationBoundaryPlan): Promise<ValidationBoundaryResult>;
+  readonly testIdentitySemantics?: readonly string[];
+  readonly testExpectationIdentitySemantics?: readonly string[];
+  readonly testCaseIdentitySemantics?: readonly string[];
+  prepareTestStrength?(root: string): Promise<TestStrengthPlan>;
+  inspectTestStrength?(root: string, plan: TestStrengthPlan): Promise<TestStrengthResult>;
   readonly publicApiSymbolIdentitySemantics?: readonly string[];
   preparePublicApiSurface?(root: string): Promise<PublicApiSurfacePlan>;
   inspectPublicApiSurface?(root: string, plan: PublicApiSurfacePlan, execution: PublicApiSurfaceExecution): Promise<PublicApiSurfaceResult>;

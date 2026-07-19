@@ -18,6 +18,7 @@ import { inspectPhpStaticAnalysisIgnoredFindings, preparePhpStaticAnalysisIgnore
 import { inspectPhpPublicApiSurface, preparePhpPublicApiSurface } from "./php-public-api-surface.js";
 import { inspectPhpBroadExceptionSwallowing, preparePhpBroadExceptionSwallowing } from "./php-broad-exception-swallowing.js";
 import { inspectPhpValidationBoundaries, preparePhpValidationBoundaries } from "./php-validation-boundaries.js";
+import { inspectPhpTestStrength, preparePhpTestStrength } from "./php-test-strength.js";
 import { collectPhpComplexityEvidence, phpComplexityCommand, phpComplexitySchemaVersion } from "./php-complexity.js";
 import { collectLaravelDeprecatedApiEvidence, collectPhpDeprecatedApiEvidence } from "./php-deprecation.js";
 import { collectPhpPerformanceEvidence, phpPerformanceCommand, phpPerformanceSchemaVersion } from "./php-performance.js";
@@ -60,6 +61,9 @@ export class PhpAdapter implements RepositoryAdapter {
   readonly validationBoundaryIdentitySemantics = ["php-validation-boundary-context/v1"] as const;
   readonly validationGuaranteeIdentitySemantics = ["php-validation-guarantee-strength/v1"] as const;
   readonly unvalidatedFlowIdentitySemantics = ["php-request-mass-assignment-flow/v1"] as const;
+  readonly testIdentitySemantics = ["php-test-declaration/v1"] as const;
+  readonly testExpectationIdentitySemantics = ["php-test-expectation-position/v1"] as const;
+  readonly testCaseIdentitySemantics = ["php-test-data-case/v1"] as const;
   readonly publicApiSymbolIdentitySemantics = ["phpprobe-public-symbol-id-fingerprint/v1"] as const;
 
   constructor(
@@ -260,6 +264,14 @@ export class PhpAdapter implements RepositoryAdapter {
 
   async inspectValidationBoundaries(root: string, plan: Parameters<typeof inspectPhpValidationBoundaries>[1]) {
     return await inspectPhpValidationBoundaries(root, plan);
+  }
+
+  async prepareTestStrength(_root: string) {
+    return await preparePhpTestStrength();
+  }
+
+  async inspectTestStrength(root: string, plan: Parameters<typeof inspectPhpTestStrength>[1]) {
+    return await inspectPhpTestStrength(root, plan);
   }
 
   async preparePublicApiSurface(root: string) {

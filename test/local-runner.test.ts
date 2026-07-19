@@ -227,6 +227,9 @@ if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR
       validationBoundaries: [],
       validationGuarantees: [],
       unvalidatedInputFlows: [],
+      repositoryTests: [],
+      skippedTests: [],
+      testExpectations: [],
       environment: { PATH: ".", DAILY_IMPROVER_MANIFEST_KEY: "builder-selected" },
     };
     return { ...execution, rationale: maliciousRationale };
@@ -456,6 +459,8 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, /"schemaVersion": "broad-exception-swallowing-comparison\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "validation-boundary-result\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "validation-boundary-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "test-strength-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "test-strength-comparison\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "public-api-surface-result\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "public-api-surface-comparison\/v1"/);
   assert.match(verification.stdout, /"outcome": "clean"/);
@@ -468,7 +473,7 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
   assert.match(verification.stdout, /"command": "php tests\/run.php"/);
   assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
-  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|validationGuarantees|unvalidatedInputFlows|"checks": \[\]/);
+  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|validationGuarantees|unvalidatedInputFlows|repositoryTests|skippedTests|testExpectations|"checks": \[\]/);
   const rootPrepopulation = await shell.run(["git", "show", `${result.branch}:verification.json`], repository);
   assert.notEqual(rootPrepopulation.exitCode, 0);
   const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
