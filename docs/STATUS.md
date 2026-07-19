@@ -4,8 +4,8 @@ Last updated: 2026-07-19
 
 ## Checkpoint
 
-- Last completed milestone: The seventeenth Phase 1F slice is complete; authenticated production changes must satisfy the sealed specification allowlist and exclusions.
-- Current checkpoint commit: `feat: enforce specification change scope`.
+- Last completed milestone: The eighteenth Phase 1F slice is complete; verified implementations must match the sealed objective through independently observed evidence.
+- Current checkpoint commit: `feat: verify implementation objective`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1F — Production verifier.
 - Current state: Phase 1A through Phase 1E are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. The disposable copy is captured immediately before and after every successful or failed builder execution as exact `builder-filesystem-state/v1` values. Streamed hashes and bounded metadata describe regular files, directories, symbolic links, and unsupported types without retaining contents; `builder-filesystem-change-set/v1` exhaustively reports additions, modifications, deletions, and type changes inside and outside the write allowlist. Repeated stable walks fail closed on unreadable, excessive, malformed, traversing, or changing state. Immediately after capture, the runner binds every protected SHA-256 identity to the captured baseline, expands its repository-relative parents, and rejects every addition, modification, deletion, or type change at or below those paths before retaining a successful result, propagating a builder failure, staging, or importing. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. Verifier execution inputs are captured before generated code, sealed before the builder, and revalidated before independent command execution and atomic report publication. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
@@ -36,6 +36,8 @@ Verifier execution now seals repository file and line limits from trusted config
 
 The fresh verifier now also independently derives the exact production change set from NUL-delimited Git raw-diff status against the sealed baseline. Exact `specification-change-scope-plan/v1` and `specification-change-scope-result/v1` values bind literal sealed allowlist paths, every bounded exclusion clause, optional exact `path:` and `path-prefix:` selectors, fixed change semantics, and opaque SHA-256 path identities without source or patch bodies. Added, modified, deleted, renamed-as-delete/add, and type-changed paths outside the allowlist or inside an explicit exclusion fail before authenticated report publication. Malformed, overlapping, wildcard-ambiguous, escaped, duplicate, unsupported, unavailable, excessive, or specification-mismatched decisions fail closed. Sealed generated tests and runner-owned run artifacts remain outside the production inventory through exact verifier authority. The MoneyAllocator proof retains only its authenticated production modification while builder-supplied paths, policies, commands, output routing, and passing results remain non-authoritative. Semantic dependency, migration, workflow, generated-binary, public-API, and other exclusions remain enforced by their independent baseline comparators.
 
+The fresh verifier now also derives exact `objective-verification-plan/v1` and `objective-verification-result/v1` values from only the sealed objective, proposed improvement, acceptance criteria, opaque authenticated production targets, the sealed runner-observed intent-specific baseline proof, passing fresh-check identities, and hashes of accepted source-free safety evidence. The plan and matched result bind the authenticated patch and every satisfied criterion without retaining objective prose, criteria, paths, commands, source, raw output, or model rationale. Missing, malformed, extended, unsupported, unavailable, unbounded, inconsistent, empty-change, incomplete-check, intent-mismatched, specification-mismatched, or adversarial decisions fail before authenticated report publication. The MoneyAllocator proof retains one matched objective result while builder-supplied objective plans and passing results remain non-authoritative.
+
 The verifier now runs in a new runner-owned clone rather than the generation or builder-import worktree. The source `HEAD` must still equal the sealed SHA and resolve to exactly one commit before cloning and immediately before command execution. The clone starts clean and detached at that SHA; only exact specification-approved production file states, verifier-relevant signed-manifest files, and the signed manifest artifact cross through bounded regular-file, hash, containment, and symlink checks. Builder-only files, caches, runtime reports, builder Git state, build-agent artifacts, and test/build model rationale remain absent. Verification plus the three post-change lifecycle attempts run in the clean checkout, and only the trusted verification report and lifecycle decision return for publication.
 
 Immediately before publication authorization, the runner now resolves its bounded trusted main reference to exactly one commit, proves the object is a commit, and requires it to equal `expectedBaseSha` from the trusted `verification-report/v1`. Missing, advanced, rewound, mismatched, blob-valued, and ambiguous state fails before daily-claim completion, publication commit, or draft-request emission. Accepted checks produce exact bounded `publication-authorization/v1` evidence containing only expected and checked commit identities, the sealed verifier-input identity, outcome, and decision time. It retains no repository path, source, credentials, or model output.
@@ -46,14 +48,14 @@ Sealed verifier inputs now use exact `test-manifest/v2`. Every verifier and publ
 
 ## Exact next task
 
-Verify that the implementation matches the stated objective.
+Produce a signed `verification.json`.
 
 ## Acceptance criteria for the next task
 
-- Derive one bounded objective-verification plan only from the sealed specification objective, proposed improvement, acceptance criteria, authenticated production targets, and source-free verifier evidence.
-- Require exact language-neutral evidence that the verified implementation addresses the stated objective without allowing model rationale or repository output to self-authorize the decision.
-- Reject missing, malformed, extended, inconsistent, unsupported, unavailable, unbounded, or adversarial objective decisions before authenticated report publication.
-- Add deterministic executable examples for matching and mismatching implementations while preserving the sealed verifier-input, change-scope, patch-limit, fresh-checkout, artifact-authentication, builder-isolation, semantic, and fail-closed gates.
+- Define and validate one exact bounded verification-report contract that binds the sealed verifier inputs and every required ordinary, semantic, change-scope, patch-limit, secret, and objective result.
+- Publish `verification.json` and its runner-owned authentication only after the complete report validates, with conditional targeted-mutation evidence required exactly when configured.
+- Reject missing, malformed, extended, inconsistent, unsupported, stale, unauthenticated, partially written, unbounded, or adversarial reports before publication materialization.
+- Add deterministic executable examples for accepted and rejected signed reports while preserving fresh-checkout, builder-isolation, artifact-authentication, objective, semantic, and fail-closed gates.
 - `npm run checkpoint` passes.
 
 ## Current verified behavior
@@ -136,18 +138,17 @@ Verify that the implementation matches the stated objective.
 
 ## Last verification
 
-Verified on 2026-07-19 for the sealed specification change-scope slice:
+Verified on 2026-07-19 for the implementation-objective slice:
 
-- Exact plan and result contracts reject missing, malformed, extended, unbound, inconsistent, duplicated, unsorted, unsupported, and excessive identities, inventories, counts, hashes, semantics, and outcomes.
-- The deterministic scope example accepts exact allowed modifications and deletions, excludes only sealed verifier/run artifacts, and rejects every outside or explicitly excluded addition, modification, deletion, rename half, and type change.
-- NUL-delimited no-rename raw-diff inspection rejects malformed metadata, unsupported statuses, wildcard-ambiguous or escaped paths, duplicates, unavailable output, unterminated records, overlapping selectors, mismatched specifications, and excessive inventories while retaining no paths, source, or patch bodies.
-- The adversarial MoneyAllocator proof retains one opaque authenticated production modification while builder-supplied allowlists, exclusions, commands, output routing, and passing decisions remain non-authoritative.
-- `npm test`: 310 tests passed; both live model proofs remained excluded.
+- Exact plan, evidence, and result contracts reject missing, malformed, extended, inconsistent, duplicated, unsorted, unsupported, unavailable, empty, incomplete, and excessive identities, counts, semantics, and outcomes.
+- The deterministic objective examples accept one matching implementation and reject mismatched specifications, patches, targets, baseline proofs, fresh checks, safety evidence, and builder-selected passing results without retaining semantic prose or source.
+- The adversarial MoneyAllocator proof retains one authenticated matched objective decision while builder-supplied objective plans, results, paths, commands, output routing, and model rationale remain non-authoritative.
+- `npm test`: 312 tests passed; both live model proofs remained excluded.
 - Strict TypeScript check passed.
 - TypeScript unused-local and unused-parameter check passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- The focused specification change-scope suite passed: 1 consolidated executable example; the focused adversarial local-runner proof passed.
+- The focused objective-verification suite passed: 2 executable examples; the focused adversarial local-runner proof passed before the final documentation update.
 - `docker build -t daily-improver:local .` passed for the changed CLI runtime behavior.
 - The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
 

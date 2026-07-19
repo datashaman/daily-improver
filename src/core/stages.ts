@@ -79,6 +79,11 @@ import {
   prepareSpecificationChangeScopePlan,
   requireSpecificationChangeScopeAccepted,
 } from "./specification-change-scope.js";
+import {
+  assertObjectiveVerificationResult,
+  type ObjectiveVerificationResult,
+} from "../domain/objective-verification.js";
+import { createObjectiveVerifierEvidence, prepareObjectiveVerificationPlan, verifyImplementationObjective } from "./objective-verification.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -280,6 +285,7 @@ export class PipelineStages {
     let secretScan: SecretScanResult | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
+    let objectiveVerification: ObjectiveVerificationResult | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
       throw new Error("Full verifier mutation testing is unsupported; use the exact targeted mode.");
     }
@@ -371,7 +377,7 @@ export class PipelineStages {
         await baselineWorkspace.cleanup();
       }
     }
-    const passed = ordinaryVerificationPassed
+    const preObjectiveVerificationPassed = ordinaryVerificationPassed
       && staticAnalysis !== undefined
       && staticAnalysisComparison !== undefined
       && staticAnalysisIgnoredFindings !== undefined
@@ -388,6 +394,29 @@ export class PipelineStages {
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
+    if (preObjectiveVerificationPassed) {
+      const objectiveEvidence = await createObjectiveVerifierEvidence(root, inputs, checks, {
+        diff,
+        specificationScope,
+        patchLimits,
+        sourceSafety,
+        staticAnalysisComparison,
+        staticAnalysisIgnoredFindingsComparison,
+        broadExceptionSwallowingComparison,
+        validationBoundaryComparison,
+        testStrengthComparison,
+        protectedRepositoryChangeComparison,
+        secretScan,
+        publicApiSurfaceComparison,
+        ...(targetedMutationComparison ? { targetedMutationComparison } : {}),
+      });
+      const objectivePlan = prepareObjectiveVerificationPlan(inputs.specification, objectiveEvidence);
+      objectiveVerification = assertObjectiveVerificationResult(
+        verifyImplementationObjective(inputs.specification, objectiveEvidence, objectivePlan),
+        objectivePlan,
+      );
+    }
+    const passed = preObjectiveVerificationPassed && objectiveVerification !== undefined;
     const report = {
       schemaVersion: "verification-report/v1" as const,
       passed,
@@ -415,6 +444,7 @@ export class PipelineStages {
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
       ...(targetedMutationComparison ? { targetedMutationComparison } : {}),
+      ...(objectiveVerification ? { objectiveVerification } : {}),
       verifiedAt: this.clock.now().toISOString(),
     };
     await writeVerificationOutput(root, inputs.outputArtifact, report);

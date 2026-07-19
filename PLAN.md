@@ -2,7 +2,7 @@
 
 Status: active
 
-Last updated: 2026-07-17
+Last updated: 2026-07-19
 
 Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
 
@@ -214,7 +214,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Scan the patch for secrets.
 - [x] Enforce file and line limits.
 - [x] Enforce spec allowlists and exclusions.
-- [ ] Verify that the implementation matches the stated objective.
+- [x] Verify that the implementation matches the stated objective.
 - [ ] Produce a signed `verification.json`.
 - [ ] Fail closed when a required verifier is unavailable.
 
@@ -519,8 +519,10 @@ The recent and next commit-sized milestones are:
 48. [x] `feat: reject accidental protected repository changes`
 49. [x] `feat: reject secrets in verified patches`
 50. [x] `feat: enforce verified patch limits`
+51. [x] `feat: enforce specification change scope`
+52. [x] `feat: verify implementation objective`
 
-The immediate next task is Phase 1F: verify that the implementation matches the stated objective. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: produce a signed `verification.json`. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

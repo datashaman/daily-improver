@@ -245,6 +245,8 @@ if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR
       specificationScopeCommand: ["./verifier-command"],
       specificationScopeOutput: "verification.json",
       specificationScopeResult: { outcome: "accepted", productionChanges: [] },
+      objectiveVerificationPlan: { objective: "builder-selected", targets: [] },
+      objectiveVerificationResult: { outcome: "matched" },
       environment: { PATH: ".", DAILY_IMPROVER_MANIFEST_KEY: "builder-selected" },
     };
     return { ...execution, rationale: maliciousRationale };
@@ -481,6 +483,7 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, /"schemaVersion": "secret-scan-result\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "verified-patch-limit-result\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "specification-change-scope-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "objective-verification-result\/v1"/);
   assert.match(verification.stdout, /"productionChanges": \[/);
   assert.match(verification.stdout, /"kind": "modified"/);
   assert.match(verification.stdout, /"maxChangedFiles": 5/);
