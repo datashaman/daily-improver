@@ -58,6 +58,17 @@ import {
   type TestStrengthComparison,
   type TestStrengthResult,
 } from "../domain/test-strength.js";
+import {
+  assertProtectedRepositoryChangePlan,
+  assertProtectedRepositoryChangeResult,
+  compareProtectedRepositoryChanges,
+  type ProtectedRepositoryChangeComparison,
+  type ProtectedRepositoryChangeResult,
+} from "../domain/protected-repository-changes.js";
+import {
+  inspectProtectedRepositoryChanges,
+  prepareProtectedRepositoryChangePlan,
+} from "./protected-repository-changes.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -233,6 +244,8 @@ export class PipelineStages {
     let validationBoundaryComparison: ValidationBoundaryComparison | undefined;
     let testStrength: TestStrengthResult | undefined;
     let testStrengthComparison: TestStrengthComparison | undefined;
+    let protectedRepositoryChanges: ProtectedRepositoryChangeResult | undefined;
+    let protectedRepositoryChangeComparison: ProtectedRepositoryChangeComparison | undefined;
     let publicApiSurface: PublicApiSurfaceResult | undefined;
     let publicApiSurfaceComparison: PublicApiSurfaceComparison | undefined;
     if (ordinaryVerificationPassed && inputs.mutationMode === "full") {
@@ -294,6 +307,17 @@ export class PipelineStages {
         );
         testStrength = await executeTestStrength(root, currentAdapter, inputs, key, this.runner);
         testStrengthComparison = compareTestStrength(baselineTestStrength, testStrength);
+        const baselineProtectedRepositoryChanges = await executeProtectedRepositoryChangeInspection(
+          baselineWorkspace.path,
+          inputs,
+          key,
+          this.runner,
+        );
+        protectedRepositoryChanges = await executeProtectedRepositoryChangeInspection(root, inputs, key, this.runner);
+        protectedRepositoryChangeComparison = compareProtectedRepositoryChanges(
+          baselineProtectedRepositoryChanges,
+          protectedRepositoryChanges,
+        );
         const baselinePublicApiSurface = await executePublicApiSurface(baselineWorkspace.path, baselineAdapter, inputs, key, this.runner);
         publicApiSurface = await executePublicApiSurface(root, currentAdapter, inputs, key, this.runner);
         publicApiSurfaceComparison = comparePublicApiSurfaces(baselinePublicApiSurface, publicApiSurface);
@@ -325,6 +349,8 @@ export class PipelineStages {
       && validationBoundaryComparison !== undefined
       && testStrength !== undefined
       && testStrengthComparison !== undefined
+      && protectedRepositoryChanges !== undefined
+      && protectedRepositoryChangeComparison !== undefined
       && publicApiSurface !== undefined
       && publicApiSurfaceComparison !== undefined
       && (inputs.mutationMode !== "targeted" || (targetedMutation !== undefined && targetedMutationComparison !== undefined));
@@ -346,6 +372,8 @@ export class PipelineStages {
       ...(validationBoundaryComparison ? { validationBoundaryComparison } : {}),
       ...(testStrength ? { testStrength } : {}),
       ...(testStrengthComparison ? { testStrengthComparison } : {}),
+      ...(protectedRepositoryChanges ? { protectedRepositoryChanges } : {}),
+      ...(protectedRepositoryChangeComparison ? { protectedRepositoryChangeComparison } : {}),
       ...(publicApiSurface ? { publicApiSurface } : {}),
       ...(publicApiSurfaceComparison ? { publicApiSurfaceComparison } : {}),
       ...(targetedMutation ? { targetedMutation } : {}),
@@ -566,6 +594,26 @@ async function executeTestStrength(
   await assertVerifierExecutionInputs(root, inputs, runner);
   if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
     throw new Error("Repository test-strength inspection changed a sealed verifier input.");
+  }
+  return result;
+}
+
+async function executeProtectedRepositoryChangeInspection(
+  root: string,
+  inputs: VerifierExecutionInputs,
+  manifestKey: string,
+  runner: CommandRunner,
+): Promise<ProtectedRepositoryChangeResult> {
+  const beforeState = await captureVerifierExecutionState(root, inputs.expectedBaseSha, runner);
+  const plan = assertProtectedRepositoryChangePlan(prepareProtectedRepositoryChangePlan());
+  const result = assertProtectedRepositoryChangeResult(
+    await inspectProtectedRepositoryChanges(root, plan, runner),
+    plan,
+  );
+  await assertVerifierExecutionStateUnchanged(root, inputs.expectedBaseSha, beforeState, runner);
+  await assertVerifierExecutionInputs(root, inputs, runner);
+  if (!(await verifyVerifierTestManifest(root, inputs.manifest, manifestKey))) {
+    throw new Error("Protected repository-change inspection changed a sealed verifier input.");
   }
   return result;
 }

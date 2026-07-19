@@ -210,7 +210,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Detect broad exception swallowing.
 - [x] Detect weakened validation.
 - [x] Detect deleted, skipped, or weakened tests.
-- [ ] Detect accidental dependency, migration, workflow, and generated-binary changes.
+- [x] Detect accidental dependency, migration, workflow, and generated-binary changes.
 - [ ] Scan the patch for secrets.
 - [ ] Enforce file and line limits.
 - [ ] Enforce spec allowlists and exclusions.
@@ -516,8 +516,9 @@ The recent and next commit-sized milestones are:
 45. [x] `feat: detect broad exception swallowing`
 46. [x] `feat: detect weakened validation`
 47. [x] `feat: detect weakened repository tests`
+48. [x] `feat: reject accidental protected repository changes`
 
-The immediate next task is Phase 1F: detect accidental dependency, migration, workflow, and generated-binary changes. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: scan the verified patch for secrets. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 
