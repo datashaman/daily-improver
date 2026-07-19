@@ -73,6 +73,12 @@ import { assertSecretScanPlan, assertSecretScanResult, type SecretScanPlan, type
 import { prepareSecretScanPlan, scanVerifiedPatchForSecrets } from "./secret-scan.js";
 import { assertVerifiedPatchLimitResult } from "../domain/verified-patch-limits.js";
 import { inspectVerifiedPatchLimits, prepareVerifiedPatchLimitPlan, requireVerifiedPatchWithinLimits } from "./verified-patch-limits.js";
+import { assertSpecificationChangeScopeResult } from "../domain/specification-change-scope.js";
+import {
+  inspectSpecificationChangeScope,
+  prepareSpecificationChangeScopePlan,
+  requireSpecificationChangeScopeAccepted,
+} from "./specification-change-scope.js";
 
 export interface PublicationMainContext {
   readonly repository: string;
@@ -219,6 +225,19 @@ export class PipelineStages {
       inputs.protectedPaths,
       trustedPaths,
     );
+    const specificationScopePlan = prepareSpecificationChangeScopePlan(inputs.specification);
+    const specificationScope = assertSpecificationChangeScopeResult(
+      await inspectSpecificationChangeScope(
+        root,
+        inputs.expectedBaseSha,
+        inputs.specification,
+        trustedPaths,
+        specificationScopePlan,
+        this.runner,
+      ),
+      specificationScopePlan,
+    );
+    requireSpecificationChangeScopeAccepted(specificationScope);
     const patchLimitPlan = prepareVerifiedPatchLimitPlan(inputs.repositoryLimits);
     const patchLimits = assertVerifiedPatchLimitResult(
       await inspectVerifiedPatchLimits(root, inputs.expectedBaseSha, patchLimitPlan, this.runner),
@@ -242,7 +261,8 @@ export class PipelineStages {
       checks.push({ command, exitCode: result.exitCode, durationMs: result.durationMs });
       if (result.exitCode !== 0) break;
     }
-    const ordinaryVerificationPassed = diff.allowed && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
+    const ordinaryVerificationPassed = diff.allowed && specificationScope.outcome === "accepted"
+      && sourceSafety.allowed && checks.every((check) => check.exitCode === 0);
     let targetedMutation: TargetedMutationResult | undefined;
     let targetedMutationComparison: TargetedMutationScoreComparison | undefined;
     let staticAnalysis: StaticAnalysisResult | undefined;
@@ -374,6 +394,7 @@ export class PipelineStages {
       expectedBaseSha: inputs.expectedBaseSha,
       verifierInputsSha256: inputs.integritySha256,
       diff,
+      specificationScope,
       patchLimits,
       sourceSafety,
       checks,

@@ -213,7 +213,7 @@ Goal: authorize publication only from a clean, independent environment.
 - [x] Detect accidental dependency, migration, workflow, and generated-binary changes.
 - [x] Scan the patch for secrets.
 - [x] Enforce file and line limits.
-- [ ] Enforce spec allowlists and exclusions.
+- [x] Enforce spec allowlists and exclusions.
 - [ ] Verify that the implementation matches the stated objective.
 - [ ] Produce a signed `verification.json`.
 - [ ] Fail closed when a required verifier is unavailable.
@@ -520,7 +520,7 @@ The recent and next commit-sized milestones are:
 49. [x] `feat: reject secrets in verified patches`
 50. [x] `feat: enforce verified patch limits`
 
-The immediate next task is Phase 1F: enforce specification allowlists and exclusions in the production verifier. The production customer-runner structured-endpoint proof remains a separate deployment gate.
+The immediate next task is Phase 1F: verify that the implementation matches the stated objective. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 

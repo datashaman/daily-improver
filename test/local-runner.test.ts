@@ -240,6 +240,11 @@ if (is_file(dirname(__DIR__, 2) . '/verification.json') || is_file(dirname(__DIR
       repositoryLimits: { maxChangedFiles: 999, maxDiffLines: 999999 },
       patchLimitCounts: { changedFileCount: 0, changedLineCount: 0 },
       patchLimitResult: { outcome: "accepted" },
+      specificationAllowlist: ["src/Other.php"],
+      specificationExclusions: [],
+      specificationScopeCommand: ["./verifier-command"],
+      specificationScopeOutput: "verification.json",
+      specificationScopeResult: { outcome: "accepted", productionChanges: [] },
       environment: { PATH: ".", DAILY_IMPROVER_MANIFEST_KEY: "builder-selected" },
     };
     return { ...execution, rationale: maliciousRationale };
@@ -475,6 +480,9 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, /"schemaVersion": "protected-repository-change-comparison\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "secret-scan-result\/v1"/);
   assert.match(verification.stdout, /"schemaVersion": "verified-patch-limit-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "specification-change-scope-result\/v1"/);
+  assert.match(verification.stdout, /"productionChanges": \[/);
+  assert.match(verification.stdout, /"kind": "modified"/);
   assert.match(verification.stdout, /"maxChangedFiles": 5/);
   assert.match(verification.stdout, /"maxDiffLines": 250/);
   assert.match(verification.stdout, /"schemaVersion": "public-api-surface-result\/v1"/);
@@ -489,7 +497,7 @@ test("ignores builder attempts to suppress, replace, redirect, or pre-populate t
   assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
   assert.match(verification.stdout, /"command": "php tests\/run.php"/);
   assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
-  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|validationGuarantees|unvalidatedInputFlows|repositoryTests|skippedTests|testExpectations|dependencyChanges|migrationChanges|workflowChanges|generatedBinaryChanges|secretScanPolicy|repositoryLimits|patchLimitCounts|patchLimitResult|999999|"checks": \[\]/);
+  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|validationGuarantees|unvalidatedInputFlows|repositoryTests|skippedTests|testExpectations|dependencyChanges|migrationChanges|workflowChanges|generatedBinaryChanges|secretScanPolicy|repositoryLimits|patchLimitCounts|patchLimitResult|specificationAllowlist|specificationExclusions|specificationScopeCommand|specificationScopeOutput|specificationScopeResult|999999|"checks": \[\]/);
   const rootPrepopulation = await shell.run(["git", "show", `${result.branch}:verification.json`], repository);
   assert.notEqual(rootPrepopulation.exitCode, 0);
   const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
