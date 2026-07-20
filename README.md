@@ -8,6 +8,8 @@ PHP/Laravel is the initial vertical, not the product boundary. The TypeScript co
 
 Agents should begin with [`AGENTS.md`](AGENTS.md), then read [`docs/STATUS.md`](docs/STATUS.md) for the exact checkpoint and [`PLAN.md`](PLAN.md) for the surrounding milestone. A context clear is safe when the checkpoint is committed, `npm run checkpoint` passes, and the working tree is clean.
 
+The deterministic checkpoint runs strict TypeScript checks plus the complete offline test suite and is expected to finish well under two minutes. Opt-in live model proofs are deliberately separate and never require credentials during ordinary development or CI verification.
+
 ## Try it
 
 ```bash

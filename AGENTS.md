@@ -118,3 +118,17 @@ Do not recommend clearing while code is uncommitted, tests are failing, a workfl
 3. Run the verification command recorded in `docs/STATUS.md`.
 4. Confirm that the stated next task still matches the code.
 5. Continue from that task without redoing completed milestones.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub at `datashaman/daily-improver`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context root layout with optional `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

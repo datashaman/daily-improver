@@ -2,16 +2,16 @@
 
 Status: active
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
-Current phase: Phase 1 — portable PHP/Laravel CLI proving loop
+Current phase: Phase 1G — real Laravel dogfood
 
 ## Current checkpoint
 
 The live implementation checkpoint is maintained in [`docs/STATUS.md`](docs/STATUS.md). At this checkpoint:
 
 - Phase 1 foundation and the deterministic PHP/Laravel proving loop are complete.
-- Phase 1A is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented.
+- Phase 1A implementation is complete; the bounded runner plus Composer, static-analysis, PHPUnit/Pest coverage and timing, targeted Infection, configured PhpMetrics and PHPCPD, version-aware PHP/Laravel deprecation, opt-in Laravel slow-query, versioned Laravel validation/error-handling, language-neutral candidate deduplication, and reproducible-evidence gate are implemented. Its original real-repository validation is now explicitly part of Phase 1G dogfooding.
 - Phase 1B is complete. Category-specific scoring weights cover bounded evidence strength, confidence, impact, effort, estimated diff, change risk, subsystem risk, and testability for every language-neutral candidate kind; versioned explanations replay those factors and weights through priority influence, value caps, and final scores, explicitly cosmetic-only candidates are capped near zero, repository priorities add only bounded deterministic influence, and oversized credible candidates are routed to a bounded human task before autonomous selection.
 - Phase 1D now derives or validates an exact language-neutral `improvement-intent/v1` contract before agent execution. Defects require a credible behavioral baseline failure; refactors require passing characterization tests; performance and maintainability work use distinct passing measurement and quality baselines. All four require passing post-change verification, generated Pest and PHPUnit tests receive bounded adapter-specific discovery, marker, assertion-structure, and data-provider inspection, and Eris property tests receive proof-bound generator, execution, target, invariant, and iteration inspection.
 - Applicable baseline-known-mutant evidence now produces an exact `known-mutation/v1` specification requirement and a sealed `known-mutation-execution-proof/v1` over the relevant generated test, selected target, approved criterion, exact command, credible failure, and hashed output.
@@ -107,7 +107,7 @@ Goal: make `analyse` generate and normalize its own evidence.
 - [x] Deduplicate overlapping findings against the same subsystem.
 - [x] Reject candidates without reproducible evidence.
 
-Exit gate: `daily-improver analyse` produces credible ranked candidates on a real Laravel repository without manually prepared `.ai/evidence` files.
+Implementation gate: `daily-improver analyse` produces credible ranked candidates without manually prepared `.ai/evidence` files. This behavior is covered deterministically by the controlled Laravel fixture; repeated proof on a real Laravel application is tracked by Phase 1G rather than implied complete here.
 
 ## Phase 1B — Deterministic candidate selection
 
@@ -152,7 +152,7 @@ Goal: replace generic shell delegation with a versioned agent protocol.
 - [ ] Execute and record the live proof against a configured customer-runner structured endpoint.
 - [x] Execute the direct OpenAI proof after the API project has usable credit, then record the verified real-model result.
 
-Exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent.
+Core exit gate: the MoneyAllocator fixture passes with a real model provider rather than the scripted proving agent. The direct OpenAI proof satisfied this gate on 2026-07-17; execution through a configured customer-runner structured endpoint remains the unchecked deployment proof above.
 
 ## Phase 1D — Generated-test quality
 
@@ -523,23 +523,29 @@ The recent and next commit-sized milestones are:
 52. [x] `feat: verify implementation objective`
 53. [x] `feat: publish signed verification report`
 54. [x] `feat: reject unavailable required verifiers`
+55. [x] `test: restore checkpoint runtime`
 
 The immediate next task is Phase 1G: select and document one real Laravel dogfood repository with meaningful domain logic, PHPUnit or Pest, PHPStan, and manageable CI duration. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
 ## Initial operating limits
 
 ```yaml
-daily_improvement:
-  max_prs_per_day: 1
-  max_open_ai_prs: 3
+limits:
+  max_open_prs: 3
   max_changed_files: 5
   max_diff_lines: 250
-  require_tests: true
-  allow_dependencies: false
-  allow_migrations: false
-  allow_public_api_changes: false
-  allow_ci_changes: false
-  draft_by_default: true
+  max_cost_usd: 5
+protected_paths:
+  - .github/**
+  - infrastructure/**
+  - database/migrations/**
+  - tests/Property/**
+  - .ai/runs/**/spec.json
+  - .ai/policies/**
+verification:
+  mutation_testing: targeted
+pull_request:
+  draft: true
 ```
 
-These defaults remain restrictive until real-repository dogfooding provides evidence that any limit can safely change.
+The complete authoritative configuration, including schedule, selection priorities, verification commands, and pull-request labels, lives in [`.ai/improver.yml`](.ai/improver.yml). These defaults remain restrictive until real-repository dogfooding provides evidence that any limit can safely change.

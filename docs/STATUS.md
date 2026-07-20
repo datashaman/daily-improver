@@ -1,14 +1,16 @@
 # Current Project Status
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Checkpoint
 
-- Last completed milestone: Phase 1F is complete; unavailable required verifiers fail before authenticated report publication.
-- Current checkpoint commit: `feat: reject unavailable required verifiers`.
+- Last completed milestone: Phase 1G preparation is complete; roadmap claims match their executable proof, agent issue-tracker conventions are installed, and the deterministic checkpoint is again well under two minutes.
+- Current checkpoint commit: `test: restore checkpoint runtime`.
 - Last planning commit: `b6f1580` (`docs: add durable delivery plan`).
 - Current phase: Phase 1G — Real Laravel dogfood.
 - Current state: Phase 1A through Phase 1F are complete. Phase 1C has strict versioned stage contracts, deterministic cost enforcement and bounded retries, isolated stage credentials, deterministic replays and routing, a production HTTPS customer-runner composition boundary, and opt-in live harnesses outside deterministic checkpoints. Its exit gate passed on 2026-07-17 when a real OpenAI model generated a credible failing MoneyAllocator defect test and a separate builder call produced a bounded patch that passed sealed-artifact and independent verification gates. Phase 1D has exhaustive intent-specific baseline semantics, nonce-bound property execution proof, applicable known-mutation execution proof, source-free implementation-restatement inspection, three-attempt generated-test lifecycle gates, and source-free Pest, PHPUnit, and Eris quality inspection before building and publishing. Phase 1E derives one exact production-file write allowlist, runs without Git metadata in a disposable copy, imports only approved regular-file writes, and materializes a versioned protected-input snapshot from trusted configuration plus sealed identities. Protected tests, specifications, policies, workflows, and migrations are immutable at the builder boundary and revalidated before import. Command-backed agents execute through a non-login shell with only a validated runner-owned absolute `PATH`, the exact current stage, and a repository-contained specification path; ambient test, analysis, manifest, control-plane, GitHub, and unrelated model credentials do not cross into the builder. Command builders default to runner-owned outbound denial using a verified macOS sandbox or Linux user/network namespace, separately default to package-manager denial through runner-owned executable interception, and require exact CPU, aggregate memory, repository disk-growth, combined-output, and wall-clock limits. Resource exhaustion terminates the complete process group and reports one bounded resource classification without retaining unbounded output. The disposable copy is captured immediately before and after every successful or failed builder execution as exact `builder-filesystem-state/v1` values. Streamed hashes and bounded metadata describe regular files, directories, symbolic links, and unsupported types without retaining contents; `builder-filesystem-change-set/v1` exhaustively reports additions, modifications, deletions, and type changes inside and outside the write allowlist. Repeated stable walks fail closed on unreadable, excessive, malformed, traversing, or changing state. Immediately after capture, the runner binds every protected SHA-256 identity to the captured baseline, expands its repository-relative parents, and rejects every addition, modification, deletion, or type change at or below those paths before retaining a successful result, propagating a builder failure, staging, or importing. Exact trusted policies may approve network or dependency exceptions independently, while missing, malformed, repository-controlled, or model-controlled decisions fail closed. Verifier execution inputs are captured before generated code, sealed before the builder, and revalidated before independent command execution and atomic report publication. The structured provider retains its separate short-lived stage credential transport boundary outside the command sandbox. The configured customer-runner structured-endpoint proof remains a separate deployment gate.
+
+The controlled Laravel full-workflow and adversarial verifier-boundary proofs now share one stronger end-to-end execution instead of repeating the complete pipeline. Independent implementation-restatement and flaky-baseline failure scenarios run concurrently inside the same suite, and the repository test command bounds Node to four test workers to avoid process contention. All 317 deterministic tests remain covered while the full suite completes with useful margin below two minutes. The public repository is `datashaman/daily-improver`; `AGENTS.md` and `docs/agents/` define its GitHub issue tracker, default triage labels, and single-context domain-document layout.
 
 Every command-backed builder now always denies Git and GitHub CLI publication tooling through an independent runner-owned executable layer. Direct, PATH-resolved, explicit-path, shell-indirect, and command-level PATH-bypass attempts fail before the real tools run, even when network and dependency capabilities are approved; there is no repository or model-controlled exception.
 
@@ -141,20 +143,15 @@ Select and document one real Laravel dogfood repository.
 
 ## Last verification
 
-Verified on 2026-07-19 for the required-verifier-availability slice:
+Verified on 2026-07-20 for the checkpoint-runtime and Phase 1G preparation slice:
 
-- Exact `required-verifier-unavailable/v1` accepts only a matched required contract/result schema, command/adapter/tool boundary and reason, opaque selection identity, and unavailable outcome; extended, inconsistent, unsupported, malformed, and unbounded decisions fail closed.
-- Deterministic command, adapter, and tool examples stop with source-free unavailable decisions before any report can be written or authenticated.
-- Exact `verification-report/v2` rejects an unavailable decision substituted for targeted-mutation evidence; off mode continues to require no mutation evidence.
-- The established fresh-checkout, signed-report, builder-isolation, trusted-publication, and adversarial MoneyAllocator proofs remain green.
-- `npm test`: 318 tests passed; both live model proofs remained excluded.
-- Strict TypeScript check passed.
-- TypeScript unused-local and unused-parameter check passed.
+- The consolidated local-runner suite passed all four full-workflow, verifier-boundary, implementation-restatement, and flaky-baseline examples in 52.5 seconds when focused.
+- `npm test`: 317 deterministic tests passed in 95.2 seconds with four bounded Node test workers; both opt-in live model proofs remained excluded.
+- Strict TypeScript and unused-local/unused-parameter checks passed.
 - `git diff --check` passed before commit.
 - `npm run checkpoint` passed after the slice commit.
-- The focused required-verifier, verification-report, static-analysis, public-API, and targeted-mutation suites passed: 22 executable examples.
-- `docker build -t daily-improver:local .` passed for the changed CLI runtime behavior.
-- The live OpenAI proof was not rerun; the previously recorded `gpt-5.6-terra` proof remains valid and outside deterministic checkpoints.
+- No container build was required because production dependencies and CLI runtime behavior did not change.
+- The live OpenAI and customer-runner structured-endpoint proofs were not run; the recorded direct OpenAI proof remains valid and the customer-runner proof remains a separate deployment gate.
 
 Run `npm run checkpoint` after resuming to confirm the checkout still matches this checkpoint.
 

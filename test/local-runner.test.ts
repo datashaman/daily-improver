@@ -2,12 +2,25 @@ import assert from "node:assert/strict";
 import { appendFile, cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import test from "node:test";
+import test, { after, describe } from "node:test";
 import type { AgentContext, AgentProvider, BuilderExecution, TestAgentExecution } from "../src/agents/agent-provider.js";
 import { createApplication } from "../src/app.js";
 import { defectBaselineFailureIsCredible, LocalImprovementRunner } from "../src/core/local-runner.js";
 import { CommandRunner } from "../src/infra/command-runner.js";
-import type { OpenPullRequestStateSource, UnresolvedFindingStateSource } from "../src/contracts.js";
+
+const previousEnvironment = {
+  runDate: process.env.DAILY_IMPROVER_RUN_DATE,
+  credential: process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL,
+  processState: process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL,
+  cache: process.env.XDG_CACHE_HOME,
+};
+process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
+after(() => {
+  restoreEnvironment("DAILY_IMPROVER_RUN_DATE", previousEnvironment.runDate);
+  restoreEnvironment("DAILY_IMPROVER_AMBIENT_CREDENTIAL", previousEnvironment.credential);
+  restoreEnvironment("DAILY_IMPROVER_PROCESS_STATE_SENTINEL", previousEnvironment.processState);
+  restoreEnvironment("XDG_CACHE_HOME", previousEnvironment.cache);
+});
 
 class ProvingAgent implements AgentProvider {
   async generateTests(context: AgentContext): Promise<TestAgentExecution> {
@@ -309,8 +322,9 @@ function fixtureRoutingDecision(stage: "test" | "build") {
   };
 }
 
-test("one local run proves a Laravel correctness fix before producing a draft PR request", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-e2e-"));
+describe("local runner workflow proofs", { concurrency: true }, () => {
+test("one local run proves the full workflow while ignoring attempts to replace the independent verifier", { concurrency: true }, async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-verifier-boundary-"));
   const repository = join(sandbox, "repository");
   await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
   const shell = new CommandRunner();
@@ -319,28 +333,32 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
   await expectSuccess(shell.run(["git", "add", "."], repository));
   await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
+  const expectedBaseSha = (await expectSuccess(shell.run(["git", "rev-parse", "HEAD"], repository))).stdout.trim();
 
-  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
-  const openPullRequests: OpenPullRequestStateSource = {
-    current: async (decidedAt) => ({
+  process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL = "must-not-cross";
+  process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL = "builder-process-state";
+  const ambientCache = join(sandbox, "ambient-cache");
+  await mkdir(ambientCache);
+  await writeFile(join(ambientCache, "sentinel"), "untrusted cache state\n");
+  process.env.XDG_CACHE_HOME = ambientCache;
+  const app = createApplication(join(sandbox, "state"), {
+    current: async (observedAt) => ({
       schemaVersion: "open-pull-request-state/v1",
       repositoryId: "b".repeat(64),
-      observedAt: decidedAt,
+      observedAt,
       openPullRequests: 0,
     }),
-  };
-  const unresolvedFindings: UnresolvedFindingStateSource = {
+  }, {
     current: async (observedAt) => ({
       schemaVersion: "unresolved-finding-state/v1",
       repositoryId: "f".repeat(64),
       observedAt,
       findingIds: [],
     }),
-  };
-  const app = createApplication(join(sandbox, "state"), openPullRequests, unresolvedFindings);
+  });
   const result = await new LocalImprovementRunner(
     app.stages,
-    new ProvingAgent(),
+    new VerifierTamperingAgent(),
     join(sandbox, "worktrees"),
     "ephemeral-test-key",
   ).run(repository);
@@ -353,10 +371,45 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   assert.match(result.publication.body, /Infection escaped mutation/);
   const fixedSource = await expectSuccess(shell.run(["git", "show", `${result.branch}:app/Domain/MoneyAllocator.php`], repository));
   assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
-  const usageArtifact = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository);
-  assert.notEqual(usageArtifact.exitCode, 0);
-  const rationaleArtifact = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
-  assert.notEqual(rationaleArtifact.exitCode, 0);
+  const verification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verification.json`], repository));
+  assert.match(verification.stdout, /"schemaVersion": "verification-report\/v2"/);
+  assert.match(verification.stdout, /"evidenceSemantics": "canonical-json-sha256\/v1"/);
+  assert.match(verification.stdout, /"mutationMode": "targeted"/);
+  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v2"/);
+  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-score-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-findings-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-ignored-findings-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "static-analysis-ignored-findings-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "broad-exception-swallowing-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "broad-exception-swallowing-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "validation-boundary-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "validation-boundary-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "test-strength-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "test-strength-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "protected-repository-change-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "protected-repository-change-comparison\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "secret-scan-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "verified-patch-limit-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "specification-change-scope-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "objective-verification-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "public-api-surface-result\/v1"/);
+  assert.match(verification.stdout, /"schemaVersion": "public-api-surface-comparison\/v1"/);
+  assert.match(verification.stdout, /"outcome": "passed"/);
+  assert.match(verification.stdout, /"sha256": "[a-f0-9]{64}"/);
+  assert.doesNotMatch(verification.stdout, /originalSourceCode|mutatedSourceCode|processOutput/);
+  assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
+  assert.match(verification.stdout, /"commandSha256": "[a-f0-9]{64}"/);
+  assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
+  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|MoneyAllocator|validationGuarantees|unvalidatedInputFlows|repositoryTests|skippedTests|testExpectations|dependencyChanges|migrationChanges|workflowChanges|generatedBinaryChanges|secretScanPolicy|repositoryLimits|patchLimitCounts|patchLimitResult|specificationAllowlist|specificationExclusions|specificationScopeCommand|specificationScopeOutput|specificationScopeResult|999999|"checks": \[\]/);
+  const rootPrepopulation = await shell.run(["git", "show", `${result.branch}:verification.json`], repository);
+  assert.notEqual(rootPrepopulation.exitCode, 0);
+  const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
+  assert.notEqual(fakeExecutable.exitCode, 0);
+  const rationale = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
+  assert.notEqual(rationale.exitCode, 0);
+  const usage = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-usage.json`], repository);
+  assert.notEqual(usage.exitCode, 0);
   const specification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/spec.json`], repository));
   assert.match(specification.stdout, /"schemaVersion": "improvement-intent\/v1"/);
   assert.match(specification.stdout, /"intent": "defect"/);
@@ -405,102 +458,6 @@ test("one local run proves a Laravel correctness fix before producing a draft PR
   const openPrDecision = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/open-pull-request-limit-decision.json`], repository));
   assert.match(openPrDecision.stdout, /"schemaVersion": "open-pull-request-limit-decision\/v1"/);
   assert.match(openPrDecision.stdout, /"outcome": "allowed"/);
-  delete process.env.DAILY_IMPROVER_RUN_DATE;
-});
-
-test("ignores builder attempts to suppress, replace, redirect, or pre-populate the independent verifier", async (context) => {
-  const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-verifier-boundary-"));
-  const repository = join(sandbox, "repository");
-  await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
-  const shell = new CommandRunner();
-  await expectSuccess(shell.run(["git", "init", "-b", "main"], repository));
-  await expectSuccess(shell.run(["git", "config", "user.email", "improver@example.test"], repository));
-  await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
-  await expectSuccess(shell.run(["git", "add", "."], repository));
-  await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
-  const expectedBaseSha = (await expectSuccess(shell.run(["git", "rev-parse", "HEAD"], repository))).stdout.trim();
-
-  const previousEnvironment = {
-    runDate: process.env.DAILY_IMPROVER_RUN_DATE,
-    credential: process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL,
-    processState: process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL,
-    cache: process.env.XDG_CACHE_HOME,
-  };
-  context.after(() => {
-    restoreEnvironment("DAILY_IMPROVER_RUN_DATE", previousEnvironment.runDate);
-    restoreEnvironment("DAILY_IMPROVER_AMBIENT_CREDENTIAL", previousEnvironment.credential);
-    restoreEnvironment("DAILY_IMPROVER_PROCESS_STATE_SENTINEL", previousEnvironment.processState);
-    restoreEnvironment("XDG_CACHE_HOME", previousEnvironment.cache);
-  });
-  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
-  process.env.DAILY_IMPROVER_AMBIENT_CREDENTIAL = "must-not-cross";
-  process.env.DAILY_IMPROVER_PROCESS_STATE_SENTINEL = "builder-process-state";
-  const ambientCache = join(sandbox, "ambient-cache");
-  await mkdir(ambientCache);
-  await writeFile(join(ambientCache, "sentinel"), "untrusted cache state\n");
-  process.env.XDG_CACHE_HOME = ambientCache;
-  const app = createApplication(join(sandbox, "state"), {
-    current: async (observedAt) => ({
-      schemaVersion: "open-pull-request-state/v1",
-      repositoryId: "b".repeat(64),
-      observedAt,
-      openPullRequests: 0,
-    }),
-  }, {
-    current: async (observedAt) => ({
-      schemaVersion: "unresolved-finding-state/v1",
-      repositoryId: "f".repeat(64),
-      observedAt,
-      findingIds: [],
-    }),
-  });
-  const result = await new LocalImprovementRunner(
-    app.stages,
-    new VerifierTamperingAgent(),
-    join(sandbox, "worktrees"),
-    "ephemeral-test-key",
-  ).run(repository);
-
-  assert.equal(result.verificationPassed, true);
-  const fixedSource = await expectSuccess(shell.run(["git", "show", `${result.branch}:app/Domain/MoneyAllocator.php`], repository));
-  assert.match(fixedSource.stdout, /\$remainder = \$total % \$parts/);
-  const verification = await expectSuccess(shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/verification.json`], repository));
-  assert.match(verification.stdout, /"schemaVersion": "verification-report\/v2"/);
-  assert.match(verification.stdout, /"evidenceSemantics": "canonical-json-sha256\/v1"/);
-  assert.match(verification.stdout, /"mutationMode": "targeted"/);
-  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-result\/v2"/);
-  assert.match(verification.stdout, /"schemaVersion": "targeted-mutation-score-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "static-analysis-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "static-analysis-findings-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "static-analysis-ignored-findings-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "static-analysis-ignored-findings-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "broad-exception-swallowing-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "broad-exception-swallowing-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "validation-boundary-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "validation-boundary-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "test-strength-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "test-strength-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "protected-repository-change-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "protected-repository-change-comparison\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "secret-scan-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "verified-patch-limit-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "specification-change-scope-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "objective-verification-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "public-api-surface-result\/v1"/);
-  assert.match(verification.stdout, /"schemaVersion": "public-api-surface-comparison\/v1"/);
-  assert.match(verification.stdout, /"outcome": "passed"/);
-  assert.match(verification.stdout, /"sha256": "[a-f0-9]{64}"/);
-  assert.doesNotMatch(verification.stdout, /originalSourceCode|mutatedSourceCode|processOutput/);
-  assert.match(verification.stdout, new RegExp(`"expectedBaseSha": "${expectedBaseSha}"`));
-  assert.match(verification.stdout, /"commandSha256": "[a-f0-9]{64}"/);
-  assert.match(verification.stdout, /"verifierInputsSha256": "[a-f0-9]{64}"/);
-  assert.doesNotMatch(verification.stdout, /builder-selected|verifier-command|MoneyAllocator|validationGuarantees|unvalidatedInputFlows|repositoryTests|skippedTests|testExpectations|dependencyChanges|migrationChanges|workflowChanges|generatedBinaryChanges|secretScanPolicy|repositoryLimits|patchLimitCounts|patchLimitResult|specificationAllowlist|specificationExclusions|specificationScopeCommand|specificationScopeOutput|specificationScopeResult|999999|"checks": \[\]/);
-  const rootPrepopulation = await shell.run(["git", "show", `${result.branch}:verification.json`], repository);
-  assert.notEqual(rootPrepopulation.exitCode, 0);
-  const fakeExecutable = await shell.run(["git", "show", `${result.branch}:verifier-command`], repository);
-  assert.notEqual(fakeExecutable.exitCode, 0);
-  const rationale = await shell.run(["git", "show", `${result.branch}:.ai/runs/2026-07-17/build-agent-rationale.json`], repository);
-  assert.notEqual(rationale.exitCode, 0);
 });
 
 test("rejects known non-behavioral defect-test failure classifications", () => {
@@ -511,7 +468,7 @@ test("rejects known non-behavioral defect-test failure classifications", () => {
   assert.equal(defectBaselineFailureIsCredible("dependency-or-autoload"), false);
 });
 
-test("rejects implementation-restating generated tests before the builder", async () => {
+test("rejects implementation-restating generated tests before the builder", { concurrency: true }, async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-restatement-"));
   const repository = join(sandbox, "repository");
   await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
@@ -522,7 +479,6 @@ test("rejects implementation-restating generated tests before the builder", asyn
   await expectSuccess(shell.run(["git", "add", "."], repository));
   await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
 
-  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
   const app = createApplication(join(sandbox, "state"), {
     current: async (observedAt) => ({
       schemaVersion: "open-pull-request-state/v1",
@@ -546,10 +502,9 @@ test("rejects implementation-restating generated tests before the builder", asyn
     "ephemeral-test-key",
   ).run(repository), /production-source-inspection/);
   assert.equal(agent.buildCalled, false);
-  delete process.env.DAILY_IMPROVER_RUN_DATE;
 });
 
-test("quarantines a newly flaky baseline before invoking the builder", async () => {
+test("quarantines a newly flaky baseline before invoking the builder", { concurrency: true }, async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "daily-improver-flaky-"));
   const repository = join(sandbox, "repository");
   await cp(join(process.cwd(), "test", "fixtures", "laravel-money-allocator"), repository, { recursive: true });
@@ -559,7 +514,6 @@ test("quarantines a newly flaky baseline before invoking the builder", async () 
   await expectSuccess(shell.run(["git", "config", "user.name", "Daily Improver Test"], repository));
   await expectSuccess(shell.run(["git", "add", "."], repository));
   await expectSuccess(shell.run(["git", "commit", "-m", "fixture baseline"], repository));
-  process.env.DAILY_IMPROVER_RUN_DATE = "2026-07-17";
   const app = createApplication(join(sandbox, "state"), {
     current: async (observedAt) => ({ schemaVersion: "open-pull-request-state/v1", repositoryId: "b".repeat(64), observedAt, openPullRequests: 0 }),
   }, {
@@ -573,7 +527,7 @@ test("quarantines a newly flaky baseline before invoking the builder", async () 
   assert.doesNotMatch(quarantine, /All tests passed|Allocation did not preserve/);
   const dailyDecision = await readFile(join(repository, ".ai", "runs", "2026-07-17", "daily-improvement-decision.json"), "utf8");
   assert.match(dailyDecision, /"outcome": "released"/);
-  delete process.env.DAILY_IMPROVER_RUN_DATE;
+});
 });
 
 async function expectSuccess<T extends { exitCode: number; stderr: string }>(promise: Promise<T>): Promise<T> {
