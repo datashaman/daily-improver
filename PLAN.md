@@ -524,6 +524,7 @@ The recent and next commit-sized milestones are:
 53. [x] `feat: publish signed verification report`
 54. [x] `feat: reject unavailable required verifiers`
 55. [x] `test: restore checkpoint runtime`
+56. [x] `test: isolate checkpoint temp workspaces`
 
 The immediate next task is Phase 1G: select and document one real Laravel dogfood repository with meaningful domain logic, PHPUnit or Pest, PHPStan, and manageable CI duration. The production customer-runner structured-endpoint proof remains a separate deployment gate.
 
